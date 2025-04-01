@@ -1,0 +1,67 @@
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "getta.club",
+    "isPrivate": false,
+    "recordType": "A",
+    "recordName": "Public_ARecord",
+    "recordValue": "192.0.2.44"
+}
+
+###
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "getta.club",
+    "recordType": "A",
+    "recordName": "Public_Default_Record",
+    "recordValue": "192.0.2.44"
+}
+
+####
+
+
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "getta.club",
+    "isPrivate": true,
+    "recordType": "A",
+    "recordName": "Private_ARecord",
+    "recordValue": "192.0.2.44"
+}
+
+####
+
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "private_getta.club",
+    "isPrivate": true,
+    "recordType": "A",
+    "recordName": "Private_ARecord",
+    "recordValue": "192.0.2.44"
+}
+
+####
+
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "private2_getta.club",
+    "vpc": "vpc-3df2df54",
+    "isPrivate": true,
+    "recordType": "A",
+    "recordName": "Private_ARecord",
+    "recordValue": "192.0.2.44"
+}

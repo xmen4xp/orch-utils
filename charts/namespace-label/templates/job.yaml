@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-{{ include "job-script-contents" . | sha256sum | trunc 8 }}
+spec:
+  template:
+    metadata:
+      annotations:
+        checksum/job: {{ include "job-script-contents" . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}
+      restartPolicy: Never
+      containers:
+      - name: ns-label-container
+        image: "bitnami/kubectl:1.28.4"
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+         {{ include "job-script-contents" . | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - asciicheck
+    - bodyclose
+    - cyclop
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - exhaustive
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - godot
+    - gofmt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - stylecheck
+    - testpackage
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+linters-settings:
+  cyclop:
+    # SDL requirements dictate a maximum cyclomatic complexity of 10
+    max-complexity: 10
+  misspell:
+    locale: US
+    ignore-words:
+      - mosquitto
+  lll:
+    line-length: 120
+    tab-width: 4
+  funlen:
+    lines: 100
+    statements: 50
+  exhaustive:
+    default-signifies-exhaustive: true
+  depguard:
+    rules:
+      prevent_unmaintained_packages:
+        list-mode: lax # allow unless explicitly denied
+        files:
+          - $all
+          - "!$test"
+        allow:
+          - $gostd
+        deny:
+          - pkg: io/ioutil
+            desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
+
+issues:
+  exclude-dirs:
+    - .github
+    - charts
+  exclude-use-default: true
+  exclude-rules:
+    # Allow shadowing err/ctx values for idiomatic code
+    - linters:
+        - govet
+      text: 'declaration of "(err|ctx)" shadows declaration at'
+    # Allow dot imports for ginkgo and gomega
+    - source: ginkgo|gomega
+      linters:
+        - revive
+      text: "should not use dot imports"

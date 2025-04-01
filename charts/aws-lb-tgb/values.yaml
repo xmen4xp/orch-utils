@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+targetGroup:
+  traefik: null
+  traefikGrpc: null
+  nginx: null
+  argocd: null

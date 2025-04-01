@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak-tenant-controller-set
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: keycloak-tenant-controller-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak-tenant-controller-pod
+  template:
+    metadata:
+      labels:
+        app: keycloak-tenant-controller-pod
+    spec:
+        {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: ktc-creds-cntr
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: badouralix/curl-jq@sha256:fe8a5ee49f613495df3b57afa86b39f081bd1b3b9ed61248f46c3d3d7df56092
+          command: ["/bin/sh"]
+          args: ["/ktc-credentials.sh", "http://platform-keycloak.{{ .Values.namespace }}.svc:8080", "http://vault.{{ .Values.namespace }}.svc:8200"]
+          env:
+            - name: VAULT_URL
+              value: "http://vault.{{ .Values.namespace }}.svc.cluster.local:8200"
+            - name: VAULT_PKI_ROLE
+              value: {{ .Values.serviceAccount.name }}
+            - name: ADMIN_USER
+              value: "{{ .Values.keycloakAdmin.user }}"
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.keycloakAdmin.passwordSecret.key }}
+                  name: {{ .Values.keycloakAdmin.passwordSecret.name }}
+            - name: ADMIN_CLIENT
+              value: "{{ .Values.keycloakAdmin.client }}"
+          volumeMounts:
+            - mountPath: /ktc-credentials.sh
+              subPath: ktc-credentials.sh
+              name: ktc-credentials
+        - name: wait-for-crd
+          image: bitnami/kubectl
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+          - |
+            set -e
+            echo "edge-orchestrator.intel.com, waiting for CR..."
+            echo "Waiting for CR 'orgs.org.infra-host.com' to be available..."
+            until kubectl get orgs.org.edge-orchestrator.intel.com; do
+              echo "orgs.org.edge-orchestrator.intel.com CR not found, waiting..."
+              sleep 10
+            done
+      volumes:
+        - name: ktc-credentials
+          configMap:
+            name: ktc-credentials
+            defaultMode: 0777
+      containers:
+        - name: keycloak-tenant-controller-pod
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: "RuntimeDefault"
+          env:
+            - name: VAULT_URL
+              value: "http://vault.{{ .Values.namespace }}.svc.cluster.local:8200"
+            - name: VAULT_PKI_ROLE
+              value: {{ .Values.serviceAccount.name }}
+            - name: KEYCLOAK_URL
+              value: "http://platform-keycloak.{{ .Values.namespace }}.svc:8080"
+            - name: KTC_SERVER_LOG_LEVEL
+              value: "info"
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.keycloak_realm | default "master" }}
+            - name: KEYCLOAK_SI_GROUPS
+              value: {{ .Values.keycloak_si_groups | toPrettyJson }}
+            - name: KEYCLOAK_ORG_GROUPS
+              value: {{ .Values.keycloak_org_groups | toPrettyJson }}
+            - name: KEYCLOAK_PROJ_GROUPS
+              value: {{ .Values.keycloak_proj_groups | toPrettyJson }}
+            {{- if .Values.proxy }}
+            {{- if .Values.proxy.httpProxy }}
+            - name: HTTP_PROXY
+              value: "{{ .Values.proxy.httpProxy }}"
+            - name: http_proxy
+              value: "{{ .Values.proxy.httpProxy }}"
+            {{- end }}
+            {{- if .Values.proxy.httpsProxy }}
+            - name: HTTPS_PROXY
+              value: "{{ .Values.proxy.httpsProxy }}"
+            - name: https_proxy
+              value: "{{ .Values.proxy.httpsProxy }}"
+            {{- end }}
+            {{- if .Values.proxy.noProxy }}
+            - name: NO_PROXY
+              value: "{{ .Values.proxy.noProxy }}"
+            - name: no_proxy
+              value: "{{ .Values.proxy.noProxy }}"
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: default-port
+              containerPort: 8080
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---

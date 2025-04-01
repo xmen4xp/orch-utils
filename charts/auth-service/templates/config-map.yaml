@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# define your template in a config map
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "auth-service.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  # Roles in this config map follow dot notation path specified in gjson golang library.
+  # When this value is changed, auth service pod must be restarted.
+  # Roles can also use projectId placeholder which will be replaced with the actual project id, creating a list dynamically.
+  roles.txt: |-
+    realm_access.roles.#(=="{projectId}_en-agent-rw")
+    realm_access.roles.#(=="{projectId}_en-ob")

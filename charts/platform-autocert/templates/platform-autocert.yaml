@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- $autoCert := include "certificate.auto" . }}
+{{- if eq $autoCert "true" }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: orchestrator-autocert-issuer
+  namespace: cert-manager
+{{- if .Values.autoCert.spec }}
+spec:
+  {{- toYaml .Values.autoCert.spec | nindent 10 }}
+{{- else }}
+spec:
+# generateautocert and custom
+  acme:
+    server: https://{{ .Values.autoCert.production | ternary "acme-v02" "acme-staging-v02" }}.api.letsencrypt.org/directory
+    preferredChain: {{ .Values.autoCert.production | ternary "ISRG Root X1" "Pretend Pear X1" }}
+    {{- if .Values.autoCert.cert.adminEmail }}
+    # No email address provided
+    email: {{ .Values.autoCert.cert.adminEmail | default "" }}
+    {{- else }}
+    # email: <email address>
+    email: ""
+    # Acknowledge the lack of email address
+    skipTLSVerify: true
+    {{- end }}
+    privateKeySecretRef:
+      name: platform-autocert-key
+    solvers:
+    - selector:
+        dnsZones:
+          - "{{- ternary .Values.certDomain .Values.autoCert.certDomain (empty .Values.autoCert.certDomain) }}"
+      dns01:
+        route53:
+          region: {{ .Values.autoCert.aws.region }}
+          role: {{ .Values.autoCert.aws.role }}
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kubernetes-docker-internal
+  namespace: orch-gateway
+spec:
+  secretName: tls-autocert
+  duration: {{ .Values.autoCert.cert.duration | default "2160h0m0s" }}
+  renewBefore: {{ .Values.autoCert.cert.renewBefore | default "1440h0m0s" }}
+  subject:
+    organizations:
+      - Intel Corporation
+    countries:
+      - US
+  isCA: false
+  privateKey:
+    rotationPolicy: Always
+    algorithm: ECDSA
+    encoding: PKCS1
+    size: 384
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  dnsNames:
+    - "{{- ternary .Values.certDomain .Values.autoCert.certDomain (empty .Values.autoCert.certDomain) }}"
+    - "*.{{- ternary .Values.certDomain .Values.autoCert.certDomain (empty .Values.autoCert.certDomain) }}"
+  issuerRef:
+    name: orchestrator-autocert-issuer
+    kind: ClusterIssuer
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: orch-gateway
+  name: orchestrator-domain
+data:
+  orchestratorDomainName: {{ .Values.certDomain }}
+---

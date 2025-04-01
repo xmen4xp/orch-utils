@@ -1,0 +1,241 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: orchestrator-selfsigned-issuer
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orch-svc
+  namespace: orch-harbor
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orch-svc-token
+  namespace: orch-harbor
+  annotations:
+    kubernetes.io/service-account.name: "orch-svc"
+type: kubernetes.io/service-account-token
+data: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orch-svc
+  namespace: orch-platform
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orch-svc-token
+  namespace: orch-platform
+  annotations:
+    kubernetes.io/service-account.name: "orch-svc"
+type: kubernetes.io/service-account-token
+data: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orch-svc
+  namespace: orch-app
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orch-svc-token
+  namespace: orch-app
+  annotations:
+    kubernetes.io/service-account.name: "orch-svc"
+type: kubernetes.io/service-account-token
+data: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orch-svc
+  namespace: orch-cluster
+  labels:
+    app.kubernetes.io/managed-by: "Helm"
+  annotations:
+    meta.helm.sh/release-name: "cluster-orchestrator"
+    meta.helm.sh/release-namespace: "orch-cluster"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orch-svc-token
+  namespace: orch-cluster
+  annotations:
+    kubernetes.io/service-account.name: "orch-svc"
+type: kubernetes.io/service-account-token
+data: {}
+---
+##
+## certs for https connections to orch-platform
+##
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kubernetes-docker-internal
+  namespace: orch-platform
+spec:
+  secretName: tls-rs-proxy
+  duration: 720h0m0s # 30 days
+  renewBefore: 168h0m0s # 7 days
+  subject:
+    organizations:
+      - Intel Corporation
+    countries:
+      - US
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  dnsNames:
+    - rs-proxy.orch-platform.svc.cluster.local
+  issuerRef:
+    name: orchestrator-selfsigned-issuer
+    kind: ClusterIssuer
+---
+{{- if .Values.generateOrchCert }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kubernetes-docker-internal
+  namespace: orch-gateway
+spec:
+  secretName: tls-orch
+  duration: 17520h0m0s # 2 year
+  renewBefore: 13140h0m0s # 1yr 6 months
+  subject:
+    organizations:
+      - Intel Corporation
+    countries:
+      - US
+  isCA: true
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  dnsNames:
+    - {{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - "*.{{ required "A valid certDomain entry required!" .Values.certDomain }}"
+  issuerRef:
+    name: orchestrator-selfsigned-issuer
+    kind: ClusterIssuer
+---
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: orch-gateway
+  name: kubernetes-docker-internal
+data:
+  dnsNames: |
+    - {{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - keycloak.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - vault.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - observability-ui.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - observability-admin.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - web-ui.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - api.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - metadata.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - registry.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - registry-oci.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - cluster-orch-edge-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - infra-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - logs-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - metrics-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - update-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - attest-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - app-orch.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - fleet.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - telemetry-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - log-query.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - app-service-proxy.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - ws-app-service-proxy.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - cluster-orch-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - vnc.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - release.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - tinkerbell-server.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - onboarding-node.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - onboarding-stream.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - orchestrator-license.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - alerting-monitor.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - connect-gateway.{{ required "A valid certDomain entry required!" .Values.certDomain }}
+---
+# FIXME: The following ClusterRole and ClusterRoleBinding should be installed by CTM chart.
+#        However there is an issue where the db migration job gets executed as PreSync hook before these are created.
+#        This is a temporary workaround until the CTM chart is fixed.
+#        Note that the name of the resources has a -workaround suffix to avoid confliction with the CTM ones.
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: ClusterRole
+metadata:
+  name: "template-manager-configmaps-rbac-workaround"
+  namespace: orch-cluster
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: "template-manager-secrets-rbac-workaround"
+  namespace: orch-cluster
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: "template-manager-secrets-rbac-binding-workaround"
+  namespace: orch-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "template-manager-secrets-rbac-workaround"
+subjects:
+  - name: "orch-svc"
+    kind: ServiceAccount
+    namespace: orch-cluster
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: "template-manager-configmaps-rbac-binding-workaround"
+  namespace: orch-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "template-manager-configmaps-rbac-workaround"
+subjects:
+  - name: "orch-svc"
+    kind: ServiceAccount
+    namespace: orch-cluster

@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: traefik-selfsigned-issuer
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+---
+##
+## certs for orch-gateway
+## a single cert in orch-gateway is intended to replace all other certs
+##
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: traefik-tls-cert
+  namespace: orch-gateway
+spec:
+  secretName: tls-traefik
+  duration: 17520h0m0s # 2 year
+  renewBefore: 13140h0m0s # 1yr 6 months
+  subject:
+    organizations:
+      - Intel Corporation
+    countries:
+      - US
+  isCA: true
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  dnsNames:
+    - {{ required "A valid certDomain entry required!" .Values.certDomain }}
+    - "*.{{ required "A valid certDomain entry required!" .Values.certDomain }}"
+  issuerRef:
+    name: traefik-selfsigned-issuer
+    kind: ClusterIssuer

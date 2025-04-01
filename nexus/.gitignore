@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+compiler/**/*.coverprofile
+compiler/cmd/nexus-sdk/nexus-sdk
+compiler/cmd/nexus-openapi-gen
+compiler/compiler.tar
+compiler/*.coverprofile
+compiler/coverage*.out
+compiler/*.test
+compiler/cmd/nexus-sdk/nexus-sdk
+compiler/cmd/nexus-openapi-gen
+compiler/cmd/gqlgen
+compiler/compiler.tar
+compiler/_generated
+compiler/_deps
+compiler/cmd/debug
+compiler/coverage.json
+compiler/report.json
+compiler/cmd/validate
+compiler/example/datamodel/build/nexus-gql/server

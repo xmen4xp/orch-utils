@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+jwtMiddlewareException:
+  - namespace: sample-ns1
+    names:
+      - sample-ingress-route-1
+      - sample-ingress-route-2
+  - namespace: sample-ns2
+    names:
+      - sample-ingress-route-4
+anyMiddlewareException:
+  - namespace: sample-ns3
+    names:
+      - sample-ingress-route-5

@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# use ".root" instead of "$" when templating the job
+{{- define "statefulsetWait.jobYaml" }}
+{{- $jobName := printf "statefulset-wait-%s-%s" .statefulsetName .jobSuffix }}
+{{- $serviceAccountName := printf "statefulset-wait-%s" .statefulsetName }}
+{{- $kubeCmd := printf "until kubectl rollout status -n %s statefulset/%s; do sleep 1; done;" .namespace .statefulsetName }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobName }}
+spec:
+  template:
+    metadata:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $serviceAccountName }}
+      containers:
+      - name: statefulset-wait
+        image: "bitnami/kubectl:1.30.3"
+        command:
+          - "timeout"
+          - "5m"
+          - "bash"
+          - "-c"
+          - {{ $kubeCmd }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        {{- with .resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}
+{{- $jobSuffix := include "statefulsetWait.jobYaml" (dict "root" $) | toYaml | sha256sum | trunc 10 }}
+{{- include "statefulsetWait.jobYaml" (dict "root" $ "jobSuffix" $jobSuffix "namespace" .Release.Namespace "statefulsetName" .Values.statefulsetName "resources" .Values.resources ) }}

@@ -1,0 +1,172 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-infra
+  namespace: orch-infra
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  - to:
+    - operation:
+        ports:
+        - "3306" # FIXME: For MariaDB part of remote onboarding. Should delete once we migrate to Postgres
+        - "7946" # Loki member list, gossip-ring (Raw TCP)
+        - "6831" # observability-opentelemetry-collector jaeger-compact (Raw UDP)
+        - "14268" # edgenode-observability-opentelemetry-collector jaeger-thrift (Raw TCP)
+        - "8888" # edgenode-observability-opentelemetry-collector metrics (Raw TCP)
+        - "9411" # edgenode-observability-opentelemetry-collector zipkin (Raw TCP)
+        - "3100" # edgenode-observability-loki (TCP)
+        - "9095" # edgenode-observability-loki (TCP)
+        - "9094" # mi-edgenode-alerting-alertmanager (TCP)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-app
+  namespace: orch-app
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  - to:
+    - operation:
+        ports:
+        - "5432" # Postgresql
+        - "11211" # memcache
+        - "9443" # adm webhook service
+        - "3310" # malware scanner
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-cluster
+  namespace: orch-cluster
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  - to:
+    - operation:
+        ports:
+        - "5432" # Postgresql
+        - "11211" # memcache
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-ui
+  namespace: orch-ui
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-platform
+  namespace: orch-platform
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  - to:
+    - operation:
+        ports:
+        - "7946" # Loki member list, gossip-ring (Raw TCP)
+        - "6831" # observability-opentelemetry-collector jaeger-compact (Raw UDP)
+        - "14268" # edgenode-observability-opentelemetry-collector jaeger-thrift (Raw TCP)
+        - "8888" # edgenode-observability-opentelemetry-collector metrics (Raw TCP)
+        - "9411" # edgenode-observability-opentelemetry-collector zipkin (Raw TCP)
+        - "8200" # For Vault standby to communicate with active
+        - "8201" # For Vault standby to communicate with active
+        - "3100" # orchestrator-observability-loki (TCP)
+        - "9095" # orchestrator-observability-loki (TCP)
+        - "8443" # rs-proxy
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-harbor
+  namespace: orch-harbor
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  # For raw TCP traffic
+  - to:
+    - operation:
+        ports:
+        - "5432" # Postgresql
+        - "6379" # Redis
+        - "7899" # notary-signer
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-gateway
+  namespace: orch-gateway
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-sre
+  namespace: orch-sre
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+{{- if .Values.enableDatabaseNamespace }}
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-to-orch-database
+  namespace: orch-database
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - "*"
+  # For raw TCP traffic
+  - to:
+    - operation:
+        ports:
+        - "5432" # Postgresql
+{{- end }}

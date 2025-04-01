@@ -1,0 +1,27 @@
+POST {{host}}/updatecert HTTP/1.1
+content-type: application/json
+
+{
+	"source": "k8s-certificate-events",
+	"data": {
+		"APIVersion": "cert-manager.io/v1",
+		"Action": "",
+		"Cluster": "certman-test-cluster",
+		"Count": 0,
+		"Kind": "Certificate",
+		"Level": "info",
+		"Messages": [
+			"status.renewalTime:\n\t-: 2024-06-11T08:53:50Z\n\t+: 2024-06-11T08:54:50Z\n"
+		],
+		"Name": "example-com3",
+		"Namespace": "cert-manager-test",
+		"Reason": "",
+		"Recommendations": null,
+		"Resource": "cert-manager.io/v1/certificates",
+		"TimeStamp": "2024-06-11T08:53:50.086043045Z",
+		"Title": "cert-manager.io/v1/certificates updated",
+		"Type": "update",
+		"Warnings": null
+	},
+	"timeStamp": "0001-01-01T00:00:00Z"
+}

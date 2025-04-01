@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kyverno.io/kyverno-version: 1.6.0
+    policies.kyverno.io/category: Pod Security Standards (Restricted) Orch
+    policies.kyverno.io/description: Restricted Pod Security for Orchestrator.
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Restrict Orchestrator Pod Security.
+    # do not auto generate policies for these objects:
+    # DaemonSet, Deployment, Job, StatefulSet, ReplicaSet, ReplicationController
+    pod-policies.kyverno.io/autogen-controllers: none
+  name: restricted-policy-orch
+spec:
+  admission: true
+  validationFailureAction: Audit  
+  background: true
+  failurePolicy: Fail
+  rules:
+  - name: restricted-policy-orch
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    exclude:
+      any:
+      - resources:
+          # exceptions for 3rd party namespaces
+          namespaces:
+          - kube-system
+          - istio-system
+          - cattle-fleet-local-system
+          - cattle-fleet-system
+          - cattle-provisioning-capi-system
+          - cattle-system
+          - fleet-default
+          - metallb-system
+          - local-path-storage
+          - virtual-en
+    skipBackgroundRequests: true
+    validate:
+      podSecurity:
+        level: restricted ## enforce the restricted profile
+        version: latest  ## enforce the latest version of this profile
+        exclude:         ## exclude certain controls with optionally certain images
+        - controlName: Capabilities
+          images:
+          - "*/istio/proxyv2*"
+        - controlName: Running as Non-root
+          images:
+          - "*/istio/proxyv2*"
+        - controlName: Running as Non-root user
+          images:
+          - "*/istio/proxyv2*"
+        - controlName: Seccomp
+          images:
+          - "*/istio/proxyv2*"
+---
+# orchestrator restricted pod security policy exception template
+{{- range .Values.restrictedPolicyOrch }}
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: restricted-policy-orch-exception-{{ .namespace }}
+spec:
+  exceptions:
+  - policyName: restricted-policy-orch
+    ruleNames:
+    - restricted-policy-orch
+  match:
+    any:
+    - resources:
+        kinds:
+        - Pod
+        namespaces:
+        - {{ .namespace }}
+        names:
+        {{- range .names }}
+        - {{ . | quote }}
+        {{- end }}
+---
+{{- end }}

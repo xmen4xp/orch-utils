@@ -1,0 +1,186 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+namespace: orch-platform
+image:
+  registry: registry-rs.edgeorchestration.intel.com/edge-orch
+  repository: common/keycloak-tenant-controller
+imagePullSecrets: ""
+serviceAccount:
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: orch-svc
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  allowPrivilegeEscalation: false
+keycloakAdmin:
+  user: admin
+  client: system-client
+  passwordSecret:
+    name: platform-keycloak # name of the secret
+    key: admin-password # key of the secret
+keycloak_realm: "master"
+keycloak_si_groups: |-
+  {
+    "Alerts-M2M-Service-Account": [
+      "realm/view-users"
+    ],
+    "Host-Manager-M2M-Service-Account": [
+      "realm/view-users",
+      "realm/query-users",
+      "realm/manage-clients",
+      "release-service-access-token-read-role",
+      "release-service-proxy-read-role"
+    ],
+    "IAM-Admin-Group": [
+      "admin",
+      "realm/view-users",
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "realm/view-users",
+      "realm/query-users",
+      "realm/manage-clients",
+      "secrets-root-role"
+    ],
+    "Org-Admin-Group": [
+      "org-read-role",
+      "org-write-role",
+      "org-update-role",
+      "org-delete-role"
+    ],
+    "SRE-Admin-Group": [
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "cluster-management-client/base-role",
+      "telemetry-client/viewer",
+      "alerts-read-role",
+      "alert-definitions-read-role"
+    ],
+    "Service-Admin-Group": [
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "realm/view-users",
+      "realm/query-users",
+      "realm/manage-clients",
+      "cluster-management-client/restricted-role",
+      "cluster-management-client/standard-role",
+      "cluster-management-client/base-role",
+      "release-service-access-token-read-role",
+      "telemetry-client/admin",
+      "telemetry-client/editor",
+      "telemetry-client/viewer",
+      "<project-id>_registry-admin-role",
+      "alerts-read-role",
+      "alert-definitions-read-role",
+      "alert-definitions-write-role",
+      "alert-receivers-read-role",
+      "alert-receivers-write-role"
+    ]
+  }
+keycloak_org_groups: |-
+  {
+    "<org-id>_Project-Manager-Group": [
+      "<org-id>_project-read-role",
+      "<org-id>_project-write-role",
+      "<org-id>_project-update-role",
+      "<org-id>_project-delete-role"
+    ]
+  }
+keycloak_proj_groups: |-
+  {
+    "<project-id>_Edge-Node-M2M-Service-Account": [
+      "release-service-access-token-read-role",
+      "release-service-proxy-read-role",
+      "<project-id>_catalog-publisher-read-role",
+      "<project-id>_registry-viewer-role",
+      "node-agent-readwrite-role",
+      "<project-id>_node-agent-readwrite-role"
+    ],
+    "<project-id>_Edge-Manager-Group": [
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "telemetry-client/<project-id>_viewer",
+      "<project-id>_app-service-proxy-read-role",
+      "<project-id>_app-service-proxy-write-role",
+      "<project-id>_app-deployment-manager-read-role",
+      "<project-id>_app-deployment-manager-write-role",
+      "<project-id>_app-resource-manager-read-role",
+      "<project-id>_app-resource-manager-write-role",
+      "<project-id>_app-vm-console-write-role",
+      "<project-id>_catalog-publisher-read-role",
+      "<project-id>_catalog-publisher-write-role",
+      "<project-id>_catalog-other-read-role",
+      "<project-id>_catalog-other-write-role",
+      "<project-id>_catalog-restricted-read-role",
+      "<project-id>_catalog-restricted-write-role",
+      "<project-id>_clusters-read-role",
+      "<project-id>_clusters-write-role",
+      "<project-id>_cluster-templates-read-role",
+      "<project-id>_cluster-templates-write-role",
+      "<project-id>_registry-admin-role",
+      "<project-id>_registry-editor-role",
+      "<project-id>_registry-viewer-role",
+      "<project-id>_infra-manager-core-read-role",
+      "<project-id>_alerts-read-role",
+      "<project-id>_alert-definitions-read-role",
+      "<project-id>_alert-definitions-write-role",
+      "<org-id>_<project-id>_member-role"
+    ],
+    "<project-id>_Edge-Onboarding-Group": [
+      "<project-id>_edge-onboarding-role"
+    ],
+    "<project-id>_Edge-Operator-Group": [
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "telemetry-client/<project-id>_viewer",
+      "<project-id>_app-service-proxy-read-role",
+      "<project-id>_app-service-proxy-write-role",
+      "<project-id>_app-deployment-manager-read-role",
+      "<project-id>_app-deployment-manager-write-role",
+      "<project-id>_app-resource-manager-read-role",
+      "<project-id>_app-resource-manager-write-role",
+      "<project-id>_app-vm-console-write-role",
+      "<project-id>_catalog-publisher-read-role",
+      "<project-id>_catalog-other-read-role",
+      "<project-id>_clusters-read-role",
+      "<project-id>_clusters-write-role",
+      "<project-id>_cluster-templates-read-role",
+      "<project-id>_registry-viewer-role",
+      "<project-id>_infra-manager-core-read-role",
+      "<project-id>_alerts-read-role",
+      "<project-id>_alert-definitions-read-role",
+      "<org-id>_<project-id>_member-role"
+    ],
+    "<project-id>_Host-Manager-Group": [
+      "account/manage-account",
+      "account/manage-account-links",
+      "account/view-profile",
+      "telemetry-client/<project-id>_viewer",
+      "<project-id>_infra-manager-core-read-role",
+      "<project-id>_infra-manager-core-write-role",
+      "<project-id>_edge-onboarding-role",
+      "<org-id>_<project-id>_member-role"
+    ]
+  }
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"

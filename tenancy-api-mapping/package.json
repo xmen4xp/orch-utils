@@ -1,0 +1,17 @@
+{
+  "name": "tenancy-api-mapping",
+  "version": "1.0.32-dev",
+  "description": "## Overview",
+  "main": "none",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "none"
+  },
+  "author": "",
+  "license": "Intel",
+  "devDependencies": {
+    "@redocly/cli": "^1.25.5"
+  }
+}

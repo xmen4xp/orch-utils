@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# use ".root" instead of "$" when templating the job
+{{- define "secretWait.jobYaml" }}
+{{- $jobName := printf "secret-wait-%s-%s" .secretName .jobSuffix }}
+{{- $serviceAccountName := printf "secret-wait-%s" .secretName }}
+{{- $kubeCmd := printf "until kubectl get secret -n %s %s; do sleep 10; done;" .namespace .secretName }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobName }}
+spec:
+  template:
+    metadata:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $serviceAccountName }}
+      containers:
+      - name: secret-wait
+        image: "bitnami/kubectl:1.28.4"
+        command:
+          - "timeout"
+          - "240h"
+          - "bash"
+          - "-c"
+          - {{ $kubeCmd }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        {{- with .resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}
+{{- $jobSuffix := include "secretWait.jobYaml" (dict "root" $) | toYaml | sha256sum | trunc 10 }}
+{{- include "secretWait.jobYaml" (dict "root" $ "jobSuffix" $jobSuffix "namespace" .Release.Namespace "secretName" .Values.secretName "resources" .Values.resources) }}

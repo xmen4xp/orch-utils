@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# define your template in a config map
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "certificate-file-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    # 
+    :{{ required "A valid service.port entry required!" .Values.service.port }}
+    root * {{ required "A valid rootFolder entry required!" .Values.rootFolder }}
+    uri strip_prefix /boots
+    file_server
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile

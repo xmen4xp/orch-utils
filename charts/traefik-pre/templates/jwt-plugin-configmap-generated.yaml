@@ -1,0 +1,682 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+binaryData:
+  jwt.png: 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
+data:
+  .commitlintrc.yml: |
+    extends:
+      - '@commitlint/config-conventional'
+
+    rules:
+      body-max-line-length:
+        - 1
+        - always
+        - 120
+      type-enum:
+        - 2
+        - always
+        -
+          - chore
+          - feat
+          - fix
+  .editorconfig: |+
+    ; https://editorconfig.org/
+    root = true
+
+    [*]
+    insert_final_newline = true
+    charset = utf-8
+    trim_trailing_whitespace = true
+    indent_style = space
+    indent_size = 2
+
+    [{Makefile,go.mod,go.sum,*.go,.gitmodules}]
+    indent_style = tab
+    indent_size = 4
+
+    [*.md]
+    indent_size = 4
+    trim_trailing_whitespace = false
+
+  .gitignore: |
+    # Binaries for programs and plugins
+    *.exe
+    *.exe~
+    *.dll
+    *.so
+    *.dylib
+
+    # Test binary, built with `go test -c`
+    *.test
+
+    # Output of the go coverage tool, specifically when used with LiteIDE
+    *.out
+
+    # Dependency directories (remove the comment below to include it)
+    # vendor/
+    .idea/
+
+    node_modules/
+  .releaserc.yaml: |
+    branches:
+      - main
+
+    tagFormat: "v${version}"
+
+    preset: "conventionalcommits"
+
+    plugins:
+      - "@semantic-release/commit-analyzer"
+      - "semantic-release-commitlint"
+      - "@semantic-release/release-notes-generator"
+      -
+        - "@semantic-release/git"
+        - assets: []
+          messsage: false
+      -
+        - "@semantic-release/github"
+        - successComment: false
+          failComment: false
+  .traefik.yml: |
+    displayName: JWT Access Policy
+    type: middleware
+
+    import: github.com/team-carepay/traefik-jwt-plugin
+
+    summary: Verifies JWT token. Supports RSA/DSA/HMAC. Support fetching keys from JWKS endpoint. Supports Open Policy Agent (OPA) for validating the request.
+
+    iconPath: jwt.png
+
+    testData:
+      OpaUrl: http://localhost:8181/v1/data/example
+      OpaAllowField: allow
+      OpaBody: true
+      PayloadFields:
+        - exp
+      Required: true
+      Keys:
+        - |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzyis1ZjfNB0bBgKFMSv
+          vkTtwlvBsaJq7S5wA+kzeVOVpVWwkWdVha4s38XM/pa/yr47av7+z3VTmvDRyAHc
+          aT92whREFpLv9cj5lTeJSibyr/Mrm/YtjCZVWgaOYIhwrXwKLqPr/11inWsAkfIy
+          tvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0
+          e+lf4s4OxQawWD79J9/5d3Ry0vbV3Am1FtGJiJvOwRsIfVChDpYStTcHTCMqtvWb
+          V6L11BWkpzGXSW4Hv43qa+GSYOD2QU68Mb59oSk2OB+BtOLpJofmbGEGgvmwyCI9
+          MwIDAQAB
+          -----END PUBLIC KEY-----
+      OpaHeaders:
+        X-Allowed: allow
+      JwtHeaders:
+        X-Subject: sub
+      OpaResponseHeaders:
+        X-Allowed: allow
+      OpaHttpStatusField: allow_status_code
+  LICENSE: |2
+                                     Apache License
+                               Version 2.0, January 2004
+                            http://www.apache.org/licenses/
+
+       TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+       1. Definitions.
+
+          "License" shall mean the terms and conditions for use, reproduction,
+          and distribution as defined by Sections 1 through 9 of this document.
+
+          "Licensor" shall mean the copyright owner or entity authorized by
+          the copyright owner that is granting the License.
+
+          "Legal Entity" shall mean the union of the acting entity and all
+          other entities that control, are controlled by, or are under common
+          control with that entity. For the purposes of this definition,
+          "control" means (i) the power, direct or indirect, to cause the
+          direction or management of such entity, whether by contract or
+          otherwise, or (ii) ownership of fifty percent (50%) or more of the
+          outstanding shares, or (iii) beneficial ownership of such entity.
+
+          "You" (or "Your") shall mean an individual or Legal Entity
+          exercising permissions granted by this License.
+
+          "Source" form shall mean the preferred form for making modifications,
+          including but not limited to software source code, documentation
+          source, and configuration files.
+
+          "Object" form shall mean any form resulting from mechanical
+          transformation or translation of a Source form, including but
+          not limited to compiled object code, generated documentation,
+          and conversions to other media types.
+
+          "Work" shall mean the work of authorship, whether in Source or
+          Object form, made available under the License, as indicated by a
+          copyright notice that is included in or attached to the work
+          (an example is provided in the Appendix below).
+
+          "Derivative Works" shall mean any work, whether in Source or Object
+          form, that is based on (or derived from) the Work and for which the
+          editorial revisions, annotations, elaborations, or other modifications
+          represent, as a whole, an original work of authorship. For the purposes
+          of this License, Derivative Works shall not include works that remain
+          separable from, or merely link (or bind by name) to the interfaces of,
+          the Work and Derivative Works thereof.
+
+          "Contribution" shall mean any work of authorship, including
+          the original version of the Work and any modifications or additions
+          to that Work or Derivative Works thereof, that is intentionally
+          submitted to Licensor for inclusion in the Work by the copyright owner
+          or by an individual or Legal Entity authorized to submit on behalf of
+          the copyright owner. For the purposes of this definition, "submitted"
+          means any form of electronic, verbal, or written communication sent
+          to the Licensor or its representatives, including but not limited to
+          communication on electronic mailing lists, source code control systems,
+          and issue tracking systems that are managed by, or on behalf of, the
+          Licensor for the purpose of discussing and improving the Work, but
+          excluding communication that is conspicuously marked or otherwise
+          designated in writing by the copyright owner as "Not a Contribution."
+
+          "Contributor" shall mean Licensor and any individual or Legal Entity
+          on behalf of whom a Contribution has been received by Licensor and
+          subsequently incorporated within the Work.
+
+       2. Grant of Copyright License. Subject to the terms and conditions of
+          this License, each Contributor hereby grants to You a perpetual,
+          worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+          copyright license to reproduce, prepare Derivative Works of,
+          publicly display, publicly perform, sublicense, and distribute the
+          Work and such Derivative Works in Source or Object form.
+
+       3. Grant of Patent License. Subject to the terms and conditions of
+          this License, each Contributor hereby grants to You a perpetual,
+          worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+          (except as stated in this section) patent license to make, have made,
+          use, offer to sell, sell, import, and otherwise transfer the Work,
+          where such license applies only to those patent claims licensable
+          by such Contributor that are necessarily infringed by their
+          Contribution(s) alone or by combination of their Contribution(s)
+          with the Work to which such Contribution(s) was submitted. If You
+          institute patent litigation against any entity (including a
+          cross-claim or counterclaim in a lawsuit) alleging that the Work
+          or a Contribution incorporated within the Work constitutes direct
+          or contributory patent infringement, then any patent licenses
+          granted to You under this License for that Work shall terminate
+          as of the date such litigation is filed.
+
+       4. Redistribution. You may reproduce and distribute copies of the
+          Work or Derivative Works thereof in any medium, with or without
+          modifications, and in Source or Object form, provided that You
+          meet the following conditions:
+
+          (a) You must give any other recipients of the Work or
+              Derivative Works a copy of this License; and
+
+          (b) You must cause any modified files to carry prominent notices
+              stating that You changed the files; and
+
+          (c) You must retain, in the Source form of any Derivative Works
+              that You distribute, all copyright, patent, trademark, and
+              attribution notices from the Source form of the Work,
+              excluding those notices that do not pertain to any part of
+              the Derivative Works; and
+
+          (d) If the Work includes a "NOTICE" text file as part of its
+              distribution, then any Derivative Works that You distribute must
+              include a readable copy of the attribution notices contained
+              within such NOTICE file, excluding those notices that do not
+              pertain to any part of the Derivative Works, in at least one
+              of the following places: within a NOTICE text file distributed
+              as part of the Derivative Works; within the Source form or
+              documentation, if provided along with the Derivative Works; or,
+              within a display generated by the Derivative Works, if and
+              wherever such third-party notices normally appear. The contents
+              of the NOTICE file are for informational purposes only and
+              do not modify the License. You may add Your own attribution
+              notices within Derivative Works that You distribute, alongside
+              or as an addendum to the NOTICE text from the Work, provided
+              that such additional attribution notices cannot be construed
+              as modifying the License.
+
+          You may add Your own copyright statement to Your modifications and
+          may provide additional or different license terms and conditions
+          for use, reproduction, or distribution of Your modifications, or
+          for any such Derivative Works as a whole, provided Your use,
+          reproduction, and distribution of the Work otherwise complies with
+          the conditions stated in this License.
+
+       5. Submission of Contributions. Unless You explicitly state otherwise,
+          any Contribution intentionally submitted for inclusion in the Work
+          by You to the Licensor shall be under the terms and conditions of
+          this License, without any additional terms or conditions.
+          Notwithstanding the above, nothing herein shall supersede or modify
+          the terms of any separate license agreement you may have executed
+          with Licensor regarding such Contributions.
+
+       6. Trademarks. This License does not grant permission to use the trade
+          names, trademarks, service marks, or product names of the Licensor,
+          except as required for reasonable and customary use in describing the
+          origin of the Work and reproducing the content of the NOTICE file.
+
+       7. Disclaimer of Warranty. Unless required by applicable law or
+          agreed to in writing, Licensor provides the Work (and each
+          Contributor provides its Contributions) on an "AS IS" BASIS,
+          WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+          implied, including, without limitation, any warranties or conditions
+          of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+          PARTICULAR PURPOSE. You are solely responsible for determining the
+          appropriateness of using or redistributing the Work and assume any
+          risks associated with Your exercise of permissions under this License.
+
+       8. Limitation of Liability. In no event and under no legal theory,
+          whether in tort (including negligence), contract, or otherwise,
+          unless required by applicable law (such as deliberate and grossly
+          negligent acts) or agreed to in writing, shall any Contributor be
+          liable to You for damages, including any direct, indirect, special,
+          incidental, or consequential damages of any character arising as a
+          result of this License or out of the use or inability to use the
+          Work (including but not limited to damages for loss of goodwill,
+          work stoppage, computer failure or malfunction, or any and all
+          other commercial damages or losses), even if such Contributor
+          has been advised of the possibility of such damages.
+
+       9. Accepting Warranty or Additional Liability. While redistributing
+          the Work or Derivative Works thereof, You may choose to offer,
+          and charge a fee for, acceptance of support, warranty, indemnity,
+          or other liability obligations and/or rights consistent with this
+          License. However, in accepting such obligations, You may act only
+          on Your own behalf and on Your sole responsibility, not on behalf
+          of any other Contributor, and only if You agree to indemnify,
+          defend, and hold each Contributor harmless for any liability
+          incurred by, or claims asserted against, such Contributor by reason
+          of your accepting any such warranty or additional liability.
+
+       END OF TERMS AND CONDITIONS
+
+       APPENDIX: How to apply the Apache License to your work.
+
+          To apply the Apache License to your work, attach the following
+          boilerplate notice, with the fields enclosed by brackets "[]"
+          replaced with your own identifying information. (Don't include
+          the brackets!)  The text should be enclosed in the appropriate
+          comment syntax for the file format. We also recommend that a
+          file or class name and description of purpose be included on the
+          same "printed page" as the copyright notice for easier
+          identification within third-party archives.
+
+       Copyright [yyyy] [name of copyright owner]
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+           http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+  Makefile: ".PHONY: lint test vendor clean\n\nexport GO111MODULE=on\n\ndefault: lint
+    test\n\nlint:\n\tgolangci-lint run\n\ntest:\n\tgo test -v -cover ./...\n\nbuild:\n\tgo
+    build -v .\n\nyaegi_test:\n\tyaegi test -v .\n\nvendor:\n\tgo mod vendor\n\nclean:\n\trm
+    -rf ./vendor\n"
+  README.md: "# traefik-jwt-plugin ![Build](https://github.com/team-carepay/traefik-jwt-plugin/workflows/build/badge.svg)\n\nTraefik
+    plugin for verifying JSON Web Tokens (JWT). Supports public keys, certificates
+    or JWKS endpoints.\nSupports RSA, ECDSA and symmetric keys. Supports Open Policy
+    Agent (OPA) for additional authorization checks.\n\nFeatures:\n\n* RS256, RS384,
+    RS512, PS256, PS384, PS512, ES256, ES384, ES512, HS256, HS384, HS512\n* Certificates
+    or public keys can be configured in the dynamic config\n* Supports JWK endpoints
+    for fetching keys remotely\n* Reject a request or Log warning when required field
+    is missing from JWT payload\n* Validate request with Open Policy Agent\n* Adds
+    the verified and decoded token to the OPA input\n\n## Installation\n\nThe plugin
+    needs to be configured in the Traefik static configuration before it can be used.\n\n###
+    Installation with Helm\n\nThe following snippet can be used as an example for
+    the values.yaml file:\n\n```yaml\nexperimental:\n  plugins:\n    enabled: true\n\nadditionalArguments:\n-
+    --experimental.plugins.jwt.moduleName=github.com/team-carepay/traefik-jwt-plugin\n-
+    --experimental.plugins.jwt.version=v0.0.11\n```\n\n### Installation via command
+    line\n\n```sh\ntraefik \\\n  --experimental.plugins.jwt.moduleName=github.com/team-carepay/traefik-jwt-plugin
+    \\\n  --experimental.plugins.jwt.version=v0.0.11\n```\n\n## Configuration\n\nThe
+    plugin currently supports the following configuration settings: (all fields are
+    optional)\n\nName | Description\n---- | ----\nOpaUrl | URL of OPA policy document
+    requested for decision, e.g. http://opa:8181/v1/data/example.\nOpaAllowField |
+    Field in the JSON result which contains a boolean, indicating whether the request
+    is allowed or not. Default `allow`.\nOpaBody | Boolean indicating whether the
+    request body should be added to the OPA input.\nPayloadFields | The field-name
+    in the JWT payload that are required (e.g. `exp`). Multiple field names may be
+    specificied (string array)\nRequired | Is `Authorization` header with JWT token
+    required for every request.\nKeys | Used to validate JWT signature. Multiple keys
+    are supported. Allowed values include certificates, public keys, symmetric keys.
+    In case the value is a valid URL, the plugin will fetch keys from the JWK endpoint.\nAlg
+    | Used to verify which PKI algorithm is used in the JWT.\nIss | Used to verify
+    the issuer of the JWT.\nAud | Used to verify the audience of the JWT.\nJwtHeaders
+    | Map used to inject JWT payload fields as HTTP request headers.\nOpaHeaders |
+    Map used to inject OPA result fields as HTTP request headers. Populated if request
+    is allowed by OPA. Only 1st level keys from OPA document are supported.\nOpaResponseHeaders
+    | Map used to inject OPA result fields as HTTP response headers. Populated if
+    OPA response has `OpaAllowField` present, regardless of value. Only 1st level
+    keys from OPA document are supported.\nOpaHttpStatusField | Field in OPA JSON
+    result, which contains int or string HTTP status code that will be returned in
+    case of desiallowed OPA response. Accepted range is >= 300 and < 600. Only 1st
+    level keys from OPA document are supported.\nJwtCookieKey | Name of the cookie
+    to extract JWT if not found in `Authorization` header.\n\n### Example configuration\n\nThis
+    example uses Kubernetes Custom Resource Descriptors (CRD) :\n\n```yaml\napiVersion:
+    traefik.containo.us/v1alpha1\nkind: Middleware\nmetadata:\n  name: jwt\nspec:\n
+    \ plugin:\n    jwt:\n      OpaUrl: http://localhost:8181/v1/data/example\n      OpaAllowField:
+    allow\n      OpaBody: true\n      PayloadFields:\n        - exp\n      Required:
+    true\n      Keys:\n        - https://samples.auth0.com/.well-known/jwks.json\n
+    \       - |\n          -----BEGIN PUBLIC KEY-----\n          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzyis1ZjfNB0bBgKFMSv\n
+    \         vkTtwlvBsaJq7S5wA+kzeVOVpVWwkWdVha4s38XM/pa/yr47av7+z3VTmvDRyAHc\n          aT92whREFpLv9cj5lTeJSibyr/Mrm/YtjCZVWgaOYIhwrXwKLqPr/11inWsAkfIy\n
+    \         tvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0\n          e+lf4s4OxQawWD79J9/5d3Ry0vbV3Am1FtGJiJvOwRsIfVChDpYStTcHTCMqtvWb\n
+    \         V6L11BWkpzGXSW4Hv43qa+GSYOD2QU68Mb59oSk2OB+BtOLpJofmbGEGgvmwyCI9\n          MwIDAQAB\n
+    \       -----END PUBLIC KEY-----\n      OpaHeaders:\n        X-Allowed: allow\n
+    \     JwtHeaders:\n        X-Subject: sub\n      OpaResponseHeaders:\n        X-Allowed:
+    allow\n      OpaHttpStatusField: allow_status_code\n      JwtCookieKey: jwt\n---\napiVersion:
+    networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: test-server\n  labels:\n
+    \   app: test-server\n  annotations:\n    kubernetes.io/ingress.class: traefik\n
+    \   traefik.ingress.kubernetes.io/router.middlewares: default-jwt@kubernetescrd\n```\n\n##
+    Open Policy Agent\n\nThe following section describes how to use this plugin with
+    Open Policy Agent (OPA)\n\n### OPA input payload\n\nThe plugin will translate
+    the HTTP request (including headers and parameters) and forwards the payload as
+    JSON to OPA.\nFor example, the following URL: `http://localhost/api/path?param1=foo&param2=bar`
+    \nwill result in the following payload (headers are reduced for readability):\n\n```json\n{\n
+    \   \"headers\": {\n      \"Accept-Encoding\": [\n        \"gzip, deflate, br\"\n
+    \     ],\n      \"Authorization\": [\n        \"Bearer XXX.XXX.XXX\"\n      ],\n
+    \     \"X-Forwarded-Host\": [\n        \"localhost\"\n      ],\n      \"X-Forwarded-Port\":
+    [\n        \"80\"\n      ],\n      \"X-Forwarded-Proto\": [\n        \"http\"\n
+    \     ],\n      \"X-Forwarded-Server\": [\n        \"traefik-84c77c5547-sm2cb\"\n
+    \     ],\n      \"X-Real-Ip\": [\n        \"172.18.0.1\"\n      ]\n    },\n    \"host\":
+    \"localhost\",\n    \"method\": \"POST\",\n    \"parameters\": {\n      \"param1\":
+    [\n        \"foo\"\n      ],\n      \"param2\": [\n        \"bar\"\n      ]\n
+    \   },\n    \"body\": {\n      \"foo\": \"bar\"\n    },\n    \"path\": [\n      \"api\",\n
+    \     \"path\"\n    ],\n    \"tokenHeader\": {\n        \"alg\": \"RS512\",\n
+    \       \"kid\": \"abc123\"\n    },\n    \"tokenPayload\": {\n        \"exp\":
+    1652263686,\n        \"sub\": \"johndoe@host.com\"\n    }\n}\n```\n\n### Example
+    OPA policy in Rego\n\nThe policies you enforce can be as complex or simple as
+    you prefer.\nFor example, the policy could decode the JWT token and verify the
+    token is valid and has not expired,\nand that the user has the required claims
+    in the token.\n\nThe policy below shows an simplified example:\n\n```config\npackage
+    example\n\ndefault allow = false\n\nallow {\n    input.method = \"GET\"\n    input.path[0]
+    = \"public\"\n}\n\nallow {\n    input.method = \"GET\"\n    input.path = [ \"secure\",
+    i ]\n    has_token([ \"123\", \"456\"])\n}\n\nhas_token(tokens) {\n    input.path[1]
+    = tokens[i]\n}\n```\n\nIn the above example, requesting `/public/anything` or
+    `/secure/123` is allowed, \nhowever requesting `/secure/xxx` would be rejected
+    and results in a 403 Forbidden.\n\n## License\n\nThis software is released under
+    the Apache 2.0 License\n"
+  jwt.go: "package traefik_jwt_plugin\n\nimport (\n\t\"bytes\"\n\t\"context\"\n\t\"crypto\"\n\t\"crypto/ecdsa\"\n\t\"crypto/elliptic\"\n\t\"crypto/hmac\"\n\t\"crypto/rsa\"\n\t\"crypto/sha256\"\n\t\"crypto/x509\"\n\t\"encoding/base64\"\n\t\"encoding/json\"\n\t\"encoding/pem\"\n\t\"fmt\"\n\t\"io\"\n\t\"math/big\"\n\t\"mime\"\n\t\"mime/multipart\"\n\t\"net\"\n\t\"net/http\"\n\t\"net/url\"\n\t\"strconv\"\n\t\"strings\"\n\t\"time\"\n)\n\n//
+    Config the plugin configuration.\ntype Config struct {\n\tOpaUrl                string\n\tOpaAllowField
+    \        string\n\tOpaBody               bool\n\tPayloadFields         []string\n\tRequired
+    \             bool\n\tKeys                  []string\n\tAlg                   string\n\tIss
+    \                  string\n\tAud                   string\n\tOpaHeaders            map[string]string\n\tJwtHeaders
+    \           map[string]string\n\tOpaResponseHeaders    map[string]string\n\tOpaHttpStatusField
+    \   string\n\tJwtCookieKey          string\n}\n\n// CreateConfig creates a new
+    OPA Config\nfunc CreateConfig() *Config {\n\treturn &Config{\n\t\tRequired:              true,
+    // default to Authorization JWT header is required\n\t\tOpaAllowField:         \"allow\",\n\t\tOpaBody:
+    \              true,\n\t}\n}\n\n// JwtPlugin contains the runtime config\ntype
+    JwtPlugin struct {\n\tnext                  http.Handler\n\topaUrl                string\n\topaAllowField
+    \        string\n\topaBody               bool\n\tpayloadFields         []string\n\trequired
+    \             bool\n\tjwkEndpoints          []*url.URL\n\tkeys                  map[string]interface{}\n\talg
+    \                  string\n\tiss                   string\n\taud                   string\n\topaHeaders
+    \           map[string]string\n\tjwtHeaders            map[string]string\n\topaResponseHeaders
+    \   map[string]string\n\topaHttpStatusField    string\n\tjwtCookieKey          string\n}\n\n//
+    LogEvent contains a single log entry\ntype LogEvent struct {\n\tLevel   string
+    \   `json:\"level\"`\n\tMsg     string    `json:\"msg\"`\n\tTime    time.Time
+    `json:\"time\"`\n\tNetwork Network   `json:\"network\"`\n\tURL     string    `json:\"url\"`\n\tSub
+    \    string    `json:\"sub\"`\n}\n\ntype Network struct {\n\tClient `json:\"client\"`\n}\n\ntype
+    Client struct {\n\tIP   string `json:\"ip\"`\n\tPort int    `json:\"port\"`\n}\n\ntype
+    JwtHeader struct {\n\tAlg  string   `json:\"alg\"`\n\tKid  string   `json:\"kid\"`\n\tTyp
+    \ string   `json:\"typ\"`\n\tCty  string   `json:\"cty\"`\n\tCrit []string `json:\"crit\"`\n}\n\ntype
+    JWT struct {\n\tPlaintext []byte\n\tSignature []byte\n\tHeader    JwtHeader\n\tPayload
+    \  map[string]interface{}\n}\n\nvar supportedHeaderNames = map[string]struct{}{\"alg\":
+    {}, \"kid\": {}, \"typ\": {}, \"cty\": {}, \"crit\": {}}\n\n// Key is a JSON web
+    key returned by the JWKS request.\ntype Key struct {\n\tKid string   `json:\"kid\"`\n\tKty
+    string   `json:\"kty\"`\n\tAlg string   `json:\"alg\"`\n\tUse string   `json:\"use\"`\n\tX5c
+    []string `json:\"x5c\"`\n\tX5t string   `json:\"x5t\"`\n\tN   string   `json:\"n\"`\n\tE
+    \  string   `json:\"e\"`\n\tK   string   `json:\"k,omitempty\"`\n\tX   string
+    \  `json:\"x,omitempty\"`\n\tY   string   `json:\"y,omitempty\"`\n\tD   string
+    \  `json:\"d,omitempty\"`\n\tP   string   `json:\"p,omitempty\"`\n\tQ   string
+    \  `json:\"q,omitempty\"`\n\tDp  string   `json:\"dp,omitempty\"`\n\tDq  string
+    \  `json:\"dq,omitempty\"`\n\tQi  string   `json:\"qi,omitempty\"`\n\tCrv string
+    \  `json:\"crv,omitempty\"`\n}\n\n// Keys represents a set of JSON web keys.\ntype
+    Keys struct {\n\t// Keys is an array of JSON web keys.\n\tKeys []Key `json:\"keys\"`\n}\n\n//
+    PayloadInput is the input payload\ntype PayloadInput struct {\n\tHost       string
+    \                `json:\"host\"`\n\tMethod     string                 `json:\"method\"`\n\tPath
+    \      []string               `json:\"path\"`\n\tParameters url.Values             `json:\"parameters\"`\n\tHeaders
+    \   map[string][]string    `json:\"headers\"`\n\tJWTHeader  JwtHeader              `json:\"tokenHeader\"`\n\tJWTPayload
+    map[string]interface{} `json:\"tokenPayload\"`\n\tBody       map[string]interface{}
+    `json:\"body,omitempty\"`\n\tForm       url.Values             `json:\"form,omitempty\"`\n}\n\n//
+    Payload for OPA requests\ntype Payload struct {\n\tInput *PayloadInput `json:\"input\"`\n}\n\n//
+    Response from OPA\ntype Response struct {\n\tResult map[string]json.RawMessage
+    `json:\"result\"`\n}\n\n// New creates a new plugin\nfunc New(_ context.Context,
+    next http.Handler, config *Config, _ string) (http.Handler, error) {\n\tjwtPlugin
+    := &JwtPlugin{\n\t\tnext:                  next,\n\t\topaUrl:                config.OpaUrl,\n\t\topaAllowField:
+    \        config.OpaAllowField,\n\t\topaBody:               config.OpaBody,\n\t\tpayloadFields:
+    \        config.PayloadFields,\n\t\trequired:              config.Required,\n\t\talg:
+    \                  config.Alg,\n\t\tiss:                   config.Iss,\n\t\taud:
+    \                  config.Aud,\n\t\tkeys:                  make(map[string]interface{}),\n\t\topaHeaders:
+    \           config.OpaHeaders,\n\t\tjwtHeaders:            config.JwtHeaders,\n\t\topaResponseHeaders:
+    \   config.OpaResponseHeaders,\n\t\topaHttpStatusField:    config.OpaHttpStatusField,\n\t\tjwtCookieKey:
+    \ config.JwtCookieKey,\n\t}\n\tif len(config.Keys) > 0 {\n\t\tif err := jwtPlugin.ParseKeys(config.Keys);
+    err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tif len(jwtPlugin.jwkEndpoints)
+    > 0 {\n\t\t\tgo jwtPlugin.BackgroundRefresh()\n\t\t}\n\t}\n\treturn jwtPlugin,
+    nil\n}\n\nfunc (jwtPlugin *JwtPlugin) BackgroundRefresh() {\n\tfor {\n\t\tjwtPlugin.FetchKeys()\n\t\ttime.Sleep(15
+    * time.Minute) // 15 min\n\t}\n}\n\nfunc (jwtPlugin *JwtPlugin) ParseKeys(certificates
+    []string) error {\n\tfor _, certificate := range certificates {\n\t\tif block,
+    rest := pem.Decode([]byte(certificate)); block != nil {\n\t\t\tif len(rest) >
+    0 {\n\t\t\t\treturn fmt.Errorf(\"extra data after a PEM certificate block\")\n\t\t\t}\n\t\t\tif
+    block.Type == \"CERTIFICATE\" {\n\t\t\t\tcert, err := x509.ParseCertificate(block.Bytes)\n\t\t\t\tif
+    err != nil {\n\t\t\t\t\treturn fmt.Errorf(\"failed to parse a PEM certificate:
+    %v\", err)\n\t\t\t\t}\n\t\t\t\tjwtPlugin.keys[base64.RawURLEncoding.EncodeToString(cert.SubjectKeyId)]
+    = cert.PublicKey\n\t\t\t} else if block.Type == \"PUBLIC KEY\" || block.Type ==
+    \"RSA PUBLIC KEY\" {\n\t\t\t\tkey, err := x509.ParsePKIXPublicKey(block.Bytes)\n\t\t\t\tif
+    err != nil {\n\t\t\t\t\treturn fmt.Errorf(\"failed to parse a PEM public key:
+    %v\", err)\n\t\t\t\t}\n\t\t\t\tjwtPlugin.keys[strconv.Itoa(len(jwtPlugin.keys))]
+    = key\n\t\t\t} else {\n\t\t\t\treturn fmt.Errorf(\"failed to extract a Key from
+    the PEM certificate\")\n\t\t\t}\n\t\t} else if u, err := url.ParseRequestURI(certificate);
+    err == nil {\n\t\t\tjwtPlugin.jwkEndpoints = append(jwtPlugin.jwkEndpoints, u)\n\t\t}
+    else {\n\t\t\treturn fmt.Errorf(\"Invalid configuration, expecting a certificate,
+    public key or JWK URL\")\n\t\t}\n\t}\n\treturn nil\n}\n\nfunc (jwtPlugin *JwtPlugin)
+    FetchKeys() {\n\tlogInfo(fmt.Sprintf(\"FetchKeys - #%d jwkEndpoints to fetch\",
+    len(jwtPlugin.jwkEndpoints))).\n\t\tprint()\n\tfor _, u := range jwtPlugin.jwkEndpoints
+    {\n\t\tresponse, err := http.Get(u.String())\n\t\tif err != nil {\n\t\t\tlogWarn(\"FetchKeys
+    - Failed to fetch keys\").withUrl(u.String()).print()\n\t\t\tcontinue\n\t\t}\n\t\tbody,
+    err := io.ReadAll(response.Body)\n\t\tif err != nil {\n\t\t\tlogWarn(\"FetchKeys
+    - Failed to read keys\").withUrl(u.String()).print()\n\t\t\tcontinue\n\t\t}\n\t\tvar
+    jwksKeys Keys\n\t\terr = json.Unmarshal(body, &jwksKeys)\n\t\tif err != nil {\n\t\t\tlogWarn(\"FetchKeys
+    - Failed to unmarshal keys\").withUrl(u.String()).print()\n\t\t\tcontinue\n\t\t}\n\t\tfor
+    _, key := range jwksKeys.Keys {\n\t\t\tswitch key.Kty {\n\t\t\tcase \"RSA\":\n\t\t\t\t{\n\t\t\t\t\tif
+    key.Kid == \"\" {\n\t\t\t\t\t\tkey.Kid, err = JWKThumbprint(fmt.Sprintf(`{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}`,
+    key.E, key.N))\n\t\t\t\t\t\tif err != nil {\n\t\t\t\t\t\t\tbreak\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\tnBytes,
+    err := base64.RawURLEncoding.DecodeString(key.N)\n\t\t\t\t\tif err != nil {\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\teBytes,
+    err := base64.RawURLEncoding.DecodeString(key.E)\n\t\t\t\t\tif err != nil {\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tptr
+    := new(rsa.PublicKey)\n\t\t\t\t\tptr.N = new(big.Int).SetBytes(nBytes)\n\t\t\t\t\tptr.E
+    = int(new(big.Int).SetBytes(eBytes).Uint64())\n\t\t\t\t\tjwtPlugin.keys[key.Kid]
+    = ptr\n\t\t\t\t}\n\t\t\tcase \"EC\":\n\t\t\t\t{\n\t\t\t\t\tif key.Kid == \"\"
+    {\n\t\t\t\t\t\tkey.Kid, err = JWKThumbprint(fmt.Sprintf(`{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"%s\",\"y\":\"%s\"}`,
+    key.X, key.Y))\n\t\t\t\t\t\tif err != nil {\n\t\t\t\t\t\t\tbreak\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\tvar
+    crv elliptic.Curve\n\t\t\t\t\tswitch key.Crv {\n\t\t\t\t\tcase \"P-256\":\n\t\t\t\t\t\tcrv
+    = elliptic.P256()\n\t\t\t\t\tcase \"P-384\":\n\t\t\t\t\t\tcrv = elliptic.P384()\n\t\t\t\t\tcase
+    \"P-521\":\n\t\t\t\t\t\tcrv = elliptic.P521()\n\t\t\t\t\tdefault:\n\t\t\t\t\t\tswitch
+    key.Alg {\n\t\t\t\t\t\tcase \"ES256\":\n\t\t\t\t\t\t\tcrv = elliptic.P256()\n\t\t\t\t\t\tcase
+    \"ES384\":\n\t\t\t\t\t\t\tcrv = elliptic.P384()\n\t\t\t\t\t\tcase \"ES512\":\n\t\t\t\t\t\t\tcrv
+    = elliptic.P521()\n\t\t\t\t\t\tdefault:\n\t\t\t\t\t\t\tcrv = elliptic.P256()\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\txBytes,
+    err := base64.RawURLEncoding.DecodeString(key.X)\n\t\t\t\t\tif err != nil {\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tyBytes,
+    err := base64.RawURLEncoding.DecodeString(key.Y)\n\t\t\t\t\tif err != nil {\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tptr
+    := new(ecdsa.PublicKey)\n\t\t\t\t\tptr.Curve = crv\n\t\t\t\t\tptr.X = new(big.Int).SetBytes(xBytes)\n\t\t\t\t\tptr.Y
+    = new(big.Int).SetBytes(yBytes)\n\t\t\t\t\tjwtPlugin.keys[key.Kid] = ptr\n\t\t\t\t}\n\t\t\tcase
+    \"oct\":\n\t\t\t\t{\n\t\t\t\t\tkBytes, err := base64.RawURLEncoding.DecodeString(key.K)\n\t\t\t\t\tif
+    err != nil {\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tif key.Kid == \"\" {\n\t\t\t\t\t\tkey.Kid,
+    err = JWKThumbprint(key.K)\n\t\t\t\t\t\tif err != nil {\n\t\t\t\t\t\t\tbreak\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\tjwtPlugin.keys[key.Kid]
+    = kBytes\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n\nfunc (jwtPlugin *JwtPlugin) ServeHTTP(rw
+    http.ResponseWriter, request *http.Request) {\n\tif st, err := jwtPlugin.CheckToken(request,
+    rw); err != nil {\n\t\tif st >= 300 && st < 600  {\n\t\t\thttp.Error(rw, err.Error(),
+    st)\n\t\t} else {\n\t\t\thttp.Error(rw, err.Error(), http.StatusForbidden)\n\t\t}\n\t\treturn\n\t}\n\tjwtPlugin.next.ServeHTTP(rw,
+    request)\n}\n\nfunc (jwtPlugin *JwtPlugin) CheckToken(request *http.Request, rw
+    http.ResponseWriter) (int, error) {\n\tjwtToken, err := jwtPlugin.ExtractToken(request)\n\tif
+    jwtToken == nil {\n\t\tif jwtPlugin.required {\n\t\t\treturn 0, err\n\t\t} else
+    {\n\t\t\tlogWarn(err.Error()).\n\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\tprint()\n\t\t}\n\t}\n\n\tsub
+    := \"\"\n\tif jwtToken != nil {\n\t\tsub = fmt.Sprint(jwtToken.Payload[\"sub\"])\n\t\t//
+    only verify jwt tokens if keys are configured\n\t\tif len(jwtPlugin.keys) > 0
+    || len(jwtPlugin.jwkEndpoints) > 0 {\n\t\t\tif err = jwtPlugin.VerifyToken(jwtToken);
+    err != nil {\n\t\t\t\tlogError(fmt.Sprintf(\"Token is invalid - err: %s\", err.Error())).\n\t\t\t\t\twithSub(sub).\n\t\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\t\tprint()\n\t\t\t\treturn
+    0, err\n\t\t\t}\n\t\t}\n\t\tfor _, fieldName := range jwtPlugin.payloadFields
+    {\n\t\t\t_, ok := jwtToken.Payload[fieldName]\n\t\t\tif !ok {\n\t\t\t\tlogError(fmt.Sprintf(\"Missing
+    JWT field %s\", fieldName)).\n\t\t\t\t\twithSub(sub).\n\t\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\t\tprint()\n\t\t\t\treturn
+    0, fmt.Errorf(\"payload missing required field %s\", fieldName)\n\t\t\t}\n\t\t\tif
+    fieldName == \"exp\" {\n\t\t\t\tif expInt, err := strconv.ParseInt(fmt.Sprint(jwtToken.Payload[\"exp\"]),
+    10, 64); err != nil || expInt < time.Now().Unix() {\n\t\t\t\t\tlogError(\"Token
+    is expired\").\n\t\t\t\t\t\twithSub(sub).\n\t\t\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\t\t\tprint()\n\t\t\t\t\treturn
+    0, fmt.Errorf(\"token is expired\")\n\t\t\t\t}\n\t\t\t} else if fieldName == \"nbf\"
+    {\n\t\t\t\tif nbfInt, err := strconv.ParseInt(fmt.Sprint(jwtToken.Payload[\"nbf\"]),
+    10, 64); err != nil || nbfInt > time.Now().Add(1*time.Minute).Unix() {\n\t\t\t\t\tlogError(\"Token
+    not valid yet\").\n\t\t\t\t\t\twithSub(sub).\n\t\t\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\t\t\tprint()\n\t\t\t\t\treturn
+    0, fmt.Errorf(\"token not valid yet\")\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\tfor k,
+    v := range jwtPlugin.jwtHeaders {\n\t\t\t_, ok := jwtToken.Payload[v]\n\t\t\tif
+    ok {\n\t\t\t\trequest.Header.Add(k, fmt.Sprint(jwtToken.Payload[v]))\n\t\t\t}\n\t\t}\n\t}\n\tif
+    jwtPlugin.opaUrl != \"\" {\n\t\tif st, err := jwtPlugin.CheckOpa(request, jwtToken,
+    rw); err != nil {\n\t\t\tlogError(fmt.Sprintf(\"OPA Check failed - err: %s\",
+    err.Error())).\n\t\t\t\twithSub(sub).\n\t\t\t\twithUrl(request.URL.String()).\n\t\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\t\tprint()\n\t\t\treturn
+    st, err\n\t\t}\n\t}\n\treturn 0, nil\n}\n\nfunc (jwtPlugin *JwtPlugin) ExtractToken(request
+    *http.Request) (*JWT, error) {\n\t// first check if the token is present in header
+    and is valid\n\tjwtTokenStr, err := jwtPlugin.extractTokenFromHeader(request)\n\tif
+    err != nil && jwtPlugin.jwtCookieKey != \"\" {\n\t\tjwtTokenStr, err = jwtPlugin.extractTokenFromCookie(request)\n\t}\n\tif
+    err != nil {\n\t\treturn nil, err\n\t}\n\n\tparts := strings.Split(jwtTokenStr,
+    \".\")\n\tif len(parts) != 3 {\n\t\tlogError(\"Invalid token format, expected
+    3 parts\").\n\t\t\twithUrl(request.URL.String()).\n\t\t\twithNetwork(jwtPlugin.remoteAddr(request)).\n\t\t\tprint()\n\t\treturn
+    nil, fmt.Errorf(\"invalid token format\")\n\t}\n\theader, err := base64.RawURLEncoding.DecodeString(parts[0])\n\tif
+    err != nil {\n\t\treturn nil, err\n\t}\n\tpayload, err := base64.RawURLEncoding.DecodeString(parts[1])\n\tif
+    err != nil {\n\t\treturn nil, err\n\t}\n\tsignature, err := base64.RawURLEncoding.DecodeString(parts[2])\n\tif
+    err != nil {\n\t\treturn nil, err\n\t}\n\tjwtToken := JWT{\n\t\tPlaintext: []byte(jwtTokenStr[0
+    : len(parts[0])+len(parts[1])+1]),\n\t\tSignature: signature,\n\t}\n\terr = json.Unmarshal(header,
+    &jwtToken.Header)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\td := json.NewDecoder(bytes.NewBuffer(payload))\n\td.UseNumber()\n\terr
+    = d.Decode(&jwtToken.Payload)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn
+    &jwtToken, nil\n}\n\nfunc (jwtPlugin *JwtPlugin) extractTokenFromHeader(request
+    *http.Request) (string, error) {\n\tauthHeader, ok := request.Header[\"Authorization\"]\n\tif
+    !ok {\n\t\treturn \"\", fmt.Errorf(\"authorization header missing\")\n\t}\n\tauth
+    := authHeader[0]\n\tif !strings.HasPrefix(auth, \"Bearer \") {\n\t\treturn \"\",
+    fmt.Errorf(\"authorization type not Bearer\")\n\t}\n\treturn auth[7:], nil\n}\n\nfunc
+    (jwtPlugin *JwtPlugin) extractTokenFromCookie(request *http.Request) (string,
+    error) {\n\tcookie, err := request.Cookie(jwtPlugin.jwtCookieKey)\n\tif err !=
+    nil {\n\t\treturn \"\", err\n\t}\n\treturn cookie.Value, nil\n}\n\nfunc (jwtPlugin
+    *JwtPlugin) remoteAddr(req *http.Request) Network {\n\t// This will only be defined
+    when site is accessed via non-anonymous proxy\n\t// and takes precedence over
+    RemoteAddr\n\t// Header.Get is case-insensitive\n\tipHeader := req.Header.Get(\"X-Forwarded-For\")\n\tif
+    len(ipHeader) == 0 {\n\t\tipHeader = req.RemoteAddr\n\t}\n\n\tip, port, err :=
+    net.SplitHostPort(ipHeader)\n\tportNumber, _ := strconv.Atoi(port)\n\tif err ==
+    nil {\n\t\treturn Network{\n\t\t\tClient: Client{\n\t\t\t\tIP:   ip,\n\t\t\t\tPort:
+    portNumber,\n\t\t\t},\n\t\t}\n\t}\n\n\tuserIP := net.ParseIP(ipHeader)\n\tif userIP
+    == nil {\n\t\treturn Network{\n\t\t\tClient: Client{\n\t\t\t\tIP:   ipHeader,\n\t\t\t\tPort:
+    portNumber,\n\t\t\t},\n\t\t}\n\t}\n\n\treturn Network{\n\t\tClient: Client{\n\t\t\tIP:
+    \  userIP.String(),\n\t\t\tPort: portNumber,\n\t\t},\n\t}\n}\n\nfunc (jwtPlugin
+    *JwtPlugin) VerifyToken(jwtToken *JWT) error {\n\tfor _, h := range jwtToken.Header.Crit
+    {\n\t\tif _, ok := supportedHeaderNames[h]; !ok {\n\t\t\treturn fmt.Errorf(\"unsupported
+    header: %s\", h)\n\t\t}\n\t}\n\t// Look up the algorithm\n\ta, ok := tokenAlgorithms[jwtToken.Header.Alg]\n\tif
+    !ok {\n\t\treturn fmt.Errorf(\"unknown JWS algorithm: %s\", jwtToken.Header.Alg)\n\t}\n\tif
+    jwtPlugin.alg != \"\" && jwtToken.Header.Alg != jwtPlugin.alg {\n\t\treturn fmt.Errorf(\"incorrect
+    alg, expected %s got %s\", jwtPlugin.alg, jwtToken.Header.Alg)\n\t}\n\tkey, ok
+    := jwtPlugin.keys[jwtToken.Header.Kid]\n\tif ok {\n\t\treturn a.verify(key, a.hash,
+    jwtToken.Plaintext, jwtToken.Signature)\n\t} else {\n\t\tfor _, key := range jwtPlugin.keys
+    {\n\t\t\terr := a.verify(key, a.hash, jwtToken.Plaintext, jwtToken.Signature)\n\t\t\tif
+    err == nil {\n\t\t\t\treturn nil\n\t\t\t}\n\t\t}\n\t\treturn fmt.Errorf(\"token
+    validation failed\")\n\t}\n}\n\nfunc (jwtPlugin *JwtPlugin) CheckOpa(request *http.Request,
+    token *JWT, rw http.ResponseWriter) (int, error) {\n\topaPayload, err := toOPAPayload(request,
+    jwtPlugin.opaBody)\n\tif err != nil {\n\t\treturn 0, err\n\t}\n\tif token != nil
+    {\n\t\topaPayload.Input.JWTHeader = token.Header\n\t\topaPayload.Input.JWTPayload
+    = token.Payload\n\t}\n\tauthPayloadAsJSON, err := json.Marshal(opaPayload)\n\tif
+    err != nil {\n\t\treturn 0, err\n\t}\n\tauthResponse, err := http.Post(jwtPlugin.opaUrl,
+    \"application/json\", bytes.NewBuffer(authPayloadAsJSON))\n\tif err != nil {\n\t\treturn
+    0, err\n\t}\n\tbody, err := io.ReadAll(authResponse.Body)\n\tif err != nil {\n\t\treturn
+    0, err\n\t}\n\tvar result Response\n\terr = json.Unmarshal(body, &result)\n\tif
+    err != nil {\n\t\treturn 0, err\n\t}\n\tif len(result.Result) == 0 {\n\t\treturn
+    0, fmt.Errorf(\"OPA result invalid\")\n\t}\n\tfieldResult, ok := result.Result[jwtPlugin.opaAllowField]\n\tif
+    !ok {\n\t\treturn 0, fmt.Errorf(\"OPA result missing: %v\", jwtPlugin.opaAllowField)\n\t}\n\tfor
+    k, v := range jwtPlugin.opaResponseHeaders {\n\t\tvar value string\n\t\tif rawVal,
+    rawValOk := result.Result[v]; rawValOk {\n\t\t\tif err = json.Unmarshal(rawVal,
+    &value); err != nil {\n\t\t\t\tvalue = string(rawVal)\n\t\t\t}\n\t\t\trw.Header().Set(k,
+    value)\n\t\t}\n\t}\n\n\tvar allow bool\n\tif err = json.Unmarshal(fieldResult,
+    &allow); err != nil {\n\t\treturn 0, err\n\t}\n\tif !allow {\n\t\tif jwtPlugin.opaHttpStatusField
+    != \"\" {\n\t\t\tif rawVal, rawValOk := result.Result[jwtPlugin.opaHttpStatusField];
+    rawValOk {\n\t\t\t\tif st, err := strconv.Atoi(strings.Trim(string(rawVal), `\"`));
+    err == nil {\n\t\t\t\t\treturn st, fmt.Errorf(\"%s\", body)\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\treturn
+    0, fmt.Errorf(\"%s\", body)\n\t}\n\n\tfor k, v := range jwtPlugin.opaHeaders {\n\t\tvar
+    value string\n\t\tif rawVal, rawValOk := result.Result[v]; rawValOk {\n\t\t\tif
+    err = json.Unmarshal(rawVal, &value); err != nil {\n\t\t\t\tvalue = string(rawVal)\n\t\t\t}\n\t\t\trequest.Header.Add(k,
+    value)\n\t\t}\n\t}\n\treturn 0, nil\n}\n\nfunc toOPAPayload(request *http.Request,
+    includeBody bool) (*Payload, error) {\n\tinput := &PayloadInput{\n\t\tHost:       request.Host,\n\t\tMethod:
+    \    request.Method,\n\t\tPath:       strings.Split(request.URL.Path, \"/\")[1:],\n\t\tParameters:
+    request.URL.Query(),\n\t\tHeaders:    request.Header,\n\t}\n\tcontentType, params,
+    err := mime.ParseMediaType(request.Header.Get(\"Content-Type\"))\n\tif err ==
+    nil && includeBody {\n\t\tvar save []byte\n\t\tsave, request.Body, err = drainBody(request.Body)\n\t\tif
+    err == nil {\n\t\t\tif contentType == \"application/json\" && len(save) > 0 {\n\t\t\t\terr
+    = json.Unmarshal(save, &input.Body)\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn
+    nil, err\n\t\t\t\t}\n\t\t\t} else if contentType == \"application/x-www-url-formencoded\"
+    {\n\t\t\t\tinput.Form, err = url.ParseQuery(string(save))\n\t\t\t\tif err != nil
+    {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t} else if contentType == \"multipart/form-data\"
+    || contentType == \"multipart/mixed\" {\n\t\t\t\tboundary := params[\"boundary\"]\n\t\t\t\tmr
+    := multipart.NewReader(bytes.NewReader(save), boundary)\n\t\t\t\tf, err := mr.ReadForm(32
+    << 20)\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\n\t\t\t\tinput.Form
+    = make(url.Values)\n\t\t\t\tfor k, v := range f.Value {\n\t\t\t\t\tinput.Form[k]
+    = append(input.Form[k], v...)\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\treturn &Payload{Input:
+    input}, nil\n}\n\nfunc drainBody(b io.ReadCloser) ([]byte, io.ReadCloser, error)
+    {\n\tif b == nil || b == http.NoBody {\n\t\t// No copying needed. Preserve the
+    magic sentinel meaning of NoBody.\n\t\treturn nil, http.NoBody, nil\n\t}\n\tbody,
+    err := io.ReadAll(b)\n\tif err != nil {\n\t\treturn nil, b, err\n\t}\n\treturn
+    body, NopCloser(bytes.NewReader(body), b), nil\n}\n\nfunc NopCloser(r io.Reader,
+    c io.Closer) io.ReadCloser {\n\treturn nopCloser{r: r, c: c}\n}\n\ntype nopCloser
+    struct {\n\tr io.Reader\n\tc io.Closer\n}\n\nfunc (n nopCloser) Read(b []byte)
+    (int, error) { return n.r.Read(b) }\nfunc (n nopCloser) Close() error               {
+    return n.c.Close() }\n\ntype tokenVerifyFunction func(key interface{}, hash crypto.Hash,
+    payload []byte, signature []byte) error\ntype tokenVerifyAsymmetricFunction func(key
+    interface{}, hash crypto.Hash, digest []byte, signature []byte) error\n\n// jwtAlgorithm
+    describes a JWS 'alg' value\ntype tokenAlgorithm struct {\n\thash   crypto.Hash\n\tverify
+    tokenVerifyFunction\n}\n\n// tokenAlgorithms is the known JWT algorithms\nvar
+    tokenAlgorithms = map[string]tokenAlgorithm{\n\t\"RS256\": {crypto.SHA256, verifyAsymmetric(verifyRSAPKCS)},\n\t\"RS384\":
+    {crypto.SHA384, verifyAsymmetric(verifyRSAPKCS)},\n\t\"RS512\": {crypto.SHA512,
+    verifyAsymmetric(verifyRSAPKCS)},\n\t\"PS256\": {crypto.SHA256, verifyAsymmetric(verifyRSAPSS)},\n\t\"PS384\":
+    {crypto.SHA384, verifyAsymmetric(verifyRSAPSS)},\n\t\"PS512\": {crypto.SHA512,
+    verifyAsymmetric(verifyRSAPSS)},\n\t\"ES256\": {crypto.SHA256, verifyAsymmetric(verifyECDSA)},\n\t\"ES384\":
+    {crypto.SHA384, verifyAsymmetric(verifyECDSA)},\n\t\"ES512\": {crypto.SHA512,
+    verifyAsymmetric(verifyECDSA)},\n\t\"HS256\": {crypto.SHA256, verifyHMAC},\n\t\"HS384\":
+    {crypto.SHA384, verifyHMAC},\n\t\"HS512\": {crypto.SHA512, verifyHMAC},\n}\n\n//
+    errSignatureNotVerified is returned when a signature cannot be verified.\nfunc
+    verifyHMAC(key interface{}, hash crypto.Hash, payload []byte, signature []byte)
+    error {\n\tmacKey, ok := key.([]byte)\n\tif !ok {\n\t\treturn fmt.Errorf(\"incorrect
+    symmetric key type\")\n\t}\n\tmac := hmac.New(hash.New, macKey)\n\tif _, err :=
+    mac.Write(payload); err != nil {\n\t\treturn err\n\t}\n\tsum := mac.Sum([]byte{})\n\tif
+    !hmac.Equal(signature, sum) {\n\t\treturn fmt.Errorf(\"token verification failed
+    (HMAC)\")\n\t}\n\treturn nil\n}\n\nfunc verifyAsymmetric(verify tokenVerifyAsymmetricFunction)
+    tokenVerifyFunction {\n\treturn func(key interface{}, hash crypto.Hash, payload
+    []byte, signature []byte) error {\n\t\th := hash.New()\n\t\t_, err := h.Write(payload)\n\t\tif
+    err != nil {\n\t\t\treturn err\n\t\t}\n\t\treturn verify(key, hash, h.Sum([]byte{}),
+    signature)\n\t}\n}\n\nfunc verifyRSAPKCS(key interface{}, hash crypto.Hash, digest
+    []byte, signature []byte) error {\n\tpublicKeyRsa := key.(*rsa.PublicKey)\n\tif
+    err := rsa.VerifyPKCS1v15(publicKeyRsa, hash, digest, signature); err != nil {\n\t\treturn
+    fmt.Errorf(\"token verification failed (RSAPKCS)\")\n\t}\n\treturn nil\n}\n\nfunc
+    verifyRSAPSS(key interface{}, hash crypto.Hash, digest []byte, signature []byte)
+    error {\n\tpublicKeyRsa, ok := key.(*rsa.PublicKey)\n\tif !ok {\n\t\treturn fmt.Errorf(\"incorrect
+    public key type\")\n\t}\n\tif err := rsa.VerifyPSS(publicKeyRsa, hash, digest,
+    signature, nil); err != nil {\n\t\treturn fmt.Errorf(\"token verification failed
+    (RSAPSS)\")\n\t}\n\treturn nil\n}\n\nfunc verifyECDSA(key interface{}, _ crypto.Hash,
+    digest []byte, signature []byte) error {\n\tpublicKeyEcdsa, ok := key.(*ecdsa.PublicKey)\n\tif
+    !ok {\n\t\treturn fmt.Errorf(\"incorrect public key type\")\n\t}\n\tr, s := &big.Int{},
+    &big.Int{}\n\tn := len(signature) / 2\n\tr.SetBytes(signature[:n])\n\ts.SetBytes(signature[n:])\n\tif
+    ecdsa.Verify(publicKeyEcdsa, digest, r, s) {\n\t\treturn nil\n\t}\n\treturn fmt.Errorf(\"token
+    verification failed (ECDSA)\")\n}\n\n// JWKThumbprint creates a JWK thumbprint
+    out of pub\n// as specified in https://tools.ietf.org/html/rfc7638.\nfunc JWKThumbprint(jwk
+    string) (string, error) {\n\tb := sha256.Sum256([]byte(jwk))\n\tvar slice []byte\n\tif
+    len(b) > 0 {\n\t\tfor _, s := range b {\n\t\t\tslice = append(slice, s)\n\t\t}\n\t}\n\treturn
+    base64.RawURLEncoding.EncodeToString(slice), nil\n}\n\nfunc logInfo(msg string)
+    *LogEvent {\n\treturn newLogEvent(\"info\", msg)\n}\n\nfunc logWarn(msg string)
+    *LogEvent {\n\treturn newLogEvent(\"warn\", msg)\n}\n\nfunc logError(msg string)
+    *LogEvent {\n\treturn newLogEvent(\"error\", msg)\n}\n\nfunc newLogEvent(level
+    string, msg string) *LogEvent {\n\treturn &LogEvent{\n\t\tLevel: level,\n\t\tMsg:
+    \  msg,\n\t}\n}\n\nfunc (logEvent *LogEvent) print() {\n\tjsonLogEvent, _ := json.Marshal(*logEvent)\n\tfmt.Println(string(jsonLogEvent))\n}\n\nfunc
+    (logEvent *LogEvent) withNetwork(network Network) *LogEvent {\n\tlogEvent.Network
+    = network\n\treturn logEvent\n}\n\nfunc (logEvent *LogEvent) withUrl(url string)
+    *LogEvent {\n\tlogEvent.URL = url\n\treturn logEvent\n}\n\nfunc (logEvent *LogEvent)
+    withSub(sub string) *LogEvent {\n\tlogEvent.Sub = sub\n\treturn logEvent\n}\n"
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: jwt-plugin
+  namespace: orch-gateway

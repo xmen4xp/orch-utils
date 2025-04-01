@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.proxy.deploy }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "token-refresh.fullname" . }}-test-connection"
+  labels:
+    {{- include "token-refresh.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "token-refresh.fullname" . }}:{{ .Values.service.port }}']
+  restartPolicy: Never
+{{- end }}

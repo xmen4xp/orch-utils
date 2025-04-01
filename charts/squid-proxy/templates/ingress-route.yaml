@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: squid-proxy
+spec:
+  entryPoints: # We listen to requests coming from external port 8080 using TCP router!!!
+    - squidproxy
+  routes:
+    - match: {{ required "A valid squidMatchHost entry required!" .Values.squidMatchHost }}
+      services:
+        - name: squid-proxy
+          port: {{ .Values.service.port }}

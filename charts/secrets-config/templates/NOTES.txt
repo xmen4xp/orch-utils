@@ -1,0 +1,17 @@
+{{ if .Values.autoInit }}
+
+Vault seal keys have been saved as secret `vault-keys` in the `orch-platform` namespace.
+
+These keys MUST be backed up outside of the cluster. If the keys are lost, there is no way to recover Vault.
+
+Use this command to extract the keys:
+
+kubectl -n orch-platform get secret vault-keys -o jsonpath='{.data.vault-keys}' | base64 -d
+
+{{ else }}
+
+Since Vault was manually initialized, please ensure seal keys were backed up in a secure location.
+
+Vault's root token was revoked per production hardening guidelines. Use JWT authentication method to authenticate with Vault.
+
+{{ end }}

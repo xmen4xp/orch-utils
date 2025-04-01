@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v2
+name: secrets-config
+type: application
+version: 3.0.2
+appVersion: "3.0.1"

@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "rs-proxy.fullname" . }}-test-connection"
+  labels:
+    {{- include "rs-proxy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "rs-proxy.fullname" . }}:{{ .Values.service.port }}']
+  restartPolicy: Never

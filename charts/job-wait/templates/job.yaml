@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-{{ include "job-wait-contents" . | sha256sum | trunc 8 }}
+spec:
+  template:
+    metadata:
+      annotations:
+        checksum/job: {{ include "job-wait-contents" . | sha256sum }}
+    spec:
+      serviceAccountName: job-wait-{{ required "A valid jobPrefix entry required!" .Values.jobPrefix }}
+      restartPolicy: Never
+      containers:
+      - name: job-wait-container
+        image: "bitnami/kubectl:1.28.4"
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+         {{ include "job-wait-contents" . | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        {{- with .Values.resources }}
+        resources:
+          limits:
+            cpu: {{ .limits.cpu }}
+            memory: {{ .limits.memory }}
+          requests:
+            cpu: {{ .requests.cpu }}
+            memory: {{ .requests.memory }}
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

@@ -1,0 +1,113 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# ## TODO: add policy for policy exceptions
+# ## https://kyverno.io/policies/other/policy-for-exceptions/policy-for-exceptions/
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-jwt-middleware
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: check-jwt-middleware
+      match:
+        any:
+        - resources:
+            kinds:
+              - traefik.containo.us/v1alpha1/IngressRoute
+      validate:
+        message: "An IngressRoute must include the 'validate-jwt' middleware."
+        pattern:
+          spec:
+            routes:
+              - match: "*"
+                kind: Rule
+                services:
+                  - name: "*"
+                    port: "*"
+                # IngressRoute must have at least one middleware name validate-jwt,
+                # but IngressRoute without any middleware would NOT be rejected by this rule.
+                # Must be paired with the other IngressRoute rule that requires any middleware.
+                ^(middlewares):
+                  - name: "validate-jwt"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-any-middleware
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: check-any-middleware
+      match:
+        any:
+        - resources:
+            kinds:
+              - traefik.containo.us/v1alpha1/IngressRoute
+      validate:
+        message: "An IngressRoute must include a middleware."
+        pattern:
+          spec:
+            routes:
+              - match: "*"
+                kind: Rule
+                services:
+                  - name: "*"
+                    port: "*"
+                # IngressRoute must have a middleware.
+                # It complements the other IngressRoute rule enforcing existence of jwt middleware.
+                middlewares:
+                  - name: "*"
+---
+# any middleware policy exception template
+{{- range .Values.anyMiddlewareException }}
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: ingressroute-require-any-middleware-exception-{{ .namespace }}
+spec:
+  exceptions:
+  - policyName: require-any-middleware
+    ruleNames:
+    - check-any-middleware
+  match:
+    any:
+    - resources:
+        kinds:
+          - traefik.containo.us/v1alpha1/IngressRoute
+        namespaces:
+        - {{ .namespace }}
+        names:
+        {{- range .names }}
+          - {{ . | quote }}
+        {{- end }}
+---
+{{- end }}
+# jwt-validate middleware policy exception template
+{{- range .Values.jwtMiddlewareException }}
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: ingressroute-require-jwt-middleware-exception-{{ .namespace }}
+spec:
+  exceptions:
+  - policyName: require-jwt-middleware
+    ruleNames:
+    - check-jwt-middleware
+  match:
+    any:
+    - resources:
+        kinds:
+          - traefik.containo.us/v1alpha1/IngressRoute
+        namespaces:
+        - {{ .namespace }}
+        names:
+        {{- range .names }}
+          - {{ . | quote }}
+        {{- end }}
+---
+{{- end }}

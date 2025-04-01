@@ -1,0 +1,106 @@
+# Copyright(c) 2025 Intel Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
+# Get Authorization Token
+# @name reqToken
+POST https://keycloak.kind.internal:443/realms/master/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=xxxx&grant_type=password&client_id=system-client&scope=openid
+#@domain = cluster.onprem:443
+@domain = kind.internal:443
+
+#username=all-groups-example-user&password=xxxx&grant_type=password&client_id=system-client&scope=openid
+###
+
+# Extract access token from response
+@token = {{reqToken.response.body.access_token}}
+
+@realm = master
+@user= "admin"
+
+### get clients
+# @name reqDefinitions
+GET https://keycloak.{{ domain }}/admin/realms/master/clients
+Authorization: Bearer {{ token }}
+# Content-Type: application/json
+
+
+### Get roles
+# @name reqDefinitions
+GET https://keycloak.{{ domain }}/admin/realms/{{realm}}/roles
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+### Get users
+# @name reqDefinitions
+GET https://keycloak.{{ domain }}/admin/realms/{{realm}}/users/
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+### assign roles to user (change the ids)
+# @name reqDefinitions
+POST https://keycloak.{{ domain }}/admin/realms/{{realm}}/users/1d35d166-4e8d-4b23-8f2a-bbb1bbd37558/role-mappings/realm
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+[{  "id":"622babf0-a83e-41e0-90bb-9586be57004c",
+    "name":"8f2ffc89-1a98-4ae9-8be7-c0bcb128f068_60281c73-f4b2-49f9-b1eb-26439594cd92_member-role"
+}]
+
+### get groups
+# @name reqDefinitions
+GET https://keycloak.{{ domain }}/admin/realms/{{realm}}/groups
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+### CORS origin injection attack
+GET https://keycloak.{{ domain }}/realms/master/.well-known/openid-configuration HTTP/2
+Content-Type: application/json
+Origin: https://evel.keycloak.kind.internal
+
+
+GET https://keycloak.{{ domain }}/admin/realms
+Authorization: Bearer {{token}}
+
+###
+POST  https://keycloak.{{ domain }}/admin/realms
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+{
+  "realm": "coke",
+  "enabled": true,
+  "displayName": "Coke Realm",
+  "displayNameHtml": "<b>Coke Realm</b>",
+  "attributes": {
+    "attribute1": "value1",
+    "attribute2": "value2"
+  },
+  "requiredCredentials": [
+    "password"
+  ],
+  "defaultRoles": [
+    "user"
+  ],
+   "passwordPolicy": "hashAlgorithm(pbkdf2)"
+}
+
+
+###
+DELETE   https://keycloak.{{ domain }}/admin/realms/coke
+Authorization: Bearer {{ token }}

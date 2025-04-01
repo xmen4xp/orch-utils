@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.proxy.deploy }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "token-refresh.fullname" . }}
+  labels:
+    {{- include "token-refresh.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "token-refresh.selectorLabels" . | nindent 4 }}
+{{- end }}

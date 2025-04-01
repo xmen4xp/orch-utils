@@ -1,0 +1,4 @@
+@token=123
+GET {{host}}/debug
+Authorization: Bearer {{token}}
+Content-Type: application/json

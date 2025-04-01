@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: traefik
+  namespace: metallb-system
+spec:
+  addresses:
+  - "{{ .Values.TraefikIP }}/32"
+  autoAssign: true
+  avoidBuggyIPs: true
+  serviceAllocation:
+    priority: 1
+    namespaces:
+      - orch-gateway
+
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: ingress-nginx-controller
+  namespace: metallb-system
+spec:
+  addresses:
+  - "{{ .Values.NginxIP }}/32"
+  autoAssign: true
+  avoidBuggyIPs: true
+  serviceAllocation:
+    priority: 1
+    namespaces:
+      - orch-boots
+
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: argocd-server
+  namespace: metallb-system
+spec:
+  addresses:
+  - "{{ .Values.ArgoIP }}/32"
+  autoAssign: true
+  avoidBuggyIPs: true
+  serviceAllocation:
+    priority: 1
+    namespaces:
+      - argocd

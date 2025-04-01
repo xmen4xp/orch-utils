@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: "Setup asdf and install dependencies"
+description: "Install asdf and required dependencies"
+runs:
+  using: "composite"
+  steps:
+    - name: Install asdf
+      # TODO: Pin to a SemVer release when one is made
+      uses: asdf-vm/actions/setup@9cd779f40fe38688dd19505ccbc4eaaf018b44e7
+      with:
+        asdf_version: 0.16.6
+    - name: Cache asdf plugins
+      uses: actions/cache@v4.2.0
+      id: asdf-cache
+      with:
+        path: |
+          ~/.asdf/installs
+          ~/.asdf/plugins
+          ~/.asdf/shims
+        key: ${{ runner.os }}-asdf-plugins-${{ hashFiles('**/.tool-versions') }}
+        restore-keys: |
+          ${{ runner.os }}-asdf-plugins-
+    - name: Reshim installed ASDF tools
+      shell: bash
+      run: asdf reshim
+    - name: Install dependencies
+      shell: bash
+      run: |
+        for plugin in golang jq mage; do
+          asdf plugin add "${plugin}"
+          asdf install "${plugin}"
+        done
+        mage asdfPlugins

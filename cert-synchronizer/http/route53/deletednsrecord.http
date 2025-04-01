@@ -1,0 +1,10 @@
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+{
+    "region": "eu-west-2",
+    "domain": "getta.club",
+    "recordType": "A",
+    "recordName": "ARecord",
+    "recordValue": "192.0.2.44"
+}

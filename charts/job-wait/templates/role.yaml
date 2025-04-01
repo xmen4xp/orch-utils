@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-wait-{{ required "A valid jobPrefix entry required!" .Values.jobPrefix }}
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: ["batch", ""]
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch

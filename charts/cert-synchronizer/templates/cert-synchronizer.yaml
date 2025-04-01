@@ -1,0 +1,125 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cert-synchronizer-service
+  namespace: orch-gateway
+spec:
+
+  selector:
+    app: cert-synchronizer
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cert-synchronizer-set
+  namespace: orch-gateway
+  labels:
+    app: cert-synchronizer
+spec:
+  serviceName: cert-synchronizer
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cert-synchronizer
+  template:
+    metadata:
+      labels:
+        app: cert-synchronizer
+    spec:
+      serviceAccountName: sa-cert-rewriter
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: cert-synchronizer
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: "RuntimeDefault"
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+          - mountPath: "/etc/ssl/certs/aws"
+            name: tls-autocert
+            readOnly: true
+          ports:
+            - containerPort: 8080
+          env:
+            {{- if .Values.proxy }}
+            {{- if .Values.proxy.httpProxy }}
+            - name: HTTP_PROXY
+              value: "{{ .Values.proxy.httpProxy }}"
+            - name: http_proxy
+              value: "{{ .Values.proxy.httpProxy }}"
+            {{- end }}
+            {{- if .Values.proxy.httpsProxy }}
+            - name: HTTPS_PROXY
+              value: "{{ .Values.proxy.httpsProxy }}"
+            - name: https_proxy
+              value: "{{ .Values.proxy.httpsProxy }}"
+            {{- end }}
+            {{- if .Values.proxy.noProxy }}
+            - name: NO_PROXY
+              value: "{{ .Values.proxy.noProxy }}"
+            - name: no_proxy
+              value: "{{ .Values.proxy.noProxy }}"
+            {{- end }}
+            {{- end }}
+            - name: CERTIFICATE_FILE
+              value: "/etc/ssl/certs/aws/tls.crt"
+            - name: CA_CERTIFICATE_FILE
+              value: "/etc/ssl/certs/aws/ca.crt"
+            - name: PRIVATE_KEY_FILE
+              value: "/etc/ssl/certs/aws/tls.key"
+            - name:  AWS_REGION
+              value: "{{ .Values.aws.region }}"
+            - name:  AUTOCERT_CERTSECRET_NAME
+              value: "{{ .Values.autoCertCertificateName }}"
+            - name:  CSP_CERTIFICATE_NAME_TAG
+              value: "acm-certificate-{{ required "A valid certDomain entry required!" .Values.certDomain }}"
+            - name:  DISABLE_CERT_MATCH_CHECKS
+              value: "{{ .Values.disableCertMatchChecks }}"
+            - name:  AWS_R53_DOMAIN
+              value: "{{ .Values.awsR35Domain }}"
+            - name: SECRET_NAMESPACE
+              value: "{{ .Values.secretNamespace }}"
+            - name: CREATE_K8S_CERT_SECRET
+              value: "{{ .Values.createK8sCertSecret }}"
+            - name:  K8S_CERTIFICATE_NAMESPACE
+              value: "{{ .Values.k8sCertificateNamespace }}"
+            - name: K8S_CERT_SECRET_NAME
+              value: "{{ .Values.k8sCertSecretName }}"
+            - name: DEBUG
+              value: "{{ .Values.debug }}"
+            - name: POD_FILE_UPDATE_TIMEOUT_SECS
+              value: "{{ .Values.podFileUpdateTimeoutSecs}}"
+            - name: INTERMEDIATE1_CERT_URL
+              value: "{{ .Values.inter1URL}}"
+            - name: INTERMEDIATE2_CERT_URL
+              value: "{{ .Values.inter2URL}}"
+            - name: ROOT_CERT_URL
+              value: "{{ .Values.rootURL}}"
+            - name: ACM_IMPORT_IF_NOT_EXISTS
+              value: "{{ .Values.acmImportIfNotExists}}"
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+      volumes:
+        - name: tls-autocert
+          secret:
+            secretName: tls-autocert
+

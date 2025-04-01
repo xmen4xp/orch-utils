@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iam.fullname" . }}
+  namespace: {{ default  .Release.Namespace .Values.global.namespace }}
+data:
+  iam-config.yaml: |
+    server:
+      address: ":443"
+      httpPort: "8082"
+      certPath: "/etc/cert/cert.pem"
+      keyPath: "/etc/cert/key.pem"
+    enableNexusRuntime: true
+    tenancyService: true
+    disableAuthz: {{ .Values.authz.disabled }}

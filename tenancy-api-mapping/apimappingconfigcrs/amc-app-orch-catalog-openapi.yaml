@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apimappingconfig.edge-orchestrator.intel.com/v1
+kind: APIMappingConfig
+metadata:
+  name: amc-app-orch-catalog-openapi
+  labels:
+    configs.config.edge-orchestrator.intel.com: default
+spec:
+  specGenEnabled: true
+  repoConf:
+    url: "https://github.com/open-edge-platform/app-orch-catalog.git"
+    tag: "v0.11.5"
+    specFilePath: "api/spec/openapi.yaml"
+  mappings:
+    - externalURI: /v3/projects/{projectName}/catalog/applications
+      serviceURI: catalog.orchestrator.apis/v3/applications
+    - externalURI: /v3/projects/{projectName}/catalog/applications/{applicationName}
+      serviceURI: catalog.orchestrator.apis/v3/applications/{applicationName}
+    - externalURI: /v3/projects/{projectName}/catalog/applications/{applicationName}/versions
+      serviceURI: catalog.orchestrator.apis/v3/applications/{applicationName}/versions
+    - externalURI: /v3/projects/{projectName}/catalog/applications/{applicationName}/versions/{version}
+      serviceURI: catalog.orchestrator.apis/v3/applications/{applicationName}/versions/{version}
+    - externalURI: /v3/projects/{projectName}/catalog/applications/{applicationName}/versions/{version}/reference_count
+      serviceURI: catalog.orchestrator.apis/v3/applications/{applicationName}/versions/{version}/reference_count
+    - externalURI: /v3/projects/{projectName}/catalog/artifacts
+      serviceURI: catalog.orchestrator.apis/v3/artifacts
+    - externalURI: /v3/projects/{projectName}/catalog/artifacts/{artifactName}
+      serviceURI: catalog.orchestrator.apis/v3/artifacts/{artifactName}
+    - externalURI: /v3/projects/{projectName}/catalog/deployment_packages
+      serviceURI: catalog.orchestrator.apis/v3/deployment_packages
+    - externalURI: /v3/projects/{projectName}/catalog/deployment_packages/{deploymentPackageName}
+      serviceURI: catalog.orchestrator.apis/v3/deployment_packages/{deploymentPackageName}
+    - externalURI: /v3/projects/{projectName}/catalog/deployment_packages/{deploymentPackageName}/versions
+      serviceURI: catalog.orchestrator.apis/v3/deployment_packages/{deploymentPackageName}/versions
+    - externalURI: /v3/projects/{projectName}/catalog/deployment_packages/{deploymentPackageName}/versions/{version}
+      serviceURI: catalog.orchestrator.apis/v3/deployment_packages/{deploymentPackageName}/versions/{version}
+    - externalURI: /v3/projects/{projectName}/catalog/registries
+      serviceURI: catalog.orchestrator.apis/v3/registries
+    - externalURI: /v3/projects/{projectName}/catalog/registries/{registryName}
+      serviceURI: catalog.orchestrator.apis/v3/registries/{registryName}
+    - externalURI: /v3/projects/{projectName}/catalog/uploads
+      serviceURI: catalog.orchestrator.apis/v3/uploads
+  backend:
+    service: "app-orch-catalog-rest-proxy.orch-app.svc.cluster.local"
+    port: 8081

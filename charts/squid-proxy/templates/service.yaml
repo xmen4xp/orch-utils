@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "squid-proxy.fullname" . }}
+  labels:
+    {{- include "squid-proxy.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: tcp
+      appProtocol: tcp
+  selector:
+    {{- include "squid-proxy.selectorLabels" . | nindent 4 }}

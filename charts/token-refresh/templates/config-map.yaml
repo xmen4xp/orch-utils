@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.proxy.deploy }}
+# define your template in a config map
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "token-refresh.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    #
+    :{{ required "A valid service.port entry required!" .Values.service.port }} {
+        reverse_proxy {{ required "A valid authEndpoint entry required!" .Values.authEndpoint }} {
+            header_up Host {upstream_hostport}
+            {{ if .Values.proxyTargetCA }}
+            transport http {
+              tls_trusted_ca_certs /data-ca/cert.pem
+            }
+            {{ end }}
+        }
+    }
+
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile
+
+{{- end }}
+---
+{{ if .Values.proxyTargetCA }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-ca-cert
+  namespace: {{ .Release.Namespace }}
+data:
+  cert.pem: |-
+    {{- .Values.proxyTargetCA | b64dec | nindent 4}}
+{{ end }}

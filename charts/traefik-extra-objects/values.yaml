@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+orchSecretName: tls-orch
+keycloakJwksUrl: http://platform-keycloak.orch-platform.svc
+keycloakJwksPath: /realms/master/protocol/openid-connect/certs
+keycloakServicePort: 80
+fleetMatchHost: "fleet.domain"
+harborOciMatchHost: "registry-oci.domain"
+observabilityMatchHost: "observability-ui.domain"
+observabilityAdminMatchHost: "observability-admin.domain"
+vaultMatchHost: "vault.domain"
+rootMatchHost: "domain"
+keycloakMatchHost: "keycloak.domain"
+authServiceForwardAddress: http://auth-service.orch-gateway.svc:8080/verifyall
+# list of URLs that the UI needs to be able to call
+connectCSPs:
+  - "https://keycloak.domain"
+  - "wss://vnc.domain"
+  - "https://app-service-proxy.domain"
+  - "https://app-orch.domain"
+  - "https://metadata.domain"
+  - "https://telemetry.domain"
+# list of locations where the UI can load scripts from (required for UI extensions)
+scriptSources:
+  - "https://app-service-proxy.domain"
+clusterOrchNodeMatchHost: "cluster-orch-node.domain"
+logsNodeMatchHost: "logs-node.domain"
+metricsNodeMatchHost: "metrics-node.domain"
+giteaMatchHost: "gitea.domain"
+# specify default values for Traefik rate limiter;
+# when average=0, Traefik is not limiting any requests
+rateLimit:
+  average: 0
+  period: 1s
+  burst: 1
+  ipStrategyDepth: 0
+  excludedIps: []
+RequestBodyBytesLimit: 21474836480 # 20 GB in bytes
+tlsOption: "gateway-tls"
+cors:
+  enabled: false
+  allowedOrigins: []
+    # - "http://localhost:8080"
+    # - "http://localhost:8082"
+    # - "http://web-ui.kind.internal"

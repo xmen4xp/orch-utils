@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# use ".root" instead of "$" when templating the job
+{{- define "deploymentWait.jobYaml" }}
+{{- $jobName := printf "deployment-wait-%s-%s" .deploymentName .jobSuffix }}
+{{- $serviceAccountName := printf "deployment-wait-%s" .deploymentName }}
+{{- $kubeCmd := printf "until kubectl rollout status -n %s deployment/%s; do sleep 1; done;" .namespace .deploymentName }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobName }}
+spec:
+  template:
+    metadata:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $serviceAccountName }}
+      containers:
+      - name: deployment-wait
+        image: "bitnami/kubectl:1.28.4"
+        command:
+          - "timeout"
+          - "5m"
+          - "bash"
+          - "-c"
+          - {{ $kubeCmd }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        {{- with .resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}
+{{- $jobSuffix := include "deploymentWait.jobYaml" (dict "root" $) | toYaml | sha256sum | trunc 10 }}
+{{- include "deploymentWait.jobYaml" (dict "root" $ "jobSuffix" $jobSuffix "namespace" .Release.Namespace "deploymentName" .Values.deploymentName "resources" .Values.resources) }}

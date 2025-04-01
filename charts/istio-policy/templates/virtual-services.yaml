@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: platform-keycloak
+  namespace: orch-platform
+spec:
+  hosts:
+    - platform-keycloak.orch-platform.svc
+  http:
+    - match:
+        - port: 80
+          headers:
+            Host:
+              exact: platform-keycloak.orch-platform.svc
+      route:
+        - destination:
+            host: platform-keycloak.orch-platform.svc.cluster.local
+            port:
+              number: 8080

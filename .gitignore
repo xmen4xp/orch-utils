@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+mage_output_file.go
+.idea/
+*.iml
+*.tgz
+*DS_Store
+cert-synchronizer/http/.vscode/
+keycloak-tenant-controller/bin/
+*.netrc
+.history
+
+# tenancy-api-mapping
+tenancy-api-mapping/.history/*
+tenancy-api-mapping/.vscode/*
+tenancy-api-mapping/.idea/*
+tenancy-api-mapping/*.out
+tenancy-api-mapping/*.log
+tenancy-api-mapping/*/coverage.html
+tenancy-api-mapping/.gitconfig
+tenancy-api-mapping/.netrc
+tenancy-api-mapping/.ssh
+tenancy-api-mapping/.gitmodules
+.gitmodules
+tenancy-api-mapping/gitsubmodules/*
+gitsubmodules/*
+tenancy-api-mapping/tests/gitsubmodules/*
+tenancy-api-mapping/tests/openapispecs/*
+tenancy-api-mapping/node_modules/*
+tenancy-api-mapping/venv_apimapping/*
+tenancy-api-mapping/build/*
+
+# tenancy-datamodel
+tenancy-datamodel/build/install-validator/
+tenancy-datamodel/build/nexus-gql/
+tenancy-datamodel/build/tsm-nexus-gql
+tenancy-datamodel/build/golangci-lint_report.html
+# Ignore the symlink to build directory used in helm workflow
+tenancy-datamodel/helm-chart/crds
+tenancy-datamodel/venv*
+tenancy-datamodel/.history/*
+tenancy-datamodel/IMAGE
+tenancy-datamodel/NAME
+tenancy-datamodel/vendor
+
+# tenancy-manager
+tenancy-manager/bin/
+tenancy-manager/.gitconfig
+tenancy-manager/.netrc
+tenancy-manager/.ssh
+tenancy-manager/coverage.out
+tenancy-manager/report.json
+tenancy-manager/vendor/
+tenancy-manager/.idea/
+tenancy-manager/build/
+tenancy-manager/venv*
+
+# nexus-api-gateway
+nexus-api-gateway/build/
+nexus-api-gateway/.gitconfig
+nexus-api-gateway/.netrc
+nexus-api-gateway/.ssh
+nexus-api-gateway/api/
+nexus-api-gateway/coverage.out
+nexus-api-gateway/report.json
+nexus-api-gateway/vendor/
+nexus-api-gateway/.idea/
+nexus-api-gateway/.idea
+nexus-api-gateway/.vscode
+nexus-api-gateway/.vscode/*
+# Ignore the symlink to build directory used in helm workflow
+nexus-api-gateway/helm-chart/crds
+nexus-api-gateway/.history/
+nexus-api-gateway/.gitignore
+nexus-api-gateway/venv_*
+nexus-api-gateway/.vscode/settings.json
+nexus-api-gateway/bin/api-gw
+nexus-api-gateway/applications.development.nexus.api-gw
+nexus-api-gateway/*.coverprofile
+nexus-api-gateway/pkg/openapi/api/api.coverprofile
+nexus-api-gateway/*venv
+
+*.test

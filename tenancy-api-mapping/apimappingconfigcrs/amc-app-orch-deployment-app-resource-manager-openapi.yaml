@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apimappingconfig.edge-orchestrator.intel.com/v1
+kind: APIMappingConfig
+metadata:
+  name: amc-app-orch-deployment-app-resource-manager-openapi
+  labels:
+    configs.config.edge-orchestrator.intel.com: default
+spec:
+  specGenEnabled: true
+  repoConf:
+    url: "https://github.com/open-edge-platform/app-orch-deployment.git"
+    tag: "v2.3.12"
+    specFilePath: "app-resource-manager/api/nbi/v2/spec/v2/openapi.yaml"
+  mappings:
+    - externalURI: /v1/projects/{projectName}/resource/workloads/pods/clusters/{clusterId}/namespaces/{namespace}/pods/{podName}/delete
+      serviceURI: resource.orchestrator.apis/v2/workloads/pods/{clusterId}/{namespace}/{podName}/delete
+    - externalURI: /v1/projects/{projectName}/resource/workloads/applications/{appId}/clusters/{clusterId}/virtual-machines/{virtualMachineId}/vnc
+      serviceURI: resource.orchestrator.apis/v2/workloads/virtual-machines/{appId}/{clusterId}/{virtualMachineId}/vnc
+    - externalURI: /v1/projects/{projectName}/resource/workloads/applications/{appId}/clusters/{clusterId}/virtual-machines/{virtualMachineId}/start
+      serviceURI: resource.orchestrator.apis/v2/workloads/virtual-machines/{appId}/{clusterId}/{virtualMachineId}/start
+    - externalURI: /v1/projects/{projectName}/resource/workloads/applications/{appId}/clusters/{clusterId}/virtual-machines/{virtualMachineId}/stop
+      serviceURI: resource.orchestrator.apis/v2/workloads/virtual-machines/{appId}/{clusterId}/{virtualMachineId}/stop
+    - externalURI: /v1/projects/{projectName}/resource/workloads/applications/{appId}/clusters/{clusterId}/virtual-machines/{virtualMachineId}/restart
+      serviceURI: resource.orchestrator.apis/v2/workloads/virtual-machines/{appId}/{clusterId}/{virtualMachineId}/restart
+    - externalURI: /v1/projects/{projectName}/resource/workloads/applications/{appId}/clusters/{clusterId}
+      serviceURI: resource.orchestrator.apis/v2/workloads/{appId}/{clusterId}
+    - externalURI: /v1/projects/{projectName}/resource/endpoints/applications/{appId}/clusters/{clusterId}
+      serviceURI: resource.orchestrator.apis/v2/endpoints/{appId}/{clusterId}
+  backend:
+    service: "app-resource-manager-rest-proxy.orch-app.svc.cluster.local"
+    port: 8081

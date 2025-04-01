@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "secrets-config.fullname" . }}-{{ randAlphaNum 8 | lower }}
+  labels:
+    {{- include "secrets-config.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "secrets-config.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "secrets-config.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          args:
+            - -logLevel={{ .Values.logLevel }}
+            - -autoInit={{ .Values.autoInit }}
+            - -autoUnseal={{ .Values.autoUnseal }}
+            - -authOrchSvcsRoleMaxTTL={{ .Values.auth.orchSvcs.roleMaxTTL }}
+            - -authOIDCIdPAddr={{ .Values.auth.oidc.idPAddr }}
+            - -authOIDCIdPDiscoveryURL={{ .Values.auth.oidc.idPDiscoveryURL }}
+            - -authOIDCRoleMaxTTL={{ .Values.auth.oidc.roleMaxTTL }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy:  {{ .Values.restartPolicy }}

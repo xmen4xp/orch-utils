@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+certDomain:
+
+
+# Should be disabled for cloud deployments, where tls-orch secret will be supplied in advance
+# setting this to true will issue a self-signed certificate and override any values set below for autoCert
+generateOrchCert: false
+
+
+autoCert:
+  enabled: false
+  # used to override the certDomain and use a different base domain for dnsZone or dnsNames
+  # should not need to be modified in most use cases.
+  certDomain:
+  aws:
+    # Name of AWS Region
+    region:
+    # Name of AWS Role that has access to route53 and ACM
+    role: certmgr-dev
+  # Determines if staging or production Lets Encrypt is used
+  # Production lets encrypt has a rate limit of 50 certificates per domain / per week.
+  # Using staging lets encrypt may require adding the LE staging CA to the trusted store
+  production: false
+  # Modify the duration and renewal of the cert-manager managed certificate
+  cert:
+    # duration: 3h0m0s # Lets Encrypt always renews at 90 days, so this value is ignored
+
+    # renewBefore is the duration before expiration that cert-manager will attempt to renew the certificate
+    renewBefore: 1440h0m0s
+
+    adminEmail:
+
+# A full ClusterIssuer spec can also be passed in for advanced usage.
+# or usage with another ACME issuer.
+# If using a different ACME issuer this may require additional configuration of cluster
+# outside the scope of what is provided by Intel Open Edge Platform. USE WITH CAUTION AND TEST THOROUGHLY.
+# spec:
+# # generateautocert and custom
+#   acme:
+#   #    server: https://acme-v02.api.letsencrypt.org/directory
+#     server: https://acme-staging-v02.api.letsencrypt.org/directory
+#     # No email address provided
+#     email: ""
+#     # Acknowledge the lack of email address
+#     skipTLSVerify: true
+#     # email: <email address>
+#     privateKeySecretRef:
+#       name: letsencrypt-route53-account-key
+#     solvers:
+#     - selector:
+#         dnsZones:
+#           - "{{ required "A valid certDomain entry required!" .Values.certDomain }}"
+#       dns01:
+#         route53:
+#           region: us-west-2
+#           role: <arn for aws role that has route53 and acm permissions>

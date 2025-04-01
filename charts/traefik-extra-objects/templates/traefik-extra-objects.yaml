@@ -1,0 +1,519 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- $keycloakJwksUrlPortPath := printf "%s:%s%s" (required "A valid keycloakJwksUrl required!" .Values.keycloakJwksUrl )  (required "A valid keycloakServicePort required!" .Values.keycloakServicePort | toString )  (required "A valid keycloakJwksPath required!" .Values.keycloakJwksPath) -}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/name: traefik
+  name: traefik-metrics
+  namespace: orch-platform
+spec:
+  jobLabel: traefik-metrics
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: traefik-orch-gateway
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/component: metrics
+  namespaceSelector:
+    matchNames:
+    - orch-gateway
+  endpoints:
+    - port: metrics
+      interval: 30s
+{{- if .Values.tlsOption }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: TLSOption
+metadata:
+  name: {{ .Values.tlsOption }}
+  namespace: orch-gateway
+spec:
+  cipherSuites:
+  - TLS_AES_256_GCM_SHA384
+  - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+  - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+  minVersion: VersionTLS12
+  sniStrict: true
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: validate-jwt
+  namespace: orch-gateway
+spec:
+  plugin:
+    jwt:
+      Required: true
+      PayloadFields:
+        - exp
+      Keys:
+        - {{ $keycloakJwksUrlPortPath }}
+      JwtHeaders:
+        X-Subject: sub
+      JwtCookieKey: jwt
+{{- if .Values.cors.enabled }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: cors
+  namespace: orch-gateway
+spec:
+  headers:
+    accessControlAllowMethods:
+      - "GET"
+      - "OPTIONS"
+      - "PUT"
+      - "PATCH"
+      - "POST"
+      - "DELETE"
+    accessControlAllowHeaders:
+      - "*"
+    accessControlAllowOriginList:
+    {{- range $origin := .Values.cors.allowedOrigins }}
+      - {{ $origin }}
+    {{- end }}
+    accessControlAllowCredentials: true
+    accessControlMaxAge: 100
+    addVaryHeader: true
+{{- end }}
+---
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: svc-kubernetes-default-headers
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      host: kubernetes.default.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: svc-harbor-oci-headers
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      Host: harbor-oci-core.orch-harbor.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: harbor-oci
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: {{ required "A valid harborMatchHost entry required!" .Values.harborOciMatchHost }} && (PathPrefix(`/api/`) || PathPrefix(`/service/`) || PathPrefix(`/v2/`) || PathPrefix(`/chartrepo/`) || PathPrefix(`/c/`))
+      middlewares:
+        - name: svc-harbor-oci-headers
+        - name: secure-headers
+      kind: Rule
+      services:
+        - name: harbor-oci-core
+          port: 80
+          scheme: http
+          namespace: orch-harbor
+    - match: {{ required "A valid harborMatchHost entry required!" .Values.harborOciMatchHost }} && PathPrefix(`/`)
+    ## TODO: add middleware here
+      kind: Rule
+      services:
+        - name: harbor-oci-portal
+          port: 80
+          scheme: http
+          namespace: orch-harbor
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: api-stripprefix
+  namespace: orch-gateway
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: edgenode-observability-grafana
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+      - match: {{ required "A valid observabilityMatchHost entry required!" .Values.observabilityMatchHost }}
+        kind: Rule
+        services:
+          - name: edgenode-observability-grafana
+            port: 80
+            scheme: http
+            namespace: orch-infra
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orch-platform-grafana
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+      - match: {{ required "A valid observabilityAdminMatchHost entry required!" .Values.observabilityAdminMatchHost }}
+        kind: Rule
+        services:
+          - name: orchestrator-observability-grafana
+            port: 80
+            scheme: http
+            namespace: orch-platform
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: svc-observability-mimir-gateway-hostname
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      Host: edgenode-observability-mimir-gateway.orch-infra.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: svc-observability-opentelemetry-hostname
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      Host: edgenode-observability-opentelemetry-collector.orch-infra.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orch-platform-vault
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+      - match: {{ required "A valid vaultMatchHost entry required!" .Values.vaultMatchHost }}
+        kind: Rule
+        services:
+          - name: vault
+            port: 8200
+            scheme: http
+            namespace: orch-platform
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orch-platform-keycloak
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+      - match: {{ required "A valid keycloakMatchHost entry required!" .Values.keycloakMatchHost }}
+        kind: Rule
+        services:
+          - name: platform-keycloak-headless
+            port: {{ required "A valid keycloakServicePort entry required!" .Values.keycloakServicePort }}
+            scheme: http
+            namespace: orch-platform
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: svc-ecm-api-orch-cluster
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      Host: ecm-api.orch-cluster.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: ma-gitea
+  namespace: orch-gateway
+spec:
+  headers:
+    customRequestHeaders:
+      Host: gitea-http.orch-app.svc
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ma-gitea
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+      - match: {{ required "A valid giteaMatchHost entry required!" .Values.giteaMatchHost }}
+        kind: Rule
+        middlewares:
+          - name: ma-gitea
+        services:
+          - name: gitea-http
+            port: 3000
+            scheme: http
+            namespace: orch-app
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: secure-headers
+  namespace: orch-gateway
+spec:
+  headers:
+    referrerPolicy: "no-referrer"
+    customResponseHeaders:
+      X-Permitted-Cross-Domain-Policies: none
+      Pragma: no-cache
+      Cache-Control: "no-store, max-age=0"
+      Content-Security-Policy: "
+        default-src 'self'; form-action 'self';
+        object-src 'none'; frame-ancestors 'none';
+        script-src 'self' 'unsafe-eval' {{ required "A valid scriptSources entry required!" (join " " .Values.scriptSources) }};
+        style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+        connect-src 'self' {{ required "A valid connectCSP entry required!" (join " " .Values.connectCSPs) }};
+        upgrade-insecure-requests; block-all-mixed-content"
+      Cross-Origin-Embedder-Policy: require-corp
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Resource-Policy: same-origin
+      Permissions-Policy: "accelerometer=(),ambient-light-sensor=(),autoplay=(),battery=(),camera=(),display-capture=(),document-domain=(),encrypted-media=(),fullscreen=(),gamepad=(),geolocation=(),gyroscope=(),layout-animations=(self),legacy-image-formats=(self),magnetometer=(),microphone=(),midi=(),oversized-images=(self),payment=(),picture-in-picture=(),publickey-credentials-get=(),speaker-selection=(),sync-xhr=(self),unoptimized-images=(self),unsized-media=(self),usb=(),screen-wake-lock=(),web-share=(),xr-spatial-tracking=()"
+      "$wsep": ""
+      Host-Header: ""
+      K-Proxy-Request: ""
+      Liferay-Portal: ""
+      OracleCommerceCloud-Version: ""
+      Pega-Host: ""
+      Powered-By: ""
+      Product: ""
+      Server: ""
+      SourceMap: ""
+      X-AspNet-Version: ""
+      X-AspNetMvc-Version: ""
+      X-Atmosphere-error: ""
+      X-Atmosphere-first-request: ""
+      X-Atmosphere-tracking-id: ""
+      X-B3-ParentSpanId: ""
+      X-B3-Sampled: ""
+      X-B3-SpanId: ""
+      X-B3-TraceId: ""
+      X-CF-Powered-By: ""
+      X-CMS: ""
+      X-Content-Encoded-By: ""
+      X-Envoy-Attempt-Count: ""
+      X-Envoy-External-Address: ""
+      X-Envoy-Internal: ""
+      X-Envoy-Original-Dst-Host: ""
+      X-Envoy-Upstream-Service-Time: ""
+      X-Framework: ""
+      X-Generated-By: ""
+      X-Generator: ""
+      X-LiteSpeed-Cache: ""
+      X-LiteSpeed-Purge: ""
+      X-LiteSpeed-Tag: ""
+      X-LiteSpeed-Vary: ""
+      X-Litespeed-Cache-Control: ""
+      X-Mod-Pagespeed: ""
+      X-Nextjs-Cache: ""
+      X-Nextjs-Matched-Path: ""
+      X-Nextjs-Page: ""
+      X-Nextjs-Redirect: ""
+      X-Old-Content-Length: ""
+      X-OneAgent-JS-Injection: ""
+      X-Page-Speed: ""
+      X-Php-Version: ""
+      X-Powered-By: ""
+      X-Powered-By-Plesk: ""
+      X-Powered-CMS: ""
+      X-Redirect-By: ""
+      X-Server-Powered-By: ""
+      X-SourceFiles: ""
+      X-SourceMap: ""
+      X-Turbo-Charged-By: ""
+      X-Umbraco-Version: ""
+      X-Varnish-Backend: ""
+      X-Varnish-Server: ""
+      X-dtAgentId: ""
+      X-dtHealthCheck: ""
+      X-dtInjectedServlet: ""
+      X-ruxit-JS-Agent: ""
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orch-platform-logs-node
+  namespace: orch-gateway
+spec:
+  entryPoints: # We listen to requests coming from ports 443
+    - websecure
+  routes:
+    - match: {{ required "A valid logsNodeMatchHost entry required!" .Values.logsNodeMatchHost }}
+      kind: Rule
+      middlewares:
+        - name: validate-jwt
+        - name: svc-observability-opentelemetry-hostname
+        - name: forward-auth-service
+      services:
+      - name: edgenode-observability-opentelemetry-collector
+        namespace: orch-infra
+        port: 4318
+        scheme: http
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orch-platform-metrics-node
+  namespace: orch-gateway
+spec:
+  entryPoints: # We listen to requests coming from ports 443
+    - websecure
+  routes:
+    - match: {{ required "A valid metricsNodeMatchHost entry required!" .Values.metricsNodeMatchHost }} && (PathPrefix(`/prometheus/api/v1/query`) || PathPrefix(`/prometheus/api/v1/query_range`) || PathPrefix(`/api/v1/push`)|| PathPrefix(`/otlp/v1/metrics`))
+      kind: Rule
+      middlewares:
+        - name: validate-jwt
+        - name: svc-observability-mimir-gateway-hostname
+        - name: forward-auth-service
+      services:
+      - name: edgenode-observability-mimir-gateway
+        namespace: orch-infra
+        port: 8181
+        scheme: http
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: ServersTransport
+metadata:
+  name: fleet-transport
+  namespace: default
+spec:
+  serverName: kubernetes.default.svc.cluster.local
+  insecureSkipVerify: true
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: svc-fleet-https
+  namespace: orch-gateway
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: {{ required "A valid fleetMatchHost entry required!" .Values.fleetMatchHost }}
+      kind: Rule
+      middlewares:
+        - name: svc-kubernetes-default-headers
+      services:
+        - name: kubernetes
+          namespace: default
+          port: 443
+          serversTransport: fleet-transport
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+    {{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+    {{- end }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+spec:
+  rateLimit:
+    average: {{ required "A valid rateLimit.average entry required!" .Values.rateLimit.average }}
+    period: {{ required "A valid rateLimit.period entry required!" .Values.rateLimit.period }}
+    burst: {{ required "A valid rateLimit.burst entry required!" .Values.rateLimit.burst }}
+    sourceCriterion:
+      ipStrategy:
+        depth: {{ required "A valid rateLimit.ipStrategyDepth entry required!" .Values.rateLimit.ipStrategyDepth }}
+        excludedIPs: {{ required "A valid rateLimit.excludedIps entry required!" .Values.rateLimit.excludedIps }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: limit-request-size
+spec:
+  buffering:
+    maxRequestBodyBytes: {{ required "A valid RequestBodyBytesLimit entry required!" .Values.RequestBodyBytesLimit }}
+---
+# Forward authentication to /verifyall
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: forward-auth-service
+spec:
+  forwardAuth:
+    address: {{ required "A valid forwardAuth address!" .Values.authServiceForwardAddress }}
+---

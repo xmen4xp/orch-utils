@@ -1,0 +1,46 @@
+POST {{host}}/creatednsrecord HTTP/1.1
+content-type: application/json
+
+[
+        {
+            "region": "eu-west-2",
+            "domain": "getta.club",
+            "isPrivate": true,
+            "recordType": "A",
+            "recordName": "ARecord",
+            "recordValue": "192.0.2.44"
+        },
+        {
+            "region": "eu-west-2",
+            "domain": "getta.club",
+            "isPrivate": true,
+            "recordType": "A",
+            "recordName": "ARecord",
+            "recordValue": "192.0.2.45"
+        },
+        {
+            "region": "eu-west-2",
+            "domain": "getta.club",
+            "isPrivate": true,
+            "recordType": "TXT",
+            "recordName": "_acme-challenge",
+            "recordValue": "D-52Wm4V7xoUpGax-F8FrPO45cQRcbRj-XoblaY4uYM"
+        },
+        {
+            "region": "eu-west-2",
+            "domain": "somethingreallyreallyreallyreallyreallylong.getta.club",
+            "isPrivate": true,
+            "recordType": "TXT",
+            "recordName": "_acme-challenge",
+            "recordValue": "D-52Wm4V7xoUpGax-F8FrPO45cQRcbRj-XoblaY4uYM"
+        },
+        {
+            "region": "eu-west-2",
+            "domain": "somethingreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallyreallylong.getta.club",
+            "isPrivate": true,
+            "recordType": "TXT",
+            "recordName": "_acme-challenge",
+            "recordValue": "D-52Wm4V7xoUpGax-F8FrPO45cQRcbRj-XoblaY4uYM"
+        }
+
+]

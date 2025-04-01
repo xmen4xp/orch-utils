@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+image:
+  repository: ""
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+aws:
+  region: ""
+autoCertCertificateName: "kubernetes-docker-internal"
+acmCertificateName: "kubernetes-docker-internal"
+disableCertMatchChecks: "false"
+awsR35Domain: "espdqa.infra-host.com"
+secretNamespace: "orch-gateway"
+createK8sCertSecret: "true"
+k8sCertificateNamespace: "orch-gateway"
+k8sCertSecretName: "tls-orch"
+debug: "false"
+podFileUpdateTimeoutSecs: "120"
+inter1URL: "https://letsencrypt.org/certs/2024/r10.pem"
+inter2URL: "https://letsencrypt.org/certs/2024/r11.pem"
+rootURL: "https://letsencrypt.org/certs/isrgrootx1.pem"
+acmImportIfNotExists: "true"
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi

@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+{{- range .Values.namespaces }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $.Release.Name }}-for-{{ . }}
+  namespace: {{ . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ required "A valid remoteNamespace entry required!" $.Values.remoteNamespace }}
+  name: {{ $.Release.Name }}-for-{{ . }}
+rules:
+- apiGroups: [""]
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch 
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - selfsubjectrulesreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $.Release.Name }}-for-{{ . }}
+  namespace: {{ required "A valid remoteNamespace entry required!" $.Values.remoteNamespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $.Release.Name }}-for-{{ . }}
+    namespace: {{ . }}
+roleRef:
+  kind: Role
+  name: {{ $.Release.Name }}-for-{{ . }}
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: {{ $.Release.Name }}
+  namespace: {{ . }}
+spec:
+  provider:
+    kubernetes:
+      # with this, the store is able to pull only from the specified namespace
+      remoteNamespace: {{ required "A valid remoteNamespace entry required!" $.Values.remoteNamespace }}
+      server:
+        url: "kubernetes.default"
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt      
+      auth:
+        serviceAccount:
+          name: {{ $.Release.Name }}-for-{{ . }}
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ $.Release.Name }}
+  namespace: {{ . }}
+spec:
+  refreshInterval: {{ required "A valid refreshInterval entry required!" $.Values.refreshInterval }}
+  secretStoreRef:
+    kind: SecretStore
+    name: {{ $.Release.Name }}             # name of the SecretStore (or kind specified)
+  target:
+    name: {{ required "A valid targetName entry required!" $.Values.targetName }}  # name of the k8s Secret to be created
+    template:
+      engineVersion: v2
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: '{"auths":{"{{ $.Values.registryHost }}":{"username":"{{ $.Values.registryHost }}","password":"{{ `{{ .token }}` }}","auth":"{{ `{{ printf "%s:%s" "somename" .token | b64enc }}`}}"}}}'
+  data:
+  # match this next value in the template
+  - secretKey: token
+    remoteRef:
+      # secret name
+      key: release-service-token
+      # key name inside of secret
+      property: token
+---
+{{- end }}

@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-istio-sidecar-injection-namespace
+  annotations:
+    policies.kyverno.io/title: Require Istio sidecar injection in all Namespaces
+    policies.kyverno.io/category: Istio
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Namespace
+    policies.kyverno.io/description: >-
+      In order for Istio to inject sidecars to workloads deployed into
+      Namespaces, the label `istio-injection` must be set to `enabled`. This
+      policy ensures that all new Namespaces set `istio-inject` to `enabled`.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-istio-injection-enabled
+      match:
+        resources:
+          kinds:
+            - Namespace
+      validate:
+        message: "All Namespaces should have Istio sidecar injection enabled."
+        pattern:
+          metadata:
+            labels:
+              istio-injection: enabled
+---
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: istio-sidecar-injection-exception
+spec:
+  exceptions:
+  - policyName: require-istio-sidecar-injection-namespace
+    ruleNames:
+    - check-istio-injection-enabled
+  match:
+    any:
+      - resources:
+          kinds:
+            - Namespace
+          names:
+          {{- range .Values.excludedNamespaces }}
+            - {{ . | quote }}
+          {{- end }}

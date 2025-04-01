@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+require_ro_rootfs:
+  FailureAction: "Audit"
+
+restrictedPolicyOrch:
+  - namespace: sample-ns1
+    names:
+      - sample-pod-name
+      - sample-pod-name-wildcard*

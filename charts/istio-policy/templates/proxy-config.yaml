@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: networking.istio.io/v1beta1
+kind: ProxyConfig
+metadata:
+  name: use-safe-approved-crypto-algorithm
+  namespace: istio-system
+spec:
+  environmentVariables:
+    WORKLOAD_RSA_KEY_SIZE: "3072"

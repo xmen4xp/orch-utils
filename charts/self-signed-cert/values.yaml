@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+certDomain:
+
+
+# Should be disabled for cloud deployments, where tls-orch secret will be supplied in advance
+generateOrchCert: false

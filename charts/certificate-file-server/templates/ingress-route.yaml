@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-boots-ca-certificate
+  namespace: orch-gateway
+spec:
+  entryPoints: # We listen to requests coming from ports 443
+    - websecure
+  routes:
+    - match: ({{ required "A valid rootMatchHost entry required!" .Values.rootMatchHost }}) && PathPrefix(`/boots`)
+      kind: Rule
+      priority: 20 # Must be greater than web-ui's catch all route
+      services:
+        - name: certificate-file-server
+          port: 8080
+          scheme: http
+          namespace: orch-gateway
+  tls:
+    secretName: {{ required "A valid orchSecretName entry required!" .Values.orchSecretName }}
+{{- if .Values.tlsOption }}
+    options:
+      name: {{ .Values.tlsOption }}
+      namespace: orch-gateway
+{{- end }}

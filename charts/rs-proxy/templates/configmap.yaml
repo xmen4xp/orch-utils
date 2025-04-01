@@ -1,0 +1,148 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# When release service requires a token, a ConfigMap is generated.
+# ExternalSecret will consume the ConfigMap, combine it with release service token to further generate the Secret.
+# When release service doesn't require a token, we generate the Secret directly
+{{- if .Values.withReleaseServiceToken }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config-tpl
+  namespace: {{ .Release.Namespace }}
+data:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    #
+    {
+        default_sni rs-proxy.orch-platform.svc.cluster.local
+    }
+
+    :{{ .Values.service.port.http }} {
+        reverse_proxy https://{{ required "A valid proxyTargetRegistry entry required!" .Values.proxyTargetRegistry }} {
+            header_up Authorization "Bearer {{ `{{ .token }}` }}"
+            header_up Host {upstream_hostport}
+            {{ if .Values.proxyTargetCA }}
+            transport http {
+              tls_trusted_ca_certs /data-ca/cert.pem
+            }
+            {{ end }}
+        }
+    }
+
+    rs-proxy.orch-platform.svc.cluster.local:{{ .Values.service.port.https }} {
+        tls /data-tls/tls.crt /data-tls/tls.key
+        reverse_proxy https://{{ required "A valid proxyTargetRegistry entry required!" .Values.proxyTargetRegistry }} {
+            header_up Authorization "Bearer {{ `{{ .token }}` }}"
+            header_up Host {upstream_hostport}
+            {{ if .Values.proxyTargetCA }}
+            transport http {
+              tls_trusted_ca_certs /data-ca/cert.pem
+            }
+            {{ end }}
+        }
+    }
+
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config-files-tpl
+  namespace: {{ .Release.Namespace }}
+data:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    #
+    :{{ .Values.service.port.http }} {
+        reverse_proxy https://{{ required "A valid proxyTargetFiles entry required!" .Values.proxyTargetFiles }} {
+            header_up Authorization "Bearer {{ `{{ .token }}` }}"
+            header_up Host {upstream_hostport}
+            {{ if .Values.proxyTargetCA }}
+            	transport http {
+                tls_trusted_ca_certs /data-ca/cert.pem
+              }
+            {{ end }}
+        }
+    }
+
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile
+{{- else }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: caddy-config
+  namespace: {{ .Release.Namespace }}
+stringData:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    #
+    {
+        default_sni rs-proxy.orch-platform.svc.cluster.local
+    }
+
+    :{{ .Values.service.port.http }} {
+        reverse_proxy https://{{ required "A valid proxyTargetRegistry entry required!" .Values.proxyTargetRegistry }} {
+            header_up Host {upstream_hostport}
+            header_up Authorization "Bearer anonymous"
+            {{ if .Values.proxyTargetCA }}
+            transport http {
+              tls_trusted_ca_certs /data-ca/cert.pem
+            }
+            {{ end }}
+        }
+    }
+
+    rs-proxy.orch-platform.svc.cluster.local:{{ .Values.service.port.https }} {
+        tls /data-tls/tls.crt /data-tls/tls.key
+        reverse_proxy https://{{ required "A valid proxyTargetRegistry entry required!" .Values.proxyTargetRegistry }} {
+            header_up Host {upstream_hostport}
+            {{ if .Values.proxyTargetCA }}
+            transport http {
+              tls_trusted_ca_certs /data-ca/cert.pem
+            }
+            {{ end }}
+        }
+    }
+
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: caddy-config-files
+  namespace: {{ .Release.Namespace }}
+stringData:
+  Caddyfile: |-
+    # The Caddyfile is an easy way to configure your Caddy web server.
+    #
+    :{{ .Values.service.port.http }} {
+        reverse_proxy https://{{ required "A valid proxyTargetFiles entry required!" .Values.proxyTargetFiles }} {
+            header_up Host {upstream_hostport}
+            header_up Authorization "Bearer anonymous"
+            {{ if .Values.proxyTargetCA }}
+            	transport http {
+                tls_trusted_ca_certs /data-ca/cert.pem
+              }
+            {{ end }}
+        }
+    }
+
+    # Refer to the Caddy docs for more information:
+    # https://caddyserver.com/docs/caddyfile
+{{- end }}
+---
+{{ if .Values.proxyTargetCA }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-ca-cert
+  namespace: {{ .Release.Namespace }}
+data:
+  cert.pem: |-
+    {{- .Values.proxyTargetCA | b64dec | nindent 4}}
+{{ end }}

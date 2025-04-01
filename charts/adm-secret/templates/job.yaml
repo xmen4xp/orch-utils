@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# use ".root" instead of "$" when templating the job
+{{- define "jobYaml" }}
+{{- $jobName := printf "adm-secret-%s" .jobSuffix }}
+{{- $secretNamespace := .secretNamespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobName }}
+  namespace: orch-platform
+spec:
+  template:
+    spec:
+      containers:
+        - name: adm-secret
+          image: "bitnami/kubectl:1.28.4"
+          command: ["/bin/bash", "/tmp/bin/run.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /tmp/bin
+          env:
+            - name: VAULT_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: vault-keys
+                  key: vault-keys
+            - name: APP_GITEA_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-gitea-credential
+                  key: username
+            - name: APP_GITEA_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: app-gitea-credential
+                  key: password
+            - name: CLUSTER_GITEA_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cluster-gitea-credential
+                  key: username
+            - name: CLUSTER_GITEA_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: cluster-gitea-credential
+                  key: password
+            - name: SEC_NAMESPACE
+              value: {{ $secretNamespace }}
+      restartPolicy: Never
+      serviceAccountName: adm-secret
+      volumes:
+        - name: script
+          configMap:
+            name: adm-secret
+            defaultMode: 0755
+        - name: orch-svc-token
+          secret:
+            secretName: orch-svc-token
+  backoffLimit: 4
+{{- end }}
+{{- $jobSuffix := include "jobYaml" (dict "root" $) | toYaml | sha256sum | trunc 10 }}
+{{- include "jobYaml" (dict "root" $ "jobSuffix" $jobSuffix "secretNamespace" .Values.secretNamespace) }}

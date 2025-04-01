@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# define your template in a config map
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "token-file-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  # Roles in this config map follow dot notation path specified in gjson golang library.
+  # When this value is changed, token file server pod must be restarted.
+  roles.txt: |-
+    realm_access.roles.#(=="rs-access-r")

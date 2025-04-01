@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# These owners will be the default owners for everything in the repo. Unless a
+# later match takes precedence, these owners will be requested for review when
+# someone opens a pull request. Use email address instead of GitHub user.
+
+# Everything requires Platform team review by default
+* chris.thach@intel.com @mdbalvin @rad-szulim @charlesmcchan @yi-tseng-intel @ashridatta @teone @callumnobleintel @daniele-moro @SeanCondon @pierventre john.oloughlin@intel.com gary.loughnane@intel.com @ahalimx86 emma.kenny@intel.com andrei.palade@intel.com dmytro.yermolenko@intel.com patryk.iracki@intel.com john.rey.juele@intel.com diwan.chandrabose@intel.com sushil.lakra@intel.com
