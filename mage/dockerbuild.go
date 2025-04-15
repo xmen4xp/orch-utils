@@ -77,7 +77,7 @@ func tokenFSBuild() error {
 		return fmt.Errorf("GITHUB_TOKEN must be set")
 	}
 
-	appVersion, err := getChartAppVersion("token-file-server")
+	appVersion, err := getChartAppVersion("token-fs")
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func tenancyDatamodelBuild() error {
 		return err
 	}
 
-	appVersion, err := getChartAppVersion("tenancy-datamodel-init")
+	appVersion, err := getChartAppVersion(projectDir)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func tenancyAPIMappingBuild() error {
 		_ = sh.RunV("cp", "-r", filepath.Join(homeDir, dir), filepath.Join(projectDir, dir))
 	}
 
-	appVersion, err := getChartAppVersion("tenancy-api-remapping")
+	appVersion, err := getChartAppVersion(projectDir)
 	if err != nil {
 		return err
 	}
@@ -390,7 +390,7 @@ func tenancyManagerBuild() error {
 		_ = sh.RunV("cp", "-r", filepath.Join(homeDir, dir), filepath.Join(projectDir, dir))
 	}
 
-	appVersion, err := getChartAppVersion("tenancy-manager")
+	appVersion, err := getChartAppVersion(projectDir)
 	if err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func nexusAPIGatewayBuild() error {
 	// some errors below are deliberately ignored to suppress “file already/doesn’t” exist errors
 	// Mage uses %v when formatting errors, so they cannot be unwrapped and handled on a case by case
 
-	projectDir := "nexus-api-gateway"
+	projectDir := "nexus-api-gw"
 	componentName := "api-gw"
 	homeDir := os.Getenv("HOME")
 
@@ -420,7 +420,7 @@ func nexusAPIGatewayBuild() error {
 
 	mg.Deps(nexusAPIGatewayClean)
 
-	appVersion, err := getChartAppVersion("nexus-api-gw")
+	appVersion, err := getChartAppVersion(projectDir)
 	if err != nil {
 		return err
 	}
@@ -493,10 +493,10 @@ func listContainers() error {
 		"nexus-api-gw",
 		"secrets-config",
 		"squid-proxy",
-		"tenancy-api-remapping",
-		"tenancy-datamodel-init",
+		"tenancy-api-mapping",
+		"tenancy-datamodel",
 		"tenancy-manager",
-		"token-file-server",
+		"token-fs",
 	}
 
 	for _, image := range images {
