@@ -109,7 +109,7 @@ To learn how to contribute to the project, see the [Contributor's Guide](https:/
 To learn more about the project, its community, and governance, visit the [Edge Orchestrator
 Community](https://github.com/open-edge-platform).
 
-For support, start with [Troubleshooting](https://github.com/open-edge-platform) or [contact us](https://github.com/open-edge-platform).
+For support, start with [Troubleshooting](https://docs.openedgeplatform.intel.com/edge-manage-docs/main/developer_guide/troubleshooting/index.html) or [contact us](https://github.com/open-edge-platform).
 
 ## License
 
