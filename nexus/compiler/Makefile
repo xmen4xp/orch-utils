@@ -79,7 +79,7 @@ endif
 
 .PHONY: docker.builder
 docker.builder:
-	docker buildx use default
+	docker context use default
 	docker build --load \
 		--build-arg HTTPS_PROXY=$(HTTPS_PROXY) \
 		--build-arg HTTP_PROXY=$(HTTP_PROXY) \
@@ -134,7 +134,7 @@ tools:
 	go install github.com/mikefarah/yq/v4@latest
 	go install ../kube-openapi/cmd/nexus-openapi-gen
 	cd ../gqlgen && go install && cd -
-	sudo curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$$(go env GOPATH)"/bin v1.49.0
+	su - appuser -c "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b '$$(go env GOPATH)'/bin v1.49.0"
 
 .PHONY: build_openapigen_in_container
 build_openapigen_in_container:
