@@ -51,6 +51,7 @@ endif
 ifeq ($(CONTAINER_ID),)
 define run_in_container
   docker run \
+  --rm \
   --volume $(realpath .)/..:/go/src/github.com/vmware-tanzu/graph-framework-for-microservices/ \
   --network=host \
   --workdir ${PKG_NAME} \
@@ -63,6 +64,7 @@ endef
 else
 define run_in_container
  docker run \
+ --rm \
  --volumes-from ${CONTAINER_ID} \
  --workdir ${PKG_NAME} \
  --env CICD_TOKEN=${CICD_TOKEN} \
@@ -79,7 +81,7 @@ endif
 
 .PHONY: docker.builder
 docker.builder:
-	docker buildx use default
+	docker context use default
 	docker build --load \
 		--build-arg HTTPS_PROXY=$(HTTPS_PROXY) \
 		--build-arg HTTP_PROXY=$(HTTP_PROXY) \
@@ -92,6 +94,14 @@ docker.builder:
 		-t ${BUILDER_DOCKER_TAG} \
 		builder/
 
+.PHONY: docker.builder.tag
+docker.builder.tag:
+	docker tag ${BUILDER_DOCKER_TAG} ${CUSTOM_BUILDER_DOCKER_TAG}
+
+.PHONY: docker.builder.clean
+docker.builder.clean:
+	docker rmi -f ${BUILDER_DOCKER_TAG}
+
 .PHONY: docker.builder.publish
 docker.builder.publish:
 	docker push ${BUILDER_DOCKER_TAG}
@@ -103,13 +113,9 @@ docker.builder.image.exists:
 
 .PHONY: docker
 docker: docker.builder.image.exists init_submodules build_openapigen_in_container build_gqlgen_in_container build_install_validator_in_container
-ifeq (${INCLUDE_LOCAL_CHANGES}, true)
-	git archive -o compiler.tar --format=tar $(shell git stash create)
-else
-	git archive -o compiler.tar --format=tar HEAD
-endif
+	tar -cf compiler.tar --exclude=compiler.tar .
 	cd .. && tar -rf compiler/compiler.tar ../.git
-	tar -rf compiler.tar _deps ../gqlgen ../kube-openapi ../nexus ../install-validator ../common-library
+	tar -rf compiler.tar ../gqlgen ../kube-openapi ../nexus ../install-validator ../common-library
 	docker build --load \
 		--build-arg HTTPS_PROXY=$(HTTPS_PROXY) \
 		--build-arg HTTP_PROXY=$(HTTP_PROXY) \
@@ -121,6 +127,14 @@ endif
 		--no-cache \
 		--build-arg BUILDER_TAG=${BUILDER_DOCKER_TAG} \
 		-t ${COMPILER_DOCKER_TAG} .
+
+.PHONY: docker.tag
+docker.tag:
+	docker tag ${COMPILER_DOCKER_TAG} ${CUSTOM_COMPILER_DOCKER_TAG}
+
+.PHONY: docker.clean
+docker.clean:
+	docker rmi -f ${COMPILER_DOCKER_TAG}
 
 .PHONY: docker.publish
 docker.publish:
@@ -134,7 +148,7 @@ tools:
 	go install github.com/mikefarah/yq/v4@latest
 	go install ../kube-openapi/cmd/nexus-openapi-gen
 	cd ../gqlgen && go install && cd -
-	sudo curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$$(go env GOPATH)"/bin v1.49.0
+	su - appuser -c "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b '$$(go env GOPATH)'/bin v1.49.0"
 
 .PHONY: build_openapigen_in_container
 build_openapigen_in_container:
@@ -326,7 +340,7 @@ publish_builder_image:
 init_submodules:
 	@if [ ! -d "_deps/github.com/kubernetes/code-generator/.git" ]; then\
     	echo "Cloning kubernetes/code-generator repo ...";\
-	git clone https://github.com/kubernetes/code-generator.git _deps/github.com/kubernetes/code-generator;\
+	git clone -b v0.16.15 https://github.com/kubernetes/code-generator.git _deps/github.com/kubernetes/code-generator;\
     fi
 
 .PHONY: render_templates

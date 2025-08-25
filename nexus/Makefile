@@ -12,6 +12,79 @@ SHELL           := bash -eu -o pipefail
 VERSION         ?= $(shell cat VERSION)
 ARCH            ?= $(shell go env GOARCH)
 DOCKER_REGISTRY ?=
+CLI_DIR ?= cli
+DOCKER_BUILD_MOUNT_DIR ?= /go/src
+
+# Detect platform and populate env variables.
+ifeq ($(shell uname), Darwin)
+	GOOS=darwin
+else
+	GOOS=linux
+endif
+
+# Detect GOARCH.
+GOARCH=$(shell go env GOARCH)
+
+### Nexus CLI build targets ###
+.PHONY: cli.build.darwin
+cli.build.darwin:
+	@echo "Building nexus/cli for darwin..."
+	docker run \
+		--pull=missing \
+		--volume $(realpath .):${DOCKER_BUILD_MOUNT_DIR} \
+		--volume ${HOME}/.cache/go-build:/root/.cache/go-build \
+		-e GOCACHE=/root/.cache/go-build \
+		-w ${DOCKER_BUILD_MOUNT_DIR}/${CLI_DIR} \
+		golang:1.19.8 \
+		/bin/bash -c "git config --global --add safe.directory '*' && go mod download && make build.darwin";
+
+.PHONY: cli.build.linux
+cli.build.linux:
+	@echo "Building nexus/cli for linux..."
+	docker run \
+		--pull=missing \
+		--volume $(realpath .):${DOCKER_BUILD_MOUNT_DIR} \
+		-w ${DOCKER_BUILD_MOUNT_DIR}/${CLI_DIR} \
+		--volume ${HOME}/.cache/go-build:/root/.cache/go-build \
+		-e GOCACHE=/root/.cache/go-build \
+		golang:1.19.8 \
+		/bin/bash -c "git config --global --add safe.directory '*' && go mod download && make build.linux";
+
+.PHONY: cli.build
+cli.build:
+	@echo "Building nexus/cli for $(GOOS)..."
+	@if [ "$(GOOS)" = "darwin" ]; then \
+		make cli.build.darwin; \
+	elif [ "$(GOOS)" = "linux" ]; then \
+		make cli.build.linux; \
+	else \
+		echo "Unknown GOOS: $(GOOS)"; \
+		exit 1; \
+	fi
+
+.PHONY: cli.install.darwin
+cli.install.darwin:
+	cd cli; make install.darwin
+
+.PHONY: cli.install.linux
+cli.install.linux:
+	cd cli; make install.linux
+
+.PHONY: cli.install
+cli.install:
+	@echo "Installing nexus/cli for $(GOOS)..."
+	@if [ "$(GOOS)" = "darwin" ]; then \
+		make cli.install.darwin; \
+	elif [ "$(GOOS)" = "linux" ]; then \
+		make cli.install.linux; \
+	else \
+		echo "Unknown GOOS: $(GOOS)"; \
+		exit 1; \
+	fi
+
+.PHONY: cli.uninstall
+cli.uninstall:
+	cd cli; make uninstall
 
 ### Docker build targets ###
 .PHONY: compiler.builder
@@ -22,6 +95,10 @@ compiler.builder:
 compiler.builder.publish:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} make docker.builder.publish
 
+.PHONY: compiler.builder.tag
+compiler.builder.tag:
+	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} CUSTOM_BUILDER_DOCKER_TAG=${CUSTOM_BUILDER_DOCKER_TAG} make docker.builder.tag
+
 .PHONY: compiler.build
 compiler.build:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker
@@ -29,6 +106,19 @@ compiler.build:
 .PHONY: compiler.build.publish
 compiler.build.publish:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker.publish
+
+.PHONY: compiler.tag
+compiler.tag:
+	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} CUSTOM_COMPILER_DOCKER_TAG=${CUSTOM_COMPILER_DOCKER_TAG} make docker.tag
+
+.PHONY: compiler.clean
+compiler.clean:
+	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker.clean
+	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker.builder.clean
+
+.PHONY: compiler.test
+compiler.test:
+	cd compiler; make generate_example_in_container
 
 OPENAPI_GENERATOR_COMPONENT_NAME ?= openapi-generator
 OPENAPI_GENERATOR_DOCKER_IMAGE   ?= ${DOCKER_REGISTRY}nexus/${OPENAPI_GENERATOR_COMPONENT_NAME}:${VERSION}

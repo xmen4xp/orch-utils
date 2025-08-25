@@ -1,0 +1,4 @@
+build/
+
+# Ignore the symlink to build directory used in helm workflow
+helm-chart/crds

@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -ex
 
 GENERATED_PACKAGE="nexustempmodule"
 
@@ -24,12 +24,13 @@ if [[ -z $DEFAULT_CLIENT_VERSION_TAG ]]; then
   exit 1
 fi
 echo "DEFAULT_CLIENT_VERSION_TAG=$DEFAULT_CLIENT_VERSION_TAG"
-echo "Generating default client"
-pushd ./_deps/github.com/kubernetes/code-generator
-  echo "checking out the version"
-  git checkout -f $DEFAULT_CLIENT_VERSION_TAG
-popd
+#echo "Generating default client"
+#pushd ./_deps/github.com/kubernetes/code-generator
+#  echo "checking out the version"
+#  git checkout -f $DEFAULT_CLIENT_VERSION_TAG
+#popd
 pushd _generated
+go get golang.org/x/tools@v0.5.0
 ../_deps/github.com/kubernetes/code-generator/generate-groups.sh all "${GENERATED_PACKAGE}/client" "${GENERATED_PACKAGE}/apis" "${API_NAMES}" --go-header-file "../scripts/boilerplate.go.txt"
 popd
 
@@ -47,6 +48,6 @@ cp -r $GOPATH/src/${GENERATED_PACKAGE}/* _generated
 #done
 
 # restore code-generator to default
-pushd ./_deps/github.com/kubernetes/code-generator
-  git checkout -f $DEFAULT_CLIENT_VERSION_TAG
-popd
+#pushd ./_deps/github.com/kubernetes/code-generator
+#  git checkout -f $DEFAULT_CLIENT_VERSION_TAG
+#popd

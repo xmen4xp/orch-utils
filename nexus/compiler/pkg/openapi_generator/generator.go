@@ -343,6 +343,11 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 			return nil
 		}
 
+		if !strings.HasSuffix(path, ".yaml") {
+			fmt.Printf("Skipping non-yaml file %q\n", path)
+			return nil
+		}
+
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("reading file %q: %v", path, err)

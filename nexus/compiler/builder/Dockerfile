@@ -5,7 +5,8 @@
 FROM golang:1.24.6
 
 # Create a non-root user with home directory
-RUN useradd -m -d /home/appuser appuser
+RUN useradd -m -d /home/appuser appuser && \
+    passwd -d appuser
 
 # Set environment variables
 ENV GOPATH=/go
