@@ -1,0 +1,11 @@
+# Stage 1: Use alpine to download kubectl
+FROM alpine:latest AS builder
+WORKDIR /
+RUN apk --no-cache add curl
+RUN curl -LO https://dl.k8s.io/release/v1.16.0/bin/linux/amd64/kubectl
+RUN chmod +x ./kubectl
+
+# Stage 2: Copy the binary into a distroless image
+FROM gcr.io/distroless/static
+COPY --from=builder /kubectl /
+ENTRYPOINT ["/kubectl"]

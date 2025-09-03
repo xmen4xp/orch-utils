@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  k8s-proxy:
+    container_name: k8s-proxy
+    image: bitnami/kubectl
+    command: proxy --disable-filter=true --v=1 --kubeconfig /var/lib/k0s/pki/admin.conf
+    hostname: k8s-proxy
+    privileged: true
+    network_mode: "host"
+    volumes:
+      - kubeconfig:/var/lib/k0s/pki
+volumes:
+  kubeconfig: {}

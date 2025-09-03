@@ -151,3 +151,50 @@ help: ## Print help for each target
 	@grep -H -n '^[[:alnum:]_-]*:.* ##' $(MAKEFILE_LIST) \
     | sort -t ":" -k 3 \
     | awk 'BEGIN  {FS=":"}; {sub(".* ## ", "", $$4)}; {printf "%-20s %-16s %s\n", $$3, $$1 ":" $$2, $$4};'
+
+# K8s Runtime Commands
+
+.PHONY: kubectl.build
+	kubectl.build:
+		@if [ -z "$$(docker images -q nexus/kubectl:latest)" ]; then \
+			echo "Building nexus/kubectl:latest image..."; \
+			cd nexus-runtime-manifests/Dockerfiles && docker build -t nexus/kubectl:latest -f Dockerfile.kubectl .; \
+		else \
+			echo "nexus/kubectl:latest image already exists."; \
+		fi
+
+.PHONY: kind.install
+kind.install: kubectl.build
+	cd nexus-runtime-manifests/kind && ./run_kind.sh -n ${CLUSTER_NAME} -p ${CLUSTER_PORT}
+
+.PHONY: kind.uninstall
+kind.uninstall:
+	cd nexus-runtime-manifests/kind && ./run_kind.sh -n ${CLUSTER_NAME} -d
+
+.PHONY: check.kind
+check.kind:
+	$(info Checking if kind requirements are met...)
+	@kind version > /dev/null
+
+# Nexus Runtime Commands
+
+.PHONY: runtime.uninstall.kind
+runtime.uninstall.kind: check.kind kind.uninstall api-gw.kind.stop
+	$(info )
+	$(info ====================================================)
+	$(info Runtime is now uninstalled)
+	$(info ====================================================)
+
+.PHONY: runtime.install.kind
+runtime.install.kind: HOST_KUBECONFIG=$(realpath .)/nexus-runtime-manifests/kind/.${CLUSTER_NAME}/kubeconfig
+runtime.install.kind: check.kind kind.install api.install.kind api-gw.kind.run
+	$(info )
+	$(info ====================================================)
+	$(info To access runtime, you can execute kubectl as:)
+	$(info     kubectl -s localhost:${K8S_RUNTIME_PORT} ...)
+	$(info )
+	$(info To access nexus api gateway using kubeconfig, export:)
+	$(info     export HOST_KUBECONFIG=${HOST_KUBECONFIG})
+	$(info     export DOCKER_NETWORK=kind)
+	$(info )
+	$(info ====================================================)

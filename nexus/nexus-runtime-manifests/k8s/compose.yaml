@@ -1,0 +1,55 @@
+version: "3.9"
+services:
+  etcd:
+    container_name: etcd
+    image: quay.io/coreos/etcd:v3.5.10
+    restart: "always"
+    network_mode: nexus
+    hostname: etcd
+    environment:
+      ALLOW_NONE_AUTHENTICATION: 'yes'
+      ETCD_AUTH_TOKEN: 'simple'
+      MY_STS_NAME: 'etcd'
+      ETCDCTL_API: '3'
+      ETCD_NAME: 'etcd'
+      ETCD_AUTO_COMPACTION_MODE: 'revision'
+      ETCD_AUTO_COMPACTION_RETENTION: '15000'
+      ETCD_LISTEN_CLIENT_URLS: 'http://0.0.0.0:2379'
+      ETCD_ADVERTISE_CLIENT_URLS: 'http://etcd.nexus-etcd-headless.default.svc.cluster.local:2379,http://nexus-etcd.default.svc.cluster.local:2379'
+      https_proxy: ''
+      http_proxy: ''
+      HTTPS_PROXY: ''
+      HTTP_PROXY: ''
+  kubernetes:
+    container_name: kubernetes
+    image: amr-registry-pre.caas.intel.com/nexus/nexus-kube-apiserver:latest
+    command: kube-apiserver --etcd-servers=http://etcd:2379 --service-account-key-file=/custom/k8s/certs/sa.pub --service-account-signing-key-file=/custom/k8s/certs/sa.key --tls-cert-file=/custom/k8s/certs/apiserver.crt --tls-private-key-file=/custom/k8s/certs/apiserver.key --client-ca-file=/custom/k8s/certs/ca.crt --service-account-issuer=api --service-cluster-ip-range=10.24.0.0/16 --disable-admission-plugins=CertificateApproval,CertificateSigning,CertificateSubjectRestriction,DefaultIngressClass,DefaultStorageClass,DefaultTolerationSeconds,LimitRanger,MutatingAdmissionWebhook,NamespaceLifecycle,PersistentVolumeClaimResize,PodSecurity,Priority,ResourceQuota,RuntimeClass,ServiceAccount,StorageObjectInUseProtection,TaintNodesByCondition,ValidatingAdmissionPolicy,ValidatingAdmissionWebhook,NodeRestriction,PodNodeSelector
+    volumes:
+      - ./certs:/custom/k8s/certs
+    network_mode: nexus
+    restart: "always"
+    hostname: kubernetes
+    ports:
+    - 6443:6443
+    environment:
+      https_proxy: ''
+      http_proxy: ''
+      HTTPS_PROXY: ''
+      HTTP_PROXY: ''
+  k8s-proxy:
+    container_name: k8s-proxy
+    image: bitnami/kubectl
+    command: proxy --disable-filter=true --v=9 --kubeconfig /var/lib/k0s/pki/kubeconfig -p $KUBECTL_PROXY_PORT --address "0.0.0.0"
+    hostname: k8s-proxy
+    privileged: true
+    network_mode: nexus
+    restart: "always"
+    environment:
+      https_proxy: ''
+      http_proxy: ''
+      HTTPS_PROXY: ''
+      HTTP_PROXY: ''
+    ports:
+    - $KUBECTL_PROXY_PORT:$KUBECTL_PROXY_PORT
+    volumes:
+      - .:/var/lib/k0s/pki

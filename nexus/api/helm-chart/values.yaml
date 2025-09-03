@@ -1,0 +1,2 @@
+global:
+  k8sProxyServiceName: nexus-k8s-proxy

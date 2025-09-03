@@ -29,3 +29,12 @@ compiler/coverage.json
 compiler/report.json
 compiler/cmd/validate
 compiler/example/datamodel/build/nexus-gql/server
+
+# k0s artifacts
+nexus-runtime-manifests/k0s/.kubeconfig
+
+# kind artifacts
+nexus-runtime-manifests/kind/\.*
+
+# k8s artifacts
+nexus-runtime-manifests/k8s/ca*

@@ -1,4 +1,3 @@
-
 {{- if not (lookup "v1" "ServiceAccount" (default .Release.Namespace .Values.namespace) "nexus-datamodel-install") }}
 apiVersion: v1
 kind: ServiceAccount
@@ -7,7 +6,7 @@ metadata:
   namespace: {{ default .Release.Namespace .Values.namespace }}
 {{- end }}
 ---
-{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRole" "" "nexus-crd-admin") }}
+{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRole" "" "crd-admin") }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -21,7 +20,7 @@ rules:
     verbs: ["create", "get", "list", "update", "patch", "delete"]
 {{- end }}
 ---
-{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRoleBinding" "" "nexus-crd-admin-binding") }}
+{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRoleBinding" "" "crd-admin-binding") }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -39,8 +38,8 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Values.datamodelName }}-dmi
-  namespace: {{ default  .Release.Namespace .Values.namespace }}
+  name: {{ .Values.global.datamodelName }}-dmi
+  namespace: {{ default  .Release.Namespace .Values.global.namespace }}
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 6
@@ -51,10 +50,10 @@ spec:
     spec:
       serviceAccountName: nexus-datamodel-install
       containers:
-      - env:
+      - image: {{ .Values.image }}
+        env:
           - name: NAME
-            value: {{ .Values.datamodelName }}
-        image: {{ .Values.image }}
+            value: {{ .Values.global.datamodelName }}
         {{- if .Values.imagePull }}
         imagePullPolicy: Always
         {{- else }}
@@ -62,3 +61,4 @@ spec:
         {{- end }}
         name: datamodel-installer-job
       restartPolicy: Never
+

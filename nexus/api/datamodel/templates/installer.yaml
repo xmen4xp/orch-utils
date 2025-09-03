@@ -1,0 +1,78 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexus-api-dmi
+  namespace: {{ default .Release.Namespace .Values.global.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nexus-api-dmi
+subjects:
+- kind: ServiceAccount
+  name: nexus-api-dmi
+  namespace: {{ default .Release.Namespace .Values.global.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nexus-api-dmi
+  namespace: {{ default .Release.Namespace .Values.global.namespace }}
+  annotations:
+    {{- template "argoJobHook" .}}
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      annotations:
+        "sidecar.istio.io/inject": "false"
+    spec:
+      {{- if eq .Values.global.tainted true }}
+      {{- template "tolerations" .}}
+      {{- end }}
+      containers:
+        - command:
+            - /bin/bash
+            - -c
+            - opt/datamodel-installer-job-cm/create_datamodel_cm.sh
+          {{- if eq .Values.global.useserviceaccount false }}
+          env:
+            - name: KUBECONFIG
+              value: /etc/config/kubeconfig
+          {{- end }}
+          image: {{.Values.global.registry}}/nexus-api:{{.Values.global.api.tag}}
+          imagePullPolicy: IfNotPresent
+          name: datamodel-installer-job
+          volumeMounts:
+            - mountPath: /opt/datamodel-installer-job-cm/
+              name: dmi-script
+              readOnly: false
+            {{- if ne .Values.global.stockkubeconfig "" }}
+            - mountPath: /etc/config
+              name: dmi-kubeconfig
+              readOnly: false
+            {{end}}
+      restartPolicy: OnFailure
+      volumes:
+        - configMap:
+            name: dmi-script
+            defaultMode: 0555
+          name: dmi-script
+        {{- if ne .Values.global.useserviceaccount false }}
+        - configMap:
+            name: dmi-kubeconfig
+            defaultMode: 0555
+          name: dmi-kubeconfig
+        {{end}}
+      {{- if ne .Values.global.imagepullsecret "" }}
+      imagePullSecrets:
+      - name: {{.Values.global.imagepullsecret}}
+      {{end}}
+      {{- if eq .Values.global.useserviceaccount true }}
+      serviceAccountName: nexus-api-dmi
+      {{- end}}
