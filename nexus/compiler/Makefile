@@ -336,11 +336,12 @@ publish_builder_image:
 	docker tag ${BUILDER_NAME}:${BUILDER_VERSION} ${DOCKER_REGISTRY}/${BUILDER_NAME}:${BUILDER_VERSION}
 	docker push ${DOCKER_REGISTRY}/${BUILDER_NAME}:${BUILDER_VERSION}
 
+# Todo: the version number for the git clone should be inferred from manifest.yaml
 .PHONY: init_submodules
 init_submodules:
 	@if [ ! -d "_deps/github.com/kubernetes/code-generator/.git" ]; then\
     	echo "Cloning kubernetes/code-generator repo ...";\
-	git clone -b v0.16.15 https://github.com/kubernetes/code-generator.git _deps/github.com/kubernetes/code-generator;\
+	git clone -b v0.26.3 https://github.com/kubernetes/code-generator.git _deps/github.com/kubernetes/code-generator;\
     fi
 
 .PHONY: render_templates

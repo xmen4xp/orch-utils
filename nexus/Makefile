@@ -25,6 +25,12 @@ endif
 # Detect GOARCH.
 GOARCH=$(shell go env GOARCH)
 
+### Nexus API GW build targets ###
+.PHONY: gw.docker
+gw.docker:
+	@echo "Building nexus/cli for darwin..."
+	docker build -f api-gw/Dockerfile -t api-gw:latest .
+
 ### Nexus CLI build targets ###
 .PHONY: cli.build.darwin
 cli.build.darwin:

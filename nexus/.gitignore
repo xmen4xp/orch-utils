@@ -38,3 +38,6 @@ nexus-runtime-manifests/kind/\.*
 
 # k8s artifacts
 nexus-runtime-manifests/k8s/ca*
+
+# api-gw files
+api-gw/bin
