@@ -10,11 +10,12 @@ import (
 	"fmt"
 	"net"
 
+	"nexus-api-gw/pkg/client"
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/server/echoserver"
+
 	"github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/client"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic/fake"
 	k8sFake "k8s.io/client-go/kubernetes/fake"

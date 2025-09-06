@@ -13,7 +13,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/model"
+
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

@@ -8,14 +8,15 @@ package combined_test
 import (
 	"encoding/json"
 
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/openapi/api"
+	"nexus-api-gw/pkg/openapi/combined"
+	"nexus-api-gw/pkg/openapi/declarative"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	yamlv1 "github.com/ghodss/yaml"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/combined"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

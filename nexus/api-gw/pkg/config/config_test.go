@@ -9,7 +9,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/config"
+
 	"github.com/stretchr/testify/assert"
 )
 

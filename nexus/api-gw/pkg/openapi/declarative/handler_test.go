@@ -12,12 +12,13 @@ import (
 	"regexp"
 	"strings"
 
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/openapi/declarative"
+	"nexus-api-gw/pkg/server/echoserver"
+
 	"github.com/labstack/echo/v4"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )

@@ -13,7 +13,6 @@ ARG NO_PROXY
 ARG USER_HOME
 
 COPY . /app
-COPY vendor/ /go/src/github.com/open-edge-platform/orch-utils/nexus-api-gw/vendor/
 
 ENV http_proxy=${HTTP_PROXY}
 ENV https_proxy=${HTTPS_PROXY}
@@ -22,11 +21,10 @@ ENV socks_proxy=${SOCKS_PROXY}
 ENV no_proxy=${NO_PROXY}
 
 WORKDIR /app
-ENV GOPRIVATE=github.com/open-edge-platform/*
 RUN set -x && \
     apt-get update -y && \
     apt-get install -y --no-install-recommends netcat-openbsd=1.217-3 && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/${API_GW_COMPONENT_NAME}
+    make build 
 
 #FROM gcr.io/distroless/static-debian12:nonroot
 FROM golang:1.24
@@ -34,11 +32,6 @@ FROM golang:1.24
 USER nobody
 
 WORKDIR /bin
-COPY --from=builder /app/bin/api-gw /usr/local/bin/api-gw
-COPY --from=builder /app/deploy/config/api-gw-config.yaml /config/api-gw-config 
-# Copy policy
-#COPY --from=builder /app/pkg/auth/authz/authz.rego /usr/local/authz.rego
+COPY --from=builder /app/build/bin/api-gw /usr/local/bin/api-gw
 
-# copy static api-doc file
-#COPY --from=builder /app/static/openapispecs/combined/combined_spec.yaml /static/openapispecs/combined/combined_spec.yaml
 ENTRYPOINT ["api-gw"]

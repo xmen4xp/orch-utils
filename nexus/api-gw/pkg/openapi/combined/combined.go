@@ -6,10 +6,11 @@
 package combined
 
 import (
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/openapi/api"
+	"nexus-api-gw/pkg/openapi/declarative"
+
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
 )
 
 func Specs() openapi3.T {

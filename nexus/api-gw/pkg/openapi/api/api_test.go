@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/openapi/api"
+
 	yamlv1 "github.com/ghodss/yaml"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

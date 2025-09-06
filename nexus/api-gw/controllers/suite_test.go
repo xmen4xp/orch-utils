@@ -36,9 +36,10 @@ import (
 	"testing"
 	"time"
 
+	ctrls "nexus-api-gw/controllers"
+
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	ctrls "github.com/open-edge-platform/orch-utils/nexus-api-gw/controllers"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"

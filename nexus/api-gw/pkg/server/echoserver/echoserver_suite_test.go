@@ -8,9 +8,10 @@ package echoserver_test
 import (
 	"testing"
 
+	"nexus-api-gw/pkg/model"
+
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 

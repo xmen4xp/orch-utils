@@ -11,7 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/config"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"

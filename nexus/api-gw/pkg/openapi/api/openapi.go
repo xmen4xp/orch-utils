@@ -13,9 +13,10 @@ import (
 	"regexp"
 	"strings"
 
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/utils"
+
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	"golang.org/x/crypto/sha3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"

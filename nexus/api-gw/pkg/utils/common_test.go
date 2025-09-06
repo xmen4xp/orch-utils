@@ -8,10 +8,11 @@ package utils_test
 import (
 	"os"
 
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/utils"
+
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 )
 
 var _ = ginkgo.Describe("Common tests", func() {

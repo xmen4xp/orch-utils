@@ -11,13 +11,14 @@ import (
 
 	nexusClient "nexus/admin/api/build/nexus-client"
 
+	"nexus-api-gw/controllers"
+	"nexus-api-gw/pkg/client"
+	"nexus-api-gw/pkg/common"
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/openapi/api"
+	"nexus-api-gw/pkg/server/echoserver"
+
 	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/controllers"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/client"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/common"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"

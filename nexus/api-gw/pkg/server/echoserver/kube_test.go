@@ -14,13 +14,14 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"nexus-api-gw/pkg/client"
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/server/echoserver"
+
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/client"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

@@ -14,12 +14,13 @@ import (
 	"strconv"
 	"strings"
 
+	"nexus-api-gw/pkg/client"
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/model"
+	"nexus-api-gw/pkg/openapi/declarative"
+	"nexus-api-gw/pkg/utils"
+
 	"github.com/labstack/echo/v4"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/client"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
 	nn "github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	"k8s.io/apimachinery/pkg/api/errors"

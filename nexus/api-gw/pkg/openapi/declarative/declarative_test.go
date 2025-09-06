@@ -9,11 +9,12 @@ import (
 	"net/http"
 	"os"
 
+	"nexus-api-gw/pkg/config"
+	"nexus-api-gw/pkg/openapi/declarative"
+	"nexus-api-gw/pkg/server/echoserver"
+
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	"k8s.io/client-go/kubernetes"
 )
 

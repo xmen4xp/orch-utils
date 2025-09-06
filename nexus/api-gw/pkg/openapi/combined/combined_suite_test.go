@@ -8,9 +8,10 @@ package combined_test
 import (
 	"testing"
 
+	"nexus-api-gw/pkg/config"
+
 	ginkgo "github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
 	log "github.com/sirupsen/logrus"
 )
 
