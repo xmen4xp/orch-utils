@@ -1,19 +1,29 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package controllers
 
 import (
 	"net/http"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 
-	"api-gw/pkg/model"
+	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
+)
 
-	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
+var (
+	appName = "nexus-api-gw-controllers"
+	log     = logging.GetLogger(appName)
 )
 
 func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
-	annotations map[string]string, eventType model.EventType) error {
+	annotations map[string]string, eventType model.EventType,
+) error {
 	n := model.NexusAnnotation{}
 
 	if eventType != model.Delete {
@@ -25,7 +35,7 @@ func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
 		// unmarshall to nexus annotation struct
 		err := json.Unmarshal([]byte(apiInfo), &n)
 		if err != nil {
-			log.Errorf("Error unmarshaling Nexus annotation %v\n", err)
+			log.InfraErr(err).Msg("Error unmarshaling Nexus annotation")
 			return err
 		}
 	}
@@ -40,24 +50,26 @@ func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
 		links = n.Links
 	}
 
-	urisMap := make(map[string]model.RestUriInfo)
+	urisMap := make(map[string]model.RestURIInfo)
 
 	// add child, link and status URIs for each GET method
 	var newUris []nexus.RestURIs
 	ConstructNewURIs(n, urisMap, &newUris)
 
-	log.Debugf("New uris %v\n", newUris)
+	log.Debug().Msgf("New uris %v\n", newUris)
 
 	n.NexusRestAPIGen.Uris = append(n.NexusRestAPIGen.Uris, newUris...)
 
 	// It has stored the URI with the CRD type and CRD type with the Node Info.
-	model.ConstructMapUriToUriInfo(eventType, urisMap)
+	model.ConstructMapURIToURIInfo(eventType, urisMap)
 	model.ConstructMapURIToCRDType(eventType, crdType, n.NexusRestAPIGen.Uris)
-	model.ConstructMapCRDTypeToNode(eventType, crdType, n.Name, n.Hierarchy, children, links, n.IsSingleton, n.Description, n.DeferredDelete)
+	model.ConstructMapCRDTypeToNode(eventType, crdType, n.Name, n.Hierarchy,
+		children, links, n.IsSingleton, n.Description, n.DeferredDelete,
+	)
 	model.ConstructMapCRDTypeToRestUris(eventType, crdType, n.NexusRestAPIGen)
 
 	// Restart echo server
-	log.Debugln("Restarting echo server...")
+	log.Debug().Msg("Restarting echo server...")
 	r.StopCh <- struct{}{}
 
 	for cType, uris := range model.CrdTypeToRestUris {
@@ -68,22 +80,23 @@ func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
 }
 
 func (r *CustomResourceDefinitionReconciler) ProcessCrdSpec(crdType string,
-	spec apiextensionsv1.CustomResourceDefinitionSpec, eventType model.EventType) error {
+	spec apiextensionsv1.CustomResourceDefinitionSpec, eventType model.EventType,
+) error {
 	// It has stored the CRD type with the CRD spec
 	model.ConstructMapCRDTypeToSpec(eventType, crdType, spec)
 	return nil
 }
 
 // ConstructNewURIs constructs the new URIs from ['status', 'children', 'links'] and store it in cache.
-func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestUriInfo, newUris *[]nexus.RestURIs) {
+func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestURIInfo, newUris *[]nexus.RestURIs) {
 	for _, uri := range n.NexusRestAPIGen.Uris {
-		urisMap[uri.Uri] = model.RestUriInfo{
+		urisMap[uri.Uri] = model.RestURIInfo{
 			TypeOfURI: model.DefaultURI,
 		}
 		for method := range uri.Methods {
 			if method == http.MethodGet {
-				statusUriPath := uri.Uri + "/status"
-				addStatusUri(statusUriPath, model.StatusURI, urisMap, newUris)
+				statusURIPath := uri.Uri + "/status"
+				addStatusURI(statusURIPath, model.StatusURI, urisMap, newUris)
 
 				for _, c := range []map[string]model.NodeHelperChild{n.Children, n.Links} {
 					processChildOrLink(c, uri, urisMap, newUris)
@@ -93,7 +106,9 @@ func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestUriI
 	}
 }
 
-func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestURIs, urisMap map[string]model.RestUriInfo, newUris *[]nexus.RestURIs) {
+func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestURIs,
+	urisMap map[string]model.RestURIInfo, newUris *[]nexus.RestURIs,
+) {
 	for _, n := range nodes {
 		uriPath := uri.Uri + "/" + n.FieldName
 		var t model.URIType
@@ -102,34 +117,34 @@ func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestUR
 		} else {
 			t = model.SingleLinkURI
 		}
-		addUri(uriPath, t, urisMap, newUris)
+		addURI(uriPath, t, urisMap, newUris)
 	}
 }
 
-// addUri adds the uriPath </root/{orgchart.Root}/leader/{management.Leader}/HR> to the urisMap and to the uris list.
-func addUri(uriPath string, typeOfUri model.URIType, urisMap map[string]model.RestUriInfo, uris *[]nexus.RestURIs) {
-	newUri := nexus.RestURIs{
+// addURI adds the uriPath </root/{orgchart.Root}/leader/{management.Leader}/HR> to the urisMap and to the uris list.
+func addURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+	newURI := nexus.RestURIs{
 		Uri: uriPath,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 		},
 	}
-	urisMap[uriPath] = model.RestUriInfo{
-		TypeOfURI: typeOfUri,
+	urisMap[uriPath] = model.RestURIInfo{
+		TypeOfURI: typeOfURI,
 	}
-	*uris = append(*uris, newUri)
+	*uris = append(*uris, newURI)
 }
 
-func addStatusUri(uriPath string, typeOfUri model.URIType, urisMap map[string]model.RestUriInfo, uris *[]nexus.RestURIs) {
-	newUri := nexus.RestURIs{
+func addStatusURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+	newURI := nexus.RestURIs{
 		Uri: uriPath,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
-			// http.MethodPut: nexus.DefaultHTTPPUTResponses,
+			http.MethodPut: nexus.DefaultHTTPPUTResponses,
 		},
 	}
-	urisMap[uriPath] = model.RestUriInfo{
-		TypeOfURI: typeOfUri,
+	urisMap[uriPath] = model.RestURIInfo{
+		TypeOfURI: typeOfURI,
 	}
-	*uris = append(*uris, newUri)
+	*uris = append(*uris, newURI)
 }

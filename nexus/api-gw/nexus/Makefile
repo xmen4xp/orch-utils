@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 UNAME := $(shell uname)
 NAMESPACE ?= default
 BUILD_DIR ?= build

@@ -1,8 +1,13 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative
 
 import (
-	"api-gw/pkg/config"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,12 +15,17 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	log "github.com/sirupsen/logrus"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	httpClientTimeoutCost   = 5 * time.Second
+	ctxTimeoutDurationConst = 10 * time.Second
+)
+
 var httpClient = &http.Client{
-	Timeout: 5 * time.Second,
+	Timeout: httpClientTimeoutCost,
 }
 
 type errorMessage struct {
@@ -29,35 +39,52 @@ func ApisHandler(c echo.Context) error {
 	crd := c.QueryParam("crd")
 	if crd != "" {
 		if val, ok := CrdToSchema[crd]; ok {
-			return c.String(200, val)
-		} else {
-			return c.NoContent(http.StatusNotFound)
+			return c.String(http.StatusOK, val)
 		}
+
+		return c.NoContent(http.StatusNotFound)
 	}
 
-	return c.JSON(200, ApisList)
+	return c.JSON(http.StatusOK, ApisList)
 }
 
 func ListHandler(c echo.Context) error {
-	ec := c.(*EndpointContext)
-	log.Debugf("ListHandler: %s <-> %s", c.Request().RequestURI, ec.SpecUri)
+	ec, ok := c.(*EndpointContext)
+	if !ok {
+		log.InfraError("c is not of type '*EndpointContext'").Msg("")
+		return fmt.Errorf("context is not of type *EndpointContext")
+	}
+	log.Debug().Msgf("ListHandler: %s <-> %s", c.Request().RequestURI, ec.SpecURI)
 
-	url, err := BuildUrlFromParams(ec)
+	url, err := BuildURLFromParams(ec)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
 	}
 
-	log.Debugf("Making a request to: %s", url)
-	resp, err := httpClient.Get(url)
+	log.Debug().Msgf("Making a request to: %s", url)
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeoutDurationConst)
+	defer cancel()
+
+	// Create a new HTTP request with the context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		log.Warn(err)
-		return c.NoContent(http.StatusInternalServerError)
+		log.Printf("Error creating request: %v", err)
+		return err
 	}
+
+	// Execute the request
+	resp, err := executeRequestWithoutCtxt(c, req)
+	if err != nil {
+		log.Warn().Msg(err.Error())
+		return err
+	}
+	defer resp.Body.Close()
 
 	var respBody interface{}
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
@@ -65,24 +92,42 @@ func ListHandler(c echo.Context) error {
 }
 
 func GetHandler(c echo.Context) error {
-	ec := c.(*EndpointContext)
-	log.Debugf("GetHandler: %s <-> %s", c.Request().RequestURI, ec.SpecUri)
+	ec, ok := c.(*EndpointContext)
+	if !ok {
+		log.InfraError("c is not of type '*EndpointContext'").Msg("")
+		return fmt.Errorf("context is not of type *EndpointContext")
+	}
+	log.Debug().Msgf("GetHandler: %s <-> %s", c.Request().RequestURI, ec.SpecURI)
 
-	url, err := BuildUrlFromParams(ec)
+	url, err := BuildURLFromParams(ec)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
 	}
 
-	log.Debugf("Making a request to: %s", url)
-	resp, err := httpClient.Get(url)
+	log.Debug().Msgf("Making a request to: %s", url)
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeoutDurationConst)
+	defer cancel()
+
+	// Create a new HTTP request with the context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		log.Warn(err)
-		return c.NoContent(http.StatusInternalServerError)
+		log.Printf("Error creating request: %v", err)
+		return err
 	}
+
+	// Execute the request
+	resp, err := executeRequestWithoutCtxt(c, req)
+	if err != nil {
+		log.Warn().Msg(err.Error())
+		return err
+	}
+	defer resp.Body.Close()
+
 	var respBody interface{}
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
@@ -90,90 +135,153 @@ func GetHandler(c echo.Context) error {
 }
 
 func PutHandler(c echo.Context) error {
-	ec := c.(*EndpointContext)
-	log.Debugf("PutHandler: %s <-> %s", c.Request().RequestURI, ec.SpecUri)
-
-	body := make(map[string]interface{})
-	if err := c.Bind(&body); err != nil {
-		log.Warn(err)
-		return c.JSON(http.StatusBadRequest, errorMessage{Message: "unable to parse body"})
+	ec, ok := c.(*EndpointContext)
+	if !ok {
+		log.InfraError("c is not of type '*EndpointContext'").Msg("")
+		return fmt.Errorf("context is not of type *EndpointContext")
 	}
+	log.Debug().Msgf("PutHandler: %s <-> %s", c.Request().RequestURI, ec.SpecURI)
 
-	if _, ok := body["metadata"]; !ok {
-		return c.JSON(http.StatusBadRequest, errorMessage{Message: "metadata field not present"})
-	}
-
-	metadata := body["metadata"].(map[string]interface{})
-	if _, ok := metadata["name"]; !ok {
-		return c.JSON(http.StatusBadRequest, errorMessage{Message: "metadata.name field not present"})
-	}
-
-	url, err := BuildUrlFromBody(ec, metadata)
+	body, err := parseRequestBody(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
 	}
 
-	// Build request
-	req, _ := http.NewRequest(http.MethodPut, url, nil)
+	metadata, err := validateMetadata(body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
+	}
+
+	url, err := BuildURLFromBody(ec, metadata)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
+	}
+
+	req, err := buildPutRequest(url, body)
+	if err != nil {
+		return fmt.Errorf("unable to build request, err=%w", err)
+	}
+
+	return executeRequest(c, req)
+}
+
+func parseRequestBody(c echo.Context) (map[string]interface{}, error) {
+	body := make(map[string]interface{})
+	if err := c.Bind(&body); err != nil {
+		log.Warn().Msg(err.Error())
+		return nil, fmt.Errorf("unable to parse body")
+	}
+	return body, nil
+}
+
+func validateMetadata(body map[string]interface{}) (map[string]interface{}, error) {
+	metadata, ok := body["metadata"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("metadata field not present or not of type map")
+	}
+	if _, ok := metadata["name"]; !ok {
+		return nil, fmt.Errorf("metadata.name field not present")
+	}
+	return metadata, nil
+}
+
+func buildPutRequest(url string, body map[string]interface{}) (*http.Request, error) {
+	req, err := http.NewRequest(http.MethodPut, url, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
 	if spec, ok := body["spec"]; ok {
-		// Marshal spec from body
 		jsonBody, err := json.Marshal(spec)
 		if err != nil {
-			log.Warn(err)
-			return c.NoContent(http.StatusInternalServerError)
+			log.Warn().Msg(err.Error())
+			return nil, fmt.Errorf("unable to marshal spec")
 		}
-
 		reqBody := bytes.NewBuffer(jsonBody)
-		req, _ = http.NewRequest(http.MethodPut, url, reqBody)
-		log.Debugf("Body: %s", reqBody.String())
+		req, err = http.NewRequest(http.MethodPut, url, reqBody)
+		if err != nil {
+			return nil, err
+		}
+		log.Debug().Msgf("Body: %s", reqBody.String())
 	}
 	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
 
-	log.Debugf("Making a request to: %s", url)
+func executeRequest(c echo.Context, req *http.Request) error {
+	log.Debug().Msgf("Making a request to: %s", req.URL.String())
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeoutDurationConst)
+	defer cancel()
+
+	req = req.WithContext(ctx)
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	defer resp.Body.Close()
 
 	var respBody interface{}
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
 	return c.JSON(resp.StatusCode, respBody)
 }
 
-func DeleteHandler(c echo.Context) error {
-	ec := c.(*EndpointContext)
-	log.Debugf("DeleteHandler: %s <-> %s", c.Request().RequestURI, ec.SpecUri)
+func executeRequestWithoutCtxt(c echo.Context, req *http.Request) (*http.Response, error) {
+	log.Debug().Msgf("Making a request to: %s", req.URL.String())
 
-	url, err := BuildUrlFromParams(ec)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Warn().Msg(err.Error())
+		return nil, c.NoContent(http.StatusInternalServerError)
+	}
+	return resp, nil
+}
+
+func DeleteHandler(c echo.Context) error {
+	ec, ok := c.(*EndpointContext)
+	if !ok {
+		log.InfraError("c is not of type '*EndpointContext'").Msg("")
+		return fmt.Errorf("context is not of type *EndpointContext")
+	}
+	log.Debug().Msgf("DeleteHandler: %s <-> %s", c.Request().RequestURI, ec.SpecURI)
+
+	url, err := BuildURLFromParams(ec)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorMessage{Message: err.Error()})
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeoutDurationConst)
+	defer cancel()
+
+	// Create a new HTTP request with the context
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, http.NoBody)
 	if err != nil {
-		log.Warn(err)
-		return c.NoContent(http.StatusInternalServerError)
+		log.Printf("Error creating request: %v", err)
+		return err
 	}
 
-	log.Debugf("Making a request to: %s", url)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Warn(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	log.Debug().Msgf("Making a request to: %s", url)
 
+	resp, err := executeRequestWithoutCtxt(c, req)
+	if err != nil {
+		log.InfraErr(err).Msg("")
+		return err
+	}
+	defer resp.Body.Close()
 	return c.NoContent(resp.StatusCode)
 }
 
-func BuildUrlFromParams(ec *EndpointContext) (string, error) {
-	url := config.Cfg.BackendService + ec.SpecUri
-	labelSelector, _ := metav1.ParseToLabelSelector(ec.QueryParams().Get("labelSelector"))
+func BuildURLFromParams(ec *EndpointContext) (string, error) {
+	url := config.Cfg.BackendService + ec.SpecURI
+	labelSelector, err := metav1.ParseToLabelSelector(ec.QueryParams().Get("labelSelector"))
+	if err != nil {
+		return "", err
+	}
 	for _, param := range ec.Params {
 		if param[1] == ec.Identifier {
 			continue
@@ -184,18 +292,18 @@ func BuildUrlFromParams(ec *EndpointContext) (string, error) {
 			labelVal = val
 		}
 
-		url = strings.Replace(url, param[0], labelVal, -1)
+		url = strings.ReplaceAll(url, param[0], labelVal)
 	}
 
 	if ec.Single {
-		url = strings.Replace(url, fmt.Sprintf("{%s}", ec.Identifier), ec.Param("name"), -1)
+		url = strings.ReplaceAll(url, fmt.Sprintf("{%s}", ec.Identifier), ec.Param("name"))
 	}
 
 	return url, nil
 }
 
-func BuildUrlFromBody(ec *EndpointContext, metadata map[string]interface{}) (string, error) {
-	url := config.Cfg.BackendService + ec.SpecUri
+func BuildURLFromBody(ec *EndpointContext, metadata map[string]interface{}) (string, error) {
+	url := config.Cfg.BackendService + ec.SpecURI
 	for _, param := range ec.Params {
 		if param[1] == ec.Identifier {
 			continue
@@ -204,13 +312,24 @@ func BuildUrlFromBody(ec *EndpointContext, metadata map[string]interface{}) (str
 		labelVal := "default"
 
 		if metadata["labels"] != nil {
-			if val, ok := metadata["labels"].(map[string]interface{})[param[1]]; ok {
-				labelVal = val.(string)
+			metadataLabels, ok := metadata["labels"].(map[string]interface{})
+			if !ok {
+				return "", fmt.Errorf("metadataLabels is not of type map[string]interface{}")
+			}
+			if val, ok := metadataLabels[param[1]]; ok {
+				labelVal, ok = val.(string)
+				if !ok {
+					return "", fmt.Errorf("val is not of type string")
+				}
 			}
 		}
-		url = strings.Replace(url, param[0], labelVal, -1)
+		url = strings.ReplaceAll(url, param[0], labelVal)
 	}
-	url = strings.Replace(url, fmt.Sprintf("{%s}", ec.Identifier), metadata["name"].(string), -1)
+	metadataName, ok := metadata["name"].(string)
+	if !ok {
+		return "", fmt.Errorf("metadataName is not of type string")
+	}
+	url = strings.ReplaceAll(url, fmt.Sprintf("{%s}", ec.Identifier), metadataName)
 
 	return url, nil
 }

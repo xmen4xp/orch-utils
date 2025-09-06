@@ -1,22 +1,25 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative_test
 
 import (
 	"testing"
 
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 const (
-	Uri         = "/v1alpha1/project/{projectId}/global-namespaces"
-	ResourceUri = "/v1alpha1/project/{projectId}/global-namespaces/{id}"
-	ListUri     = "/v1alpha1/global-namespaces/test"
+	URI         = "/v1alpha1/project/{projectId}/global-namespaces"
+	ResourceURI = "/v1alpha1/project/{projectId}/global-namespaces/{id}"
+	ListURI     = "/v1alpha1/global-namespaces/test"
 )
 
-var (
-	spec = []byte(`openapi: 3.0.0
+var spec = []byte(`openapi: 3.0.0
 info:
   version: 1.0.0
   title: NSX-SM <Tenant/Operator> APIs
@@ -290,10 +293,9 @@ components:
         - domain_name
         - match_conditions
       additionalProperties: false`)
-)
 
 func TestDeclarative(t *testing.T) {
 	log.StandardLogger().ExitFunc = nil
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Declarative Suite")
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	ginkgo.RunSpecs(t, "Declarative Suite")
 }

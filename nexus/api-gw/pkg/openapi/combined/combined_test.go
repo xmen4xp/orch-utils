@@ -1,34 +1,39 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package combined_test
 
 import (
-	"api-gw/pkg/model"
-	"api-gw/pkg/openapi/api"
-	"api-gw/pkg/openapi/combined"
-	"api-gw/pkg/openapi/declarative"
 	"encoding/json"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	yamlv1 "github.com/ghodss/yaml"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/combined"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var _ = Describe("Combined OpenAPI tests", func() {
-	It("should setup and load openapi file", func() {
+var _ = ginkgo.Describe("Combined OpenAPI tests", ginkgo.Ordered, func() {
+	ginkgo.It("should setup and load openapi file", func() {
 		err := declarative.Load(spec)
-		Expect(err).To(BeNil())
+		gomega.Expect(err).To(gomega.BeNil())
 
-		Expect(declarative.Paths).To(HaveKey(Uri))
-		Expect(declarative.Paths).To(HaveKey(ResourceUri))
+		gomega.Expect(declarative.Paths).To(gomega.HaveKey(URI))
+		gomega.Expect(declarative.Paths).To(gomega.HaveKey(ResourceURI))
 	})
 
-	It("should create new datamodel", func() {
-		Expect(api.Schemas).To(BeEmpty())
+	ginkgo.It("should create new datamodel", func() {
+		gomega.Expect(api.Schemas).To(gomega.BeEmpty())
 		api.New("vmware.org")
-		Expect(api.Schemas["vmware.org"].Info.Title).To(Equal("Nexus API GW APIs"))
+		gomega.Expect(api.Schemas["vmware.org"].Info.Title).To(gomega.Equal("Nexus API GW APIs"))
 
 		unstructuredObj := unstructured.Unstructured{
 			Object: map[string]interface{}{
@@ -40,43 +45,47 @@ var _ = Describe("Combined OpenAPI tests", func() {
 
 		model.ConstructDatamodel(model.Upsert, "vmware2.org", &unstructuredObj)
 		api.New("vmware2.org")
-		Expect(api.Schemas["vmware2.org"].Info.Title).To(Equal("VMWare Datamodel"))
+		gomega.Expect(api.Schemas["vmware2.org"].Info.Title).To(gomega.Equal("VMWare Datamodel"))
 	})
 
-	It("should add custom description to node", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should add custom description to node", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leader/{orgchart.Leader}",
 			Methods: nexus.DefaultHTTPMethodsResponses,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{"roots.orgchart.vmware.org"}, nil, nil, false, "my custom description", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Name).To(Equal("orgchart.Leader"))
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Description).To(Equal("my custom description"))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).
+			Get.Parameters[0].Value.Name).
+			To(gomega.Equal("orgchart.Leader"))
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).
+			Get.Parameters[0].Value.Description).
+			To(gomega.Equal("my custom description"))
 	})
 
-	It("should combine openapi specs", func() {
-		schema := combined.CombinedSpecs()
+	ginkgo.It("should combine openapi specs", func() {
+		schema := combined.Specs()
 
 		pathItem := schema.Paths.Find("/leader/{orgchart.Leader}")
-		Expect(pathItem).ToNot(BeNil())
+		gomega.Expect(pathItem).ToNot(gomega.BeNil())
 
 		pathItem = schema.Paths.Find("/v1alpha1/project/{projectId}/global-namespaces")
-		Expect(pathItem).ToNot(BeNil())
+		gomega.Expect(pathItem).ToNot(gomega.BeNil())
 	})
 
-	It("should combine openapi specs with additional components", func() {
+	ginkgo.It("should combine openapi specs with additional components", func() {
 		s := api.Schemas["vmware.org"]
 		s.Components.SecuritySchemes = openapi3.SecuritySchemes{
 			"BasicAuth": {
@@ -113,12 +122,12 @@ var _ = Describe("Combined OpenAPI tests", func() {
 		}
 		api.Schemas["vmware.org"] = s
 
-		schema := combined.CombinedSpecs()
+		schema := combined.Specs()
 
 		pathItem := schema.Paths.Find("/leader/{orgchart.Leader}")
-		Expect(pathItem).ToNot(BeNil())
+		gomega.Expect(pathItem).ToNot(gomega.BeNil())
 
 		pathItem = schema.Paths.Find("/v1alpha1/project/{projectId}/global-namespaces")
-		Expect(pathItem).ToNot(BeNil())
+		gomega.Expect(pathItem).ToNot(gomega.BeNil())
 	})
 })

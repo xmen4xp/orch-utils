@@ -1,14 +1,32 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package combined
 
 import (
-	"api-gw/pkg/config"
-	"api-gw/pkg/openapi/api"
-	"api-gw/pkg/openapi/declarative"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
 )
 
-func CombinedSpecs() openapi3.T {
-	newSchema := openapi3.T{
+func Specs() openapi3.T {
+	newSchema := initializeSchema()
+
+	nexusSchemas := api.Schemas
+
+	for _, schema := range nexusSchemas {
+		mergePaths(&newSchema, schema)
+		mergeComponents(&newSchema, schema)
+	}
+
+	return newSchema
+}
+
+func initializeSchema() openapi3.T {
+	return openapi3.T{
 		OpenAPI:    "3.0.0",
 		Components: declarative.Schema.Components,
 		Info:       declarative.Schema.Info,
@@ -16,10 +34,10 @@ func CombinedSpecs() openapi3.T {
 		Security:   declarative.Schema.Security,
 		Servers: openapi3.Servers{
 			&openapi3.Server{
-				URL: config.Cfg.TenantApiGwDomain + "/tsm/",
+				URL: config.Cfg.TenantAPIGwDomain + "/tsm/",
 			},
 			&openapi3.Server{
-				URL: config.Cfg.TenantApiGwDomain + "/local/v1/",
+				URL: config.Cfg.TenantAPIGwDomain + "/local/v1/",
 			},
 			&openapi3.Server{
 				URL: "http://localhost:3000/v1/",
@@ -31,81 +49,106 @@ func CombinedSpecs() openapi3.T {
 		Tags:         declarative.Schema.Tags,
 		ExternalDocs: declarative.Schema.ExternalDocs,
 	}
+}
 
-	nexusSchemas := api.Schemas
-
-	for _, schema := range nexusSchemas {
-		for k, v := range schema.Paths {
-			if newSchema.Paths == nil {
-				newSchema.Paths = openapi3.Paths{}
-			}
-			newSchema.Paths[k] = v
-		}
-
-		for k, v := range schema.Components.Schemas {
-			if newSchema.Components.Schemas == nil {
-				newSchema.Components.Schemas = openapi3.Schemas{}
-			}
-			newSchema.Components.Schemas[k] = v
-		}
-
-		for k, v := range schema.Components.Parameters {
-			if newSchema.Components.Parameters == nil {
-				newSchema.Components.Parameters = openapi3.ParametersMap{}
-			}
-			newSchema.Components.Parameters[k] = v
-		}
-
-		for k, v := range schema.Components.Headers {
-			if newSchema.Components.Headers == nil {
-				newSchema.Components.Headers = openapi3.Headers{}
-			}
-			newSchema.Components.Headers[k] = v
-		}
-
-		for k, v := range schema.Components.RequestBodies {
-			if newSchema.Components.RequestBodies == nil {
-				newSchema.Components.RequestBodies = openapi3.RequestBodies{}
-			}
-			newSchema.Components.RequestBodies[k] = v
-		}
-
-		for k, v := range schema.Components.Responses {
-			if newSchema.Components.Responses == nil {
-				newSchema.Components.Responses = openapi3.Responses{}
-			}
-
-			newSchema.Components.Responses[k] = v
-		}
-
-		for k, v := range schema.Components.SecuritySchemes {
-			if newSchema.Components.SecuritySchemes == nil {
-				newSchema.Components.SecuritySchemes = openapi3.SecuritySchemes{}
-			}
-			newSchema.Components.SecuritySchemes[k] = v
-		}
-
-		for k, v := range schema.Components.Examples {
-			if newSchema.Components.Examples == nil {
-				newSchema.Components.Examples = openapi3.Examples{}
-			}
-			newSchema.Components.Examples[k] = v
-		}
-
-		for k, v := range schema.Components.Links {
-			if newSchema.Components.Links == nil {
-				newSchema.Components.Links = openapi3.Links{}
-			}
-			newSchema.Components.Links[k] = v
-		}
-
-		for k, v := range schema.Components.Callbacks {
-			if newSchema.Components.Callbacks == nil {
-				newSchema.Components.Callbacks = openapi3.Callbacks{}
-			}
-			newSchema.Components.Callbacks[k] = v
-		}
+func mergePaths(newSchema *openapi3.T, schema openapi3.T) {
+	if newSchema.Paths == nil {
+		newSchema.Paths = openapi3.NewPaths()
 	}
+	for k, v := range schema.Paths.Map() {
+		newSchema.Paths.Set(k, v)
+	}
+}
 
-	return newSchema
+func mergeComponents(newSchema *openapi3.T, schema openapi3.T) {
+	mergeSchemas(&newSchema.Components.Schemas, schema.Components.Schemas)
+	mergeParameters(&newSchema.Components.Parameters, schema.Components.Parameters)
+	mergeHeaders(&newSchema.Components.Headers, schema.Components.Headers)
+	mergeRequestBodies(&newSchema.Components.RequestBodies, schema.Components.RequestBodies)
+	mergeResponseBodies(&newSchema.Components.Responses, schema.Components.Responses)
+	mergeSecuritySchemes(&newSchema.Components.SecuritySchemes, schema.Components.SecuritySchemes)
+	mergeExamples(&newSchema.Components.Examples, schema.Components.Examples)
+	mergeLinks(&newSchema.Components.Links, schema.Components.Links)
+	mergeCallbacks(&newSchema.Components.Callbacks, schema.Components.Callbacks)
+}
+
+func mergeSchemas(dest *openapi3.Schemas, src openapi3.Schemas) {
+	if *dest == nil {
+		*dest = openapi3.Schemas{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeParameters(dest *openapi3.ParametersMap, src openapi3.ParametersMap) {
+	if *dest == nil {
+		*dest = openapi3.ParametersMap{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeHeaders(dest *openapi3.Headers, src openapi3.Headers) {
+	if *dest == nil {
+		*dest = openapi3.Headers{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeRequestBodies(dest *openapi3.RequestBodies, src openapi3.RequestBodies) {
+	if *dest == nil {
+		*dest = openapi3.RequestBodies{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeResponseBodies(dest *openapi3.ResponseBodies, src openapi3.ResponseBodies) {
+	if *dest == nil {
+		*dest = openapi3.ResponseBodies{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeSecuritySchemes(dest *openapi3.SecuritySchemes, src openapi3.SecuritySchemes) {
+	if *dest == nil {
+		*dest = openapi3.SecuritySchemes{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeExamples(dest *openapi3.Examples, src openapi3.Examples) {
+	if *dest == nil {
+		*dest = openapi3.Examples{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeLinks(dest *openapi3.Links, src openapi3.Links) {
+	if *dest == nil {
+		*dest = openapi3.Links{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
+}
+
+func mergeCallbacks(dest *openapi3.Callbacks, src openapi3.Callbacks) {
+	if *dest == nil {
+		*dest = openapi3.Callbacks{}
+	}
+	for k, v := range src {
+		(*dest)[k] = v
+	}
 }

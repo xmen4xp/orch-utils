@@ -1,27 +1,15 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package model
 
 import (
-	"context"
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
 	"strings"
-	"time"
-
-	authnexusv1 "nexus/admin/api/build/apis/authentication.admin.nexus.com/v1"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	middlewarenexusv1 "nexus/admin/api/build/apis/domain.admin.nexus.com/v1"
-	tenantv1 "nexus/admin/api/build/apis/tenantconfig.admin.nexus.com/v1"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 )
-
-// adding this global variables for CORS to support multiple domain and header configuration
-var CorsConfigOrigins = map[string][]string{}
-var CorsConfigHeaders = map[string][]string{}
 
 type EventType string
 
@@ -30,6 +18,7 @@ const (
 	Delete EventType = "Delete"
 )
 
+//nolint:tagliatelle // This struct has dependency on nexus's field name.
 type NexusAnnotation struct {
 	Name                 string                     `json:"name,omitempty"`
 	Hierarchy            []string                   `json:"hierarchy,omitempty"`
@@ -58,7 +47,7 @@ type NodeInfo struct {
 	DeferredDelete  bool
 }
 
-type RestUriInfo struct {
+type RestURIInfo struct {
 	TypeOfURI URIType
 }
 
@@ -76,23 +65,8 @@ func ConstructEchoPathParamURL(uri string) string {
 	return replacer.Replace(uri)
 }
 
-type OidcNodeEvent struct {
-	Oidc authnexusv1.OIDC
-	Type EventType
-}
-
-type TenantNodeEvent struct {
-	Tenant tenantv1.Tenant
-	Type   EventType
-}
-
 type DatamodelInfo struct {
 	Title string
-}
-
-type CorsNodeEvent struct {
-	Cors middlewarenexusv1.CORSConfig
-	Type EventType
 }
 
 // LinkGvk : This model used to carry fully qualified object <gvk> and
@@ -102,51 +76,4 @@ type LinkGvk struct {
 	Kind      string   `json:"kind,omitempty" yaml:"kind,omitempty"`
 	Name      string   `json:"name,omitempty" yaml:"name,omitempty"`
 	Hierarchy []string `json:"hierarchy,omitempty" yaml:"hierarchy,omitempty"`
-}
-
-type ConnectorObject struct {
-	Service    string
-	Protocol   string
-	Connection *grpc.ClientConn
-}
-
-func (v *ConnectorObject) GetVersion() (interface{}, error) {
-	var result interface{}
-	if v.Protocol == "http" {
-		resp, err := http.Get(v.Service)
-		if err != nil {
-			return nil, err
-		}
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
-}
-
-func (v *ConnectorObject) InitConnection() (err error) {
-	var Connection *grpc.ClientConn
-	if v.Protocol == "grpc" {
-		var registration_retry int = 0
-		for registration_retry < 10 {
-			registration_retry = registration_retry + 1
-			Connection, err = grpc.DialContext(context.TODO(), v.Service, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				if registration_retry == 10 {
-					return err
-				} else {
-					time.Sleep(10)
-					continue
-				}
-			}
-			break
-		}
-	}
-	v.Connection = Connection
-	return nil
 }

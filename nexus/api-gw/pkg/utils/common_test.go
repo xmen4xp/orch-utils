@@ -1,41 +1,42 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package utils_test
 
 import (
-	"api-gw/pkg/client"
-	"api-gw/pkg/config"
-	"api-gw/pkg/utils"
 	"os"
 
-	nexus_client "nexus/admin/api/build/nexus-client"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 )
 
-var _ = Describe("Common tests", func() {
-
-	It("should get correct datamodel name from crd", func() {
+var _ = ginkgo.Describe("Common tests", func() {
+	ginkgo.It("should get correct datamodel name from crd", func() {
 		datamodelName := utils.GetDatamodelName("route.route.admin.nexus.com")
-		Expect(datamodelName).To(Equal("admin.nexus.com"))
+		gomega.Expect(datamodelName).To(gomega.Equal("admin.nexus.com"))
 	})
 
-	It("should check if file exist", func() {
+	ginkgo.It("should check if file exist", func() {
 		file, err := os.Create("test-file.txt")
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		check := utils.IsFileExists(file.Name())
-		Expect(check).To(BeTrue())
+		gomega.Expect(check).To(gomega.BeTrue())
 
 		err = os.Remove("test-file.txt")
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	})
 
-	It("should check if file not exist", func() {
+	ginkgo.It("should check if file not exist", func() {
 		check := utils.IsFileExists("non-existent-file")
-		Expect(check).To(BeFalse())
+		gomega.Expect(check).To(gomega.BeFalse())
 	})
 
-	It("should check if server config is valid", func() {
+	ginkgo.It("should check if server config is valid", func() {
 		isValid := utils.IsServerConfigValid(&config.Config{
 			Server: config.ServerConfig{
 				Address:  "address",
@@ -43,52 +44,21 @@ var _ = Describe("Common tests", func() {
 				KeyPath:  "key_path",
 			},
 		})
-		Expect(isValid).To(BeTrue())
+		gomega.Expect(isValid).To(gomega.BeTrue())
 	})
 
-	It("should check if server config is not valid", func() {
+	ginkgo.It("should check if server config is not valid", func() {
 		isValid := utils.IsServerConfigValid(&config.Config{})
-		Expect(isValid).To(BeFalse())
+		gomega.Expect(isValid).To(gomega.BeFalse())
 	})
 
-	It("should get crd type", func() {
+	ginkgo.It("should get crd type", func() {
 		crdType := utils.GetCrdType("Test", "vmware.org")
-		Expect(crdType).To(Equal("tests.vmware.org"))
+		gomega.Expect(crdType).To(gomega.Equal("tests.vmware.org"))
 	})
 
-	It("should get resource name", func() {
+	ginkgo.It("should get resource name", func() {
 		resource := utils.GetGroupResourceName("Test")
-		Expect(resource).To(Equal("tests"))
-	})
-
-	It("should GetEnvoyInitParams without error", func() {
-		client.NexusClient = nexus_client.NewFakeClient()
-		//TODO: more detailed test with mock server
-		//client.NexusClient.Authentication().CreateOIDCByName(context.TODO(), &v1.OIDC{
-		//	ObjectMeta: metav1.ObjectMeta{
-		//		Name: "okta",
-		//	},
-		//	Spec: v1.OIDCSpec{
-		//		Config: v1.IDPConfig{
-		//			ClientId:       "XXX",
-		//			ClientSecret:   "XXX",
-		//			OAuthIssuerUrl: "https://dev-XXX.okta.com/oauth2/default",
-		//			Scopes: []string{
-		//				"openid",
-		//				"profile",
-		//				"offline_access",
-		//			},
-		//			OAuthRedirectUrl: "http://<API-GW-DNS/IP>:<PORT>/<CALLBACK_PATH>",
-		//		},
-		//		ValidationProps: v1.ValidationProperties{
-		//			InsecureIssuerURLContext: false,
-		//			SkipIssuerValidation:     false,
-		//			SkipClientIdValidation:   false,
-		//			SkipClientAudValidation:  false,
-		//		},
-		//	},
-		//})
-		_, _, _, err := utils.GetEnvoyInitParams()
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(resource).To(gomega.Equal("tests"))
 	})
 })

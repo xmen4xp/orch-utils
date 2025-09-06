@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,7 +25,7 @@ data:
       address: ":443"
       certPath: "/etc/cert/cert.pem"
       keyPath: "/etc/cert/key.pem"
-    enable_nexus_runtime: true
+    enableNexusRuntime: true
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -96,7 +99,7 @@ spec:
                   app.kubernetes.io/instance: ingress-nginx
                 name: nginx-'"$NAMESPACE"'
               spec:
-                controller: k8s.io/ingress-nginx' | kubectl apply -f - -n $NAMESPACE      
+                controller: k8s.io/ingress-nginx' | kubectl apply -f - -n $NAMESPACE
       containers:
         -
           image: "{{.Image}}:{{.Tag}}"

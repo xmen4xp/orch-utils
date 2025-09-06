@@ -1,39 +1,44 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative_test
 
 import (
-	"api-gw/pkg/openapi/declarative"
 	"net/http"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
 )
 
-var _ = Describe("OpenAPI tests", func() {
-	It("should setup and load openapi file", func() {
+var _ = ginkgo.Describe("OpenAPI tests", func() {
+	ginkgo.It("should setup and load openapi file", func() {
 		err := declarative.Load(spec)
-		Expect(err).To(BeNil())
+		gomega.Expect(err).To(gomega.BeNil())
 
-		Expect(declarative.Paths).To(HaveKey(Uri))
-		Expect(declarative.Paths).To(HaveKey(ResourceUri))
+		gomega.Expect(declarative.Paths).To(gomega.HaveKey(URI))
+		gomega.Expect(declarative.Paths).To(gomega.HaveKey(ResourceURI))
 	})
 
-	It("should get extension value for kind and group", func() {
-		kind := declarative.GetExtensionVal(declarative.Paths[Uri].Get, declarative.NexusKindName)
-		Expect(kind).To(Equal("GlobalNamespace"))
+	ginkgo.It("should get extension value for kind and group", func() {
+		kind := declarative.GetExtensionVal(declarative.Paths[URI].Get, declarative.NexusKindName)
+		gomega.Expect(kind).To(gomega.Equal("GlobalNamespace"))
 
-		group := declarative.GetExtensionVal(declarative.Paths[Uri].Get, declarative.NexusGroupName)
-		Expect(group).To(Equal("gns.vmware.org"))
+		group := declarative.GetExtensionVal(declarative.Paths[URI].Get, declarative.NexusGroupName)
+		gomega.Expect(group).To(gomega.Equal("gns.vmware.org"))
 
-		list := declarative.GetExtensionVal(declarative.Paths[ListUri].Get, declarative.NexusListEndpoint)
-		Expect(list).To(Equal("true"))
+		list := declarative.GetExtensionVal(declarative.Paths[ListURI].Get, declarative.NexusListEndpoint)
+		gomega.Expect(list).To(gomega.Equal("true"))
 	})
 
-	It("should setup context for resource list operation", func() {
-		ec := declarative.SetupContext(Uri, http.MethodGet, declarative.Paths[Uri].Get)
+	ginkgo.It("should setup context for resource list operation", func() {
+		ec := declarative.SetupContext(URI, http.MethodGet, declarative.Paths[URI].Get)
 
 		expectedEc := declarative.EndpointContext{
 			Context:      nil,
-			SpecUri:      Uri,
+			SpecURI:      URI,
 			Method:       http.MethodGet,
 			KindName:     "GlobalNamespace",
 			ResourceName: "globalnamespaces",
@@ -43,19 +48,19 @@ var _ = Describe("OpenAPI tests", func() {
 			Identifier:   "",
 			Single:       false,
 			ShortName:    "gns",
-			ShortUri:     "/apis/v1/gns",
-			Uri:          "/apis/gns.vmware.org/v1/globalnamespaces",
+			ShortURI:     "/apis/v1/gns",
+			URI:          "/apis/gns.vmware.org/v1/globalnamespaces",
 		}
 
-		Expect(ec).To(Equal(&expectedEc))
+		gomega.Expect(ec).To(gomega.Equal(&expectedEc))
 	})
 
-	It("should setup context for resource get operation", func() {
-		ec := declarative.SetupContext(ResourceUri, http.MethodGet, declarative.Paths[ResourceUri].Get)
+	ginkgo.It("should setup context for resource get operation", func() {
+		ec := declarative.SetupContext(ResourceURI, http.MethodGet, declarative.Paths[ResourceURI].Get)
 
 		expectedEc := declarative.EndpointContext{
 			Context:      nil,
-			SpecUri:      ResourceUri,
+			SpecURI:      ResourceURI,
 			Method:       http.MethodGet,
 			KindName:     "GlobalNamespace",
 			ResourceName: "globalnamespaces",
@@ -64,21 +69,21 @@ var _ = Describe("OpenAPI tests", func() {
 			Params:       [][]string{{"{projectId}", "projectId"}, {"{id}", "id"}},
 			Identifier:   "id",
 			Single:       true,
-			Uri:          "/apis/gns.vmware.org/v1/globalnamespaces/:name",
+			URI:          "/apis/gns.vmware.org/v1/globalnamespaces/:name",
 			ShortName:    "gns",
-			ShortUri:     "/apis/v1/gns/:name",
+			ShortURI:     "/apis/v1/gns/:name",
 		}
 
-		Expect(ec).To(Equal(&expectedEc))
+		gomega.Expect(ec).To(gomega.Equal(&expectedEc))
 	})
 
-	It("should check if resource get operation have an array response", func() {
-		isArray := declarative.IsArrayResponse(declarative.Paths[Uri].Get)
-		Expect(isArray).To(BeTrue())
+	ginkgo.It("should check if resource get operation have an array response", func() {
+		isArray := declarative.IsArrayResponse(declarative.Paths[URI].Get)
+		gomega.Expect(isArray).To(gomega.BeTrue())
 	})
 
-	It("should fail on nil operation when checking if response is array", func() {
+	ginkgo.It("should fail on nil operation when checking if response is array", func() {
 		isArray := declarative.IsArrayResponse(nil)
-		Expect(isArray).To(BeFalse())
+		gomega.Expect(isArray).To(gomega.BeFalse())
 	})
 })

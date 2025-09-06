@@ -1,26 +1,15 @@
-/*
-Copyright 2022.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
 import (
-	"api-gw/pkg/model"
 	"context"
+	"errors"
 
-	logger "github.com/sirupsen/logrus"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,10 +17,10 @@ import (
 	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// DatamodelReconciler reconciles a Datamodels object
+// DatamodelReconciler reconciles a Datamodels object.
 type DatamodelReconciler struct {
 	client.Client
 	Scheme  *runtime.Scheme
@@ -50,8 +39,13 @@ type DatamodelReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 
 func (r *DatamodelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	_ = ctrllog.FromContext(ctx)
+
 	eventType := model.Upsert
+
+	if r.Dynamic == nil {
+		return ctrl.Result{}, errors.New("dynamic client is not initialized")
+	}
 
 	obj, err := r.Dynamic.Resource(schema.GroupVersionResource{
 		Group:    "nexus.com",
@@ -65,8 +59,12 @@ func (r *DatamodelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		eventType = model.Delete
 	}
 
-	logger.Infof("Received Datamodel notification for Name %s Type %s", req.Name, eventType)
-	logger.Infof("Datamodel Object: %s", obj)
+	log.Info().Msgf("Received Datamodel notification for Name %s Type %s", req.Name, eventType)
+	if obj != nil {
+		log.Info().Msgf("Datamodel Object: %s", obj)
+	} else {
+		log.Info().Msgf("Datamodel Object is nil")
+	}
 	model.ConstructDatamodel(eventType, req.Name, obj)
 
 	return ctrl.Result{}, nil

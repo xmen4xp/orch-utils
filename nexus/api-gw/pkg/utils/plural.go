@@ -1,60 +1,61 @@
-/*
-Copyright 2015 The Kubernetes Authors.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package utils
 
 var consonants = "bcdfghjklmnpqrstvwxyz"
 
+const intTwoConstant = 2
+
 // ToPlural returns the plural form of the type's name. If the type's name is found
 // in the exceptions map, the map value is returned.
 func ToPlural(t string) string {
 	singular := t
-	var plural string
 
-	if len(singular) < 2 {
+	if len(singular) < intTwoConstant {
 		return singular
 	}
 
-	switch rune(singular[len(singular)-1]) {
+	lastChar := rune(singular[len(singular)-1])
+	secondLastChar := rune(singular[len(singular)-2])
+
+	switch lastChar {
 	case 's', 'x', 'z':
-		plural = esPlural(singular)
+		return esPlural(singular)
 	case 'y':
-		sl := rune(singular[len(singular)-2])
-		if isConsonant(sl) {
-			plural = iesPlural(singular)
-		} else {
-			plural = sPlural(singular)
-		}
+		return handleYPlural(singular, secondLastChar)
 	case 'h':
-		sl := rune(singular[len(singular)-2])
-		if sl == 'c' || sl == 's' {
-			plural = esPlural(singular)
-		} else {
-			plural = sPlural(singular)
-		}
+		return handleHPlural(singular, secondLastChar)
 	case 'e':
-		sl := rune(singular[len(singular)-2])
-		if sl == 'f' {
-			plural = vesPlural(singular[:len(singular)-1])
-		} else {
-			plural = sPlural(singular)
-		}
+		return handleEPlural(singular, secondLastChar)
 	case 'f':
-		plural = vesPlural(singular)
+		return vesPlural(singular)
 	default:
-		plural = sPlural(singular)
+		return sPlural(singular)
 	}
-	return plural
+}
+
+func handleYPlural(singular string, secondLastChar rune) string {
+	if isConsonant(secondLastChar) {
+		return iesPlural(singular)
+	}
+	return sPlural(singular)
+}
+
+func handleHPlural(singular string, secondLastChar rune) string {
+	if secondLastChar == 'c' || secondLastChar == 's' {
+		return esPlural(singular)
+	}
+	return sPlural(singular)
+}
+
+func handleEPlural(singular string, secondLastChar rune) string {
+	if secondLastChar == 'f' {
+		return vesPlural(singular[:len(singular)-1])
+	}
+	return sPlural(singular)
 }
 
 func iesPlural(singular string) string {

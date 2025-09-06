@@ -1,18 +1,23 @@
-package controllers
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package controllers_test
 
 import (
-	"api-gw/pkg/model"
 	"context"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var _ = Describe("Datamodel controller", func() {
-	It("should create datamodel crd", func() {
+var _ = ginkgo.Describe("Datamodel controller", func() {
+	ginkgo.It("should create datamodel crd", func() {
 		gvr := schema.GroupVersionResource{
 			Group:    "nexus.com",
 			Version:  "v1",
@@ -33,13 +38,13 @@ var _ = Describe("Datamodel controller", func() {
 			},
 		}
 		_, err := dynamicClient.Resource(gvr).Create(context.TODO(), &unstructuredObject, metav1.CreateOptions{})
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-		Eventually(func() bool {
-			if _, ok := model.DatamodelToDatamodelInfo["nexus.com"]; ok {
+		gomega.Eventually(func() bool {
+			if _, ok := model.GetDatamodel("nexus.com"); ok {
 				return true
 			}
 			return false
-		}).Should(BeTrue())
+		}).Should(gomega.BeTrue())
 	})
 })

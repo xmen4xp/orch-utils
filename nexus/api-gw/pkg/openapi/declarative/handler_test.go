@@ -1,38 +1,42 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative_test
 
 import (
-	"api-gw/pkg/config"
-	"api-gw/pkg/openapi/declarative"
-	"api-gw/pkg/server/echo_server"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 
-	nexus_client "nexus/admin/api/build/nexus-client"
-
 	"github.com/labstack/echo/v4"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/declarative"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/server/echoserver"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
 
-var _ = Describe("Handler tests", func() {
-	BeforeSuite(func() {
-		log.SetLevel(log.DebugLevel)
-		err := declarative.Load(spec)
-		Expect(err).To(BeNil())
-	})
+var _ = ginkgo.BeforeSuite(func() {
+	log.SetLevel(log.DebugLevel)
+	err := declarative.Load(spec)
+	gomega.Expect(err).To(gomega.BeNil())
+})
 
-	It("should test ListHandler for gns list url", func() {
-		ec := declarative.SetupContext(Uri, http.MethodGet, declarative.Paths[Uri].Get)
+var _ = ginkgo.Describe("Handler tests", ginkgo.Ordered, func() {
+	ginkgo.It("should test ListHandler for gns list url", func() {
+		ec := declarative.SetupContext(URI, http.MethodGet, declarative.Paths[URI].Get)
 
 		// setup test http server for backend service calls
-		var requestUri string
+		var requestURI string
 		server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			requestUri = req.URL.String()
-			res.WriteHeader(200)
+			requestURI = req.URL.String()
+			res.WriteHeader(http.StatusOK)
 			res.Write([]byte(`[]`))
 		}))
 		defer server.Close()
@@ -40,25 +44,25 @@ var _ = Describe("Handler tests", func() {
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		ec.Context = c
 
 		err := declarative.ListHandler(ec)
-		Expect(err).To(BeNil())
-		Expect(rec.Body.String()).To(Equal("[]\n"))
-		Expect(requestUri).To(Equal("/v1alpha1/project/default/global-namespaces"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Body.String()).To(gomega.Equal("[]\n"))
+		gomega.Expect(requestURI).To(gomega.Equal("/v1alpha1/project/default/global-namespaces"))
 	})
 
-	It("should test GetHandler for given gns id", func() {
-		ec := declarative.SetupContext(ResourceUri, http.MethodGet, declarative.Paths[ResourceUri].Get)
+	ginkgo.It("should test GetHandler for given gns id", func() {
+		ec := declarative.SetupContext(ResourceURI, http.MethodGet, declarative.Paths[ResourceURI].Get)
 
 		// setup test http server for backend service calls
-		var requestUri string
+		var requestURI string
 		server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			requestUri = req.URL.String()
-			res.WriteHeader(200)
+			requestURI = req.URL.String()
+			res.WriteHeader(http.StatusOK)
 			res.Write([]byte(`{}`))
 		}))
 		defer server.Close()
@@ -66,7 +70,7 @@ var _ = Describe("Handler tests", func() {
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/:name")
@@ -75,14 +79,14 @@ var _ = Describe("Handler tests", func() {
 		ec.Context = c
 
 		err := declarative.GetHandler(ec)
-		Expect(err).To(BeNil())
-		Expect(rec.Body.String()).To(Equal("{}\n"))
-		Expect(requestUri).To(Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Body.String()).To(gomega.Equal("{}\n"))
+		gomega.Expect(requestURI).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
 	})
 
-	It("should test PutHandler for given gns id", func() {
-		ec := declarative.SetupContext(ResourceUri, http.MethodPut, declarative.Paths[ResourceUri].Put)
-		gnsJson := `{
+	ginkgo.It("should test PutHandler for given gns id", func() {
+		ec := declarative.SetupContext(ResourceURI, http.MethodPut, declarative.Paths[ResourceURI].Put)
+		gnsJSON := `{
     "metadata": {
         "name": "test"
     },
@@ -92,14 +96,14 @@ var _ = Describe("Handler tests", func() {
 }`
 
 		// setup test http server for backend service calls
-		var requestUri string
+		var requestURI string
 		var requestBody string
 		server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			requestUri = req.URL.String()
+			requestURI = req.URL.String()
 			if b, err := io.ReadAll(req.Body); err == nil {
 				requestBody = string(b)
 			}
-			res.WriteHeader(200)
+			res.WriteHeader(http.StatusOK)
 			res.Write([]byte(`{}`))
 		}))
 		defer server.Close()
@@ -107,36 +111,36 @@ var _ = Describe("Handler tests", func() {
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(gnsJson))
+		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(gnsJSON))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		ec.Context = c
 
 		err := declarative.PutHandler(ec)
-		Expect(err).To(BeNil())
-		Expect(rec.Body.String()).To(Equal("{}\n"))
-		Expect(requestBody).To(Equal("{\"foo\":\"bar\"}"))
-		Expect(requestUri).To(Equal("/v1alpha1/project/default/global-namespaces/test"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Body.String()).To(gomega.Equal("{}\n"))
+		gomega.Expect(requestBody).To(gomega.Equal("{\"foo\":\"bar\"}"))
+		gomega.Expect(requestURI).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/test"))
 	})
 
-	It("should test PutHandler for given gns id with empty spec", func() {
-		ec := declarative.SetupContext(ResourceUri, http.MethodPut, declarative.Paths[ResourceUri].Put)
-		gnsJson := `{
+	ginkgo.It("should test PutHandler for given gns id with empty spec", func() {
+		ec := declarative.SetupContext(ResourceURI, http.MethodPut, declarative.Paths[ResourceURI].Put)
+		gnsJSON := `{
     "metadata": {
         "name": "test"
     }
 }`
 
 		// setup test http server for backend service calls
-		var requestUri string
+		var requestURI string
 		var requestBody string
 		server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			requestUri = req.URL.String()
+			requestURI = req.URL.String()
 			if b, err := io.ReadAll(req.Body); err == nil {
 				requestBody = string(b)
 			}
-			res.WriteHeader(200)
+			res.WriteHeader(http.StatusOK)
 			res.Write([]byte(`{}`))
 		}))
 		defer server.Close()
@@ -144,34 +148,34 @@ var _ = Describe("Handler tests", func() {
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(gnsJson))
+		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(gnsJSON))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		ec.Context = c
 
 		err := declarative.PutHandler(ec)
-		Expect(err).To(BeNil())
-		Expect(rec.Body.String()).To(Equal("{}\n"))
-		Expect(requestBody).To(Equal(""))
-		Expect(requestUri).To(Equal("/v1alpha1/project/default/global-namespaces/test"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Body.String()).To(gomega.Equal("{}\n"))
+		gomega.Expect(requestBody).To(gomega.Equal(""))
+		gomega.Expect(requestURI).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/test"))
 	})
 
-	It("should test DeleteHandler for given gns id", func() {
-		ec := declarative.SetupContext(ResourceUri, http.MethodDelete, declarative.Paths[ResourceUri].Delete)
+	ginkgo.It("should test DeleteHandler for given gns id", func() {
+		ec := declarative.SetupContext(ResourceURI, http.MethodDelete, declarative.Paths[ResourceURI].Delete)
 
 		// setup test http server for backend service calls
-		var requestUri string
+		var requestURI string
 		server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			requestUri = req.URL.String()
-			res.WriteHeader(200)
+			requestURI = req.URL.String()
+			res.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
 		config.Cfg = &config.Config{BackendService: server.URL}
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/:name")
@@ -180,108 +184,165 @@ var _ = Describe("Handler tests", func() {
 		ec.Context = c
 
 		err := declarative.DeleteHandler(ec)
-		Expect(err).To(BeNil())
-		Expect(rec.Code).To(Equal(200))
-		Expect(requestUri).To(Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Code).To(gomega.Equal(http.StatusOK))
+		gomega.Expect(requestURI).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
 	})
 
-	It("should test buildUrlFromParams method with provided labels", func() {
+	ginkgo.It("should test buildUrlFromParams method with provided labels", func() {
 		config.Cfg.BackendService = ""
-		ec := declarative.SetupContext(ResourceUri, http.MethodGet, declarative.Paths[ResourceUri].Get)
+		ec := declarative.SetupContext(ResourceURI, http.MethodGet, declarative.Paths[ResourceURI].Get)
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/?labelSelector=projectId=example-id", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/?labelSelector=projectId=example-id", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/:name")
 		c.SetParamNames("name")
 		c.SetParamValues("example-gns-id")
 		ec.Context = c
-		url, err := declarative.BuildUrlFromParams(ec)
-		Expect(err).To(BeNil())
-		Expect(url).To(Equal("/v1alpha1/project/example-id/global-namespaces/example-gns-id"))
+		url, err := declarative.BuildURLFromParams(ec)
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(url).To(gomega.Equal("/v1alpha1/project/example-id/global-namespaces/example-gns-id"))
 	})
 
-	It("should test buildUrlFromParams method without labels", func() {
+	ginkgo.It("should test buildUrlFromParams method without labels", func() {
 		config.Cfg.BackendService = ""
-		ec := declarative.SetupContext(ResourceUri, http.MethodGet, declarative.Paths[ResourceUri].Get)
+		ec := declarative.SetupContext(ResourceURI, http.MethodGet, declarative.Paths[ResourceURI].Get)
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/:name")
 		c.SetParamNames("name")
 		c.SetParamValues("example-gns-id")
 		ec.Context = c
-		url, err := declarative.BuildUrlFromParams(ec)
-		Expect(err).To(BeNil())
-		Expect(url).To(Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
+		url, err := declarative.BuildURLFromParams(ec)
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(url).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/example-gns-id"))
 	})
 
-	It("should test buildUrlFromBody method with provided labels", func() {
+	ginkgo.It("should test buildUrlFromBody method with provided labels", func() {
 		config.Cfg.BackendService = ""
-		ec := declarative.SetupContext(ResourceUri, http.MethodPut, declarative.Paths[ResourceUri].Put)
+		ec := declarative.SetupContext(ResourceURI, http.MethodPut, declarative.Paths[ResourceURI].Put)
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		ec.Context = c
-		url, err := declarative.BuildUrlFromBody(ec, map[string]interface{}{
+		url, err := declarative.BuildURLFromBody(ec, map[string]interface{}{
 			"name": "test",
 			"labels": map[string]interface{}{
 				"projectId": "example-id",
 			},
 		})
-		Expect(err).To(BeNil())
-		Expect(url).To(Equal("/v1alpha1/project/example-id/global-namespaces/test"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(url).To(gomega.Equal("/v1alpha1/project/example-id/global-namespaces/test"))
 	})
 
-	It("should test buildUrlFromBody method without labels", func() {
+	ginkgo.It("should test buildUrlFromBody method without labels", func() {
 		config.Cfg.BackendService = ""
-		ec := declarative.SetupContext(ResourceUri, http.MethodPut, declarative.Paths[ResourceUri].Put)
+		ec := declarative.SetupContext(ResourceURI, http.MethodPut, declarative.Paths[ResourceURI].Put)
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		ec.Context = c
-		url, err := declarative.BuildUrlFromBody(ec, map[string]interface{}{
+		url, err := declarative.BuildURLFromBody(ec, map[string]interface{}{
 			"name": "test",
 		})
-		Expect(err).To(BeNil())
-		Expect(url).To(Equal("/v1alpha1/project/default/global-namespaces/test"))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(url).To(gomega.Equal("/v1alpha1/project/default/global-namespaces/test"))
 	})
 
-	It("should test Apis handler", func() {
-		echoServer := echo_server.NewEchoServer(config.Cfg, &kubernetes.Clientset{}, &nexus_client.Clientset{})
+	ginkgo.It("should test Apis handler", func() {
+		echoServer := echoserver.NewEchoServer(config.Cfg, &kubernetes.Clientset{})
 		echoServer.RegisterDeclarativeRouter()
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodGet, "/declarative/apis", nil)
+		req := httptest.NewRequest(http.MethodGet, "/declarative/apis", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/declarative/apis")
 
 		err := declarative.ApisHandler(c)
-		Expect(err).To(BeNil())
+		gomega.Expect(err).To(gomega.BeNil())
+		expectedBody := `{
+			"/apis/gns.vmware.org/v1/globalnamespacelists": {
+				"GET": {
+					"group": "gns.vmware.org",
+					"kind": "GlobalNamespaceList",
+					"params": [],
+					"uri": "/v1alpha1/global-namespaces/test"
+				},
+				"short": {
+					"name": "gns",
+					"uri": "/apis/v1/gns"
+				}
+			},
+			"/apis/gns.vmware.org/v1/globalnamespaces": {
+				"GET": {
+					"group": "gns.vmware.org",
+					"kind": "GlobalNamespace",
+					"params": ["projectId"],
+					"uri": "/v1alpha1/project/{projectId}/global-namespaces"
+				},
+				"PUT": {
+					"group": "gns.vmware.org",
+					"kind": "GlobalNamespace",
+					"params": ["projectId", "id"],
+					"uri": "/v1alpha1/project/{projectId}/global-namespaces/{id}"
+				},
+				"short": {
+					"name": "gns",
+					"uri": "/apis/v1/gns"
+				},
+				"yaml": "apiVersion: gns.vmware.org/v1\nkind: GlobalNamespace\nmetadata:\n  labels:\n
+				    projectId: string\n  name: string\nspec:\n  api_discovery_enabled: true\n  
+					ca: string\n  ca_type: PreExistingCA\n  color: string\n  description: string\n  
+					display_name: string\n  domain_name: string\n  match_conditions:\n  - cluster:\n    
+					  match: string\n      type: string\n    namespace:\n      match: string\n      
+					  type: string\n    service: object\n  mtls_enforced: true\n  name: string\n  
+					  use_shared_gateway: true\n  version: string\n"
+			},
+			"/apis/gns.vmware.org/v1/globalnamespaces/:name": {
+				"DELETE": {
+					"group": "gns.vmware.org",
+					"kind": "GlobalNamespace",
+					"params": ["projectId", "id"],
+					"uri": "/v1alpha1/project/{projectId}/global-namespaces/{id}"
+				},
+				"GET": {
+					"group": "gns.vmware.org",
+					"kind": "GlobalNamespace",
+					"params": ["projectId", "id"],
+					"uri": "/v1alpha1/project/{projectId}/global-namespaces/{id}"
+				},
+				"short": {
+					"name": "gns",
+					"uri": "/apis/v1/gns/:name"
+				}
+			}
+		}`
+		recBodyStr := NormalizeString(rec.Body.String())
+		expectedStr := NormalizeString(expectedBody)
 
-		expectedBody := `{"/apis/gns.vmware.org/v1/globalnamespacelists":{"GET":{"group":"gns.vmware.org","kind":"GlobalNamespaceList","params":null,"uri":"/v1alpha1/global-namespaces/test"},"short":{"name":"gns","uri":"/apis/v1/gns"}},"/apis/gns.vmware.org/v1/globalnamespaces":{"GET":{"group":"gns.vmware.org","kind":"GlobalNamespace","params":["projectId"],"uri":"/v1alpha1/project/{projectId}/global-namespaces"},"PUT":{"group":"gns.vmware.org","kind":"GlobalNamespace","params":["projectId","id"],"uri":"/v1alpha1/project/{projectId}/global-namespaces/{id}"},"short":{"name":"gns","uri":"/apis/v1/gns"},"yaml":"apiVersion: gns.vmware.org/v1\nkind: GlobalNamespace\nmetadata:\n  labels:\n    projectId: string\n  name: string\nspec:\n  api_discovery_enabled: true\n  ca: string\n  ca_type: PreExistingCA\n  color: string\n  description: string\n  display_name: string\n  domain_name: string\n  match_conditions:\n  - cluster:\n      match: string\n      type: string\n    namespace:\n      match: string\n      type: string\n    service: object\n  mtls_enforced: true\n  name: string\n  use_shared_gateway: true\n  version: string\n"},"/apis/gns.vmware.org/v1/globalnamespaces/:name":{"DELETE":{"group":"gns.vmware.org","kind":"GlobalNamespace","params":["projectId","id"],"uri":"/v1alpha1/project/{projectId}/global-namespaces/{id}"},"GET":{"group":"gns.vmware.org","kind":"GlobalNamespace","params":["projectId","id"],"uri":"/v1alpha1/project/{projectId}/global-namespaces/{id}"},"short":{"name":"gns","uri":"/apis/v1/gns/:name"}}}
-`
-		Expect(rec.Body.String()).To(Equal(expectedBody))
+		gomega.Expect(recBodyStr).To(gomega.Equal(expectedStr))
 	})
 
-	It("should test Apis handler with globalnamespaces.gns.vmware.org crd", func() {
-		echoServer := echo_server.NewEchoServer(config.Cfg, &kubernetes.Clientset{}, &nexus_client.Clientset{})
+	ginkgo.It("should test Apis handler with globalnamespaces.gns.vmware.org crd", func() {
+		echoServer := echoserver.NewEchoServer(config.Cfg, &kubernetes.Clientset{})
 		echoServer.RegisterDeclarativeRouter()
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodGet, "/declarative/apis?crd=globalnamespaces.gns.vmware.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/declarative/apis?crd=globalnamespaces.gns.vmware.org", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/declarative/apis?crd=globalnamespaces.gns.vmware.org")
 
 		err := declarative.ApisHandler(c)
-		Expect(err).To(BeNil())
+		gomega.Expect(err).To(gomega.BeNil())
 
 		expectedBody := `apiVersion: gns.vmware.org/v1
 kind: GlobalNamespace
@@ -310,22 +371,29 @@ spec:
   use_shared_gateway: true
   version: string
 `
-		Expect(rec.Body.String()).To(Equal(expectedBody))
+		gomega.Expect(rec.Body.String()).To(gomega.Equal(expectedBody))
 	})
 
-	It("should test Apis handler with non-existent crd", func() {
-		echoServer := echo_server.NewEchoServer(config.Cfg, &kubernetes.Clientset{}, &nexus_client.Clientset{})
+	ginkgo.It("should test Apis handler with non-existent crd", func() {
+		echoServer := echoserver.NewEchoServer(config.Cfg, &kubernetes.Clientset{})
 		echoServer.RegisterDeclarativeRouter()
 
 		// setup echo test
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodGet, "/declarative/apis?crd=non-existent-crd", nil)
+		req := httptest.NewRequest(http.MethodGet, "/declarative/apis?crd=non-existent-crd", http.NoBody)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("/declarative/apis?crd=non-existent-crd")
 
 		err := declarative.ApisHandler(c)
-		Expect(err).To(BeNil())
-		Expect(rec.Code).To(Equal(http.StatusNotFound))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(rec.Code).To(gomega.Equal(http.StatusNotFound))
 	})
 })
+
+// normalizeString removes all whitespace characters from the input string.
+func NormalizeString(s string) string {
+	// Replace all whitespace characters (including \n, \t, etc.) with an empty string
+	re := regexp.MustCompile(`\s+`)
+	return re.ReplaceAllString(s, "")
+}

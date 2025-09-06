@@ -1,7 +1,11 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package client
 
 import (
-	"api-gw/pkg/model"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,9 +13,7 @@ import (
 	"os"
 	"strings"
 
-	nexus_client "nexus/admin/api/build/nexus-client"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,26 +22,32 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	nexus_client "nexus/admin/api/build/nexus-client"
+
+	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
 )
 
-var Client dynamic.Interface
-var CoreClient kubernetes.Interface
-var Host string
-var HostScheme string = "http"
-var HostTLSClientConfig rest.TLSClientConfig
-
-var NexusClient *nexus_client.Clientset
+var (
+	Client              dynamic.Interface
+	CoreClient          kubernetes.Interface
+	Host                string
+	HostScheme          = "http"
+	HostTLSClientConfig rest.TLSClientConfig
+	appName             = "nexus-api-gw-client"
+	log                 = logging.GetLogger(appName)
+	NexusClient         *nexus_client.Clientset
+)
 
 func New(config *rest.Config) (err error) {
-
 	if config != nil {
 		HostTLSClientConfig = config.TLSClientConfig
 	}
 
-	if kubeApiHostPort, isSpecified := os.LookupEnv("KUBEAPI_ENDPOINT"); isSpecified {
-		parsedURI, err := url.Parse(kubeApiHostPort)
+	if kubeAPIHostPort, isSpecified := os.LookupEnv("KUBEAPI_ENDPOINT"); isSpecified {
+		parsedURI, err := url.Parse(kubeAPIHostPort)
 		if err != nil {
-			return fmt.Errorf("parsing URI %v failed with error %+v", kubeApiHostPort, err)
+			return fmt.Errorf("parsing URI %v failed with error %w", kubeAPIHostPort, err)
 		}
 
 		if parsedURI.Scheme != "" {
@@ -47,15 +55,18 @@ func New(config *rest.Config) (err error) {
 		}
 		Host = fmt.Sprintf("%s://%s", HostScheme, parsedURI.Host)
 
-		log.Debugf("kubeApiHostPortt: %+v", kubeApiHostPort)
-		log.Debugf("parserdURI: %+v", parsedURI)
-		log.Debugf("Host: %s", Host)
+		log.Debug().Msgf("kubeApiHostPort: %+v", kubeAPIHostPort)
+		log.Debug().Msgf("parsedURI: %+v", parsedURI)
+		log.Debug().Msgf("Host: %s", Host)
 	} else {
 		Host = config.Host
 	}
 
+	config.Burst = 1500
+	config.QPS = 1000
 	Client, err = dynamic.NewForConfig(config)
 	if err != nil {
+		log.InfraErr(err).Msg("error building dynamic client")
 		return err
 	}
 	CoreClient, err = kubernetes.NewForConfig(config)
@@ -76,7 +87,8 @@ func NewNexusClient(config *rest.Config) error {
 }
 
 func CreateObject(gvr schema.GroupVersionResource, kind, hashedName string, labels map[string]string,
-	body map[string]interface{}, finalizers []string) error {
+	body map[string]interface{}, finalizers []string,
+) error {
 	labelsUnstructured := map[string]interface{}{}
 	for k, v := range labels {
 		labelsUnstructured[k] = v
@@ -123,21 +135,12 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 
 	// Delete all children
 	listOpts := metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", crdType, labels["nexus/display_name"])}
-	for k, _ := range crdInfo.Children {
+	for k := range crdInfo.Children {
 		err = DeleteChildren(k, listOpts)
 		if err != nil {
 			return err
 		}
 	}
-
-	// if len(crdInfo.ParentHierarchy) > 0 {
-	//	parentCrdName := crdInfo.ParentHierarchy[len(crdInfo.ParentHierarchy)-1]
-	//	parentCrdInfo := model.CrdTypeToNodeInfo[parentCrdName]
-	//	err = UpdateParentWithRemovedChild(parentCrdName, parentCrdInfo, obj.GetLabels(), crdType, labels["nexus/display_name"])
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
 
 	// Delete object
 	err = Client.Resource(gvr).Delete(context.TODO(), hashedName, metav1.DeleteOptions{})
@@ -150,7 +153,7 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 
 func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
-	for k, _ := range crdInfo.Children {
+	for k := range crdInfo.Children {
 		err := DeleteChildren(k, listOpts)
 		if err != nil {
 			return err
@@ -196,8 +199,10 @@ func GetParent(parentCrdType string, parentCrdInfo model.NodeInfo, labels map[st
 	return GetObject(gvr, hashedParentName, metav1.GetOptions{})
 }
 
-// TODO: build PatchOP in common-library
-func UpdateParentWithAddedChild(parentCrdType string, parentCrdInfo model.NodeInfo, labels map[string]string, childCrdInfo model.NodeInfo, childCrdType string, childName string, childHashedName string) error {
+// TODO: build PatchOP in common-library.
+func UpdateParentWithAddedChild(parentCrdType string, parentCrdInfo model.NodeInfo,
+	labels map[string]string, childCrdInfo model.NodeInfo, childCrdType, childName, childHashedName string,
+) error {
 	var (
 		patchType types.PatchType
 		marshaled []byte
@@ -219,7 +224,17 @@ func UpdateParentWithAddedChild(parentCrdType string, parentCrdInfo model.NodeIn
 	childNameParts := strings.Split(childCrdInfo.Name, ".")
 
 	if childGvk.IsNamed {
-		payload := "{\"spec\": {\"" + childGvk.FieldNameGvk + "\": {\"" + childName + "\": {\"name\": \"" + childHashedName + "\",\"kind\": \"" + childNameParts[1] + "\", \"group\": \"" + group + "\"}}}}"
+		payload := fmt.Sprintf(`{
+			"spec": {
+				"%s": {
+					"%s": {
+						"name": "%s",
+						"kind": "%s",
+						"group": "%s"
+					}
+				}
+			}
+		}`, childGvk.FieldNameGvk, childName, childHashedName, childNameParts[1], group)
 
 		patchType = types.MergePatchType
 		marshaled = []byte(payload)
@@ -243,16 +258,20 @@ func UpdateParentWithAddedChild(parentCrdType string, parentCrdInfo model.NodeIn
 		patchType = types.JSONPatchType
 	}
 
-	_, err := Client.Resource(gvr).Patch(context.TODO(), hashedParentName, patchType, marshaled, metav1.PatchOptions{})
+	_, err := Client.Resource(gvr).Patch(context.TODO(),
+		hashedParentName, patchType, marshaled, metav1.PatchOptions{},
+	)
 	if err != nil {
-		log.Debugf("UpdateParentWithAddedChild: failed to patch %v with error %+v", hashedParentName, err)
+		log.InfraErr(err).Msgf("UpdateParentWithAddedChild: failed to patch %v", hashedParentName)
 		return err
 	}
 
 	return nil
 }
 
-func UpdateParentWithRemovedChild(parentCrdType string, parentCrdInfo model.NodeInfo, labels map[string]string, childCrdType string, childName string) error {
+func UpdateParentWithRemovedChild(parentCrdType string, parentCrdInfo model.NodeInfo,
+	labels map[string]string, childCrdType, childName string,
+) error {
 	parentParts := strings.Split(parentCrdType, ".")
 	gvr := schema.GroupVersionResource{
 		Group:    strings.Join(parentParts[1:], "."),

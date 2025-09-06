@@ -1,3 +1,8 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package api_test
 
 var crdExample = `
@@ -6,7 +11,32 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     nexus: |
-      {"name":"management.Leader","hierarchy":["roots.orgchart.vmware.org"],"children":{"humanresourceses.hr.vmware.org":{"fieldName":"HR","fieldNameGvk":"hRGvk","isNamed":false},"mgrs.management.vmware.org":{"fieldName":"EngManagers","fieldNameGvk":"engManagersGvk","isNamed":true}},"links":{"Role":{"fieldName":"Role","fieldNameGvk":"roleGvk","isNamed":false}},"is_singleton":true,"nexus-rest-api-gen":{"uris":[{"uri":"/root/{orgchart.Root}/leader/{management.Leader}","methods":{"DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},"auth":false},{"uri":"/leader","methods":{"DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},"auth":false},{"uri":"/leaders","methods":{"LIST":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}}},"auth":false}]}}
+      {"name":"management.Leader","hierarchy":["roots.orgchart.vmware.org"],
+      "children":{
+      "humanresourceses.hr.vmware.org":{"fieldName":"HR","fieldNameGvk":"hRGvk","isNamed":false},
+      "mgrs.management.vmware.org":{"fieldName":"EngManagers","fieldNameGvk":"engManagersGvk","isNamed":true}
+      },
+      "links":{"Role":{"fieldName":"Role","fieldNameGvk":"roleGvk","isNamed":false}
+      },
+      "is_singleton":true,
+      "nexus-rest-api-gen":{
+      "uris":[{
+      "uri":"/root/{orgchart.Root}/leader/{management.Leader}",
+      "methods":{
+      "DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},
+      "auth":false},{
+      "uri":"/leader",
+      "methods":{
+      "DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},
+      "auth":false},{
+      "uri":"/leaders",
+      "methods":{
+      "LIST":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}}},
+      "auth":false}]}}
   creationTimestamp: null
   name: leaders.management.vmware.org
 spec:
@@ -29,12 +59,14 @@ spec:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              internal value, and may reject unrecognized values. 
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              submits requests to. Cannot be updated. In CamelCase. 
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object

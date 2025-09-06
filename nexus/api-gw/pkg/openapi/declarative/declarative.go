@@ -1,28 +1,46 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
-	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
 
-	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
 )
 
-var supportedOperations = []string{"GET", "DELETE", "PUT"}
+var (
+	supportedOperations = []string{"GET", "DELETE", "PUT"}
+	appName             = "nexus-api-gw-openapi"
+	log                 = logging.GetLogger(appName)
+)
 
-const NexusKindName = "x-nexus-kind-name"
-const NexusGroupName = "x-nexus-group-name"
-const NexusListEndpoint = "x-nexus-list-endpoint"
-const NexusShortName = "x-nexus-short-name"
-const OpenApiSpecFile = "/openapi/openapi.yaml"
-const OpenApiSpecDir = "/openapi"
+const (
+	constStrObject     = "object"
+	constStrArray      = "array"
+	constStrString     = "string"
+	constNumber        = 1.2
+	constInt       int = 1
+)
+
+const (
+	NexusKindName     = "x-nexus-kind-name"
+	NexusGroupName    = "x-nexus-group-name"
+	NexusListEndpoint = "x-nexus-list-endpoint"
+	NexusShortName    = "x-nexus-short-name"
+	OpenAPISpecFile   = "/openapi/openapi.yaml"
+	OpenAPISpecDir    = "/openapi"
+)
 
 var (
 	Paths              = make(map[string]*openapi3.PathItem)
@@ -36,17 +54,17 @@ var (
 	crdToSchemaMutex   = sync.Mutex{}
 )
 
-func Setup(openApiSpecFile string) error {
-	_, err := os.Stat(openApiSpecFile)
+func Setup(openAPISpecFile string) error {
+	_, err := os.Stat(openAPISpecFile)
 	if err == nil {
-		f, err := ioutil.ReadFile(openApiSpecFile)
+		f, err := os.ReadFile(openAPISpecFile)
 		if err != nil {
 			return err
 		}
 
 		return Load(f)
 	}
-	log.Errorln("File", openApiSpecFile, " is not present at setup")
+	log.InfraError("File %v is not present at setup", openAPISpecFile).Msg("")
 	return nil
 }
 
@@ -59,7 +77,7 @@ func Load(data []byte) error {
 	Schemas = doc.Components.Schemas
 	Schema = *doc
 
-	for uri, pathInfo := range doc.Paths {
+	for uri, pathInfo := range doc.Paths.Map() {
 		if !ValidateNexusAnnotations(pathInfo) {
 			continue
 		}
@@ -89,12 +107,23 @@ func ValidateNexusAnnotations(item *openapi3.PathItem) bool {
 }
 
 func GetExtensionVal(operation *openapi3.Operation, key string) string {
-	val, ok := operation.ExtensionProps.Extensions[key]
-	if val == nil || !ok {
+	val, ok := operation.Extensions[key]
+	if !ok || val == nil {
 		return ""
 	}
 
-	out, _ := val.(json.RawMessage).MarshalJSON()
+	rawMsg, ok := val.(json.RawMessage)
+	if !ok {
+		// val is not of type json.RawMessage, log and assume as string
+		rawMsg = json.RawMessage(fmt.Sprint(val))
+	}
+
+	out, err := rawMsg.MarshalJSON()
+	if err != nil {
+		// handle the error or return an empty string
+		return ""
+	}
+
 	outStr := string(out)
 
 	if strings.HasPrefix(outStr, `"`) && strings.HasSuffix(outStr, `"`) && len(outStr) > 2 {
@@ -112,32 +141,32 @@ func AddApisEndpoint(ec *EndpointContext) {
 		crdToSchemaMutex.Unlock()
 	}()
 
-	if ApisList[ec.Uri] == nil {
-		ApisList[ec.Uri] = make(map[string]interface{})
+	if ApisList[ec.URI] == nil {
+		ApisList[ec.URI] = make(map[string]interface{})
 	}
 
-	var params []string
+	params := make([]string, 0, len(ec.Params))
 	for _, param := range ec.Params {
 		params = append(params, param[1])
 	}
 
-	ApisList[ec.Uri][ec.Method] = map[string]interface{}{
+	ApisList[ec.URI][ec.Method] = map[string]interface{}{
 		"group":  ec.GroupName,
 		"kind":   ec.KindName,
 		"params": params,
-		"uri":    ec.SpecUri,
+		"uri":    ec.SpecURI,
 	}
 
 	if ec.SchemaName != "" {
 		schema := ConvertSchemaToYaml(ec, params)
-		ApisList[ec.Uri]["yaml"] = schema
+		ApisList[ec.URI]["yaml"] = schema
 		CrdToSchema[fmt.Sprintf("%s.%s", ec.ResourceName, ec.GroupName)] = schema
 	}
 
-	if ec.ShortUri != "" {
-		ApisList[ec.Uri]["short"] = map[string]interface{}{
+	if ec.ShortURI != "" {
+		ApisList[ec.URI]["short"] = map[string]interface{}{
 			"name": ec.ShortName,
-			"uri":  ec.ShortUri,
+			"uri":  ec.ShortURI,
 		}
 	}
 }
@@ -146,7 +175,7 @@ func ConvertSchemaToYaml(ec *EndpointContext, params []string) string {
 	labels := map[string]interface{}{}
 	for _, param := range params {
 		if param != ec.Identifier {
-			labels[param] = "string"
+			labels[param] = constStrString
 		}
 	}
 
@@ -154,14 +183,14 @@ func ConvertSchemaToYaml(ec *EndpointContext, params []string) string {
 		"apiVersion": ec.GroupName + "/v1",
 		"kind":       ec.KindName,
 		"metadata": map[string]interface{}{
-			"name":   "string",
+			"name":   constStrString,
 			"labels": labels,
 		},
 	}
 	obj["spec"] = parsedSchemas[ec.SchemaName]
 	yamlObj, err := yaml.Marshal(obj)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 	}
 	return string(yamlObj)
 }
@@ -176,51 +205,67 @@ func parseSchema(schemaName string, wg *sync.WaitGroup) {
 	spec := make(map[string]interface{})
 
 	for field, val := range Schemas[schemaName].Value.Properties {
-		switch val.Value.Type {
-		case "string":
-			spec[field] = "string"
-			if len(val.Value.Enum) > 0 {
-				spec[field] = val.Value.Enum[0]
-			}
-		case "boolean":
-			spec[field] = true
-		case "number":
-			spec[field] = 1.2
-		case "integer":
-			spec[field] = 1
-		case "array":
-			if val.Value.Items.Ref != "" {
-				ref := openapi3.DefaultRefNameResolver(val.Value.Items.Ref)
-				if ref == schemaName {
-					spec[field] = "object"
-				} else {
-					spec[field] = map[string]interface{}{
-						"ref":  ref,
-						"type": "array",
-					}
-				}
-			} else {
-				if val.Value.Items.Value.Type == "string" {
-					spec[field] = []string{val.Value.Items.Value.Type}
-				}
-			}
-		case "object":
-			spec[field] = "object"
-		}
-
-		if val.Ref != "" {
-			ref := openapi3.DefaultRefNameResolver(val.Ref)
-			if ref == schemaName {
-				spec[field] = "object"
-			} else {
-				spec[field] = map[string]interface{}{
-					"ref": ref,
-				}
-			}
-		}
+		spec[field] = parseField(schemaName, val)
 	}
 
 	parsedSchemas[schemaName] = spec
+}
+
+func parseField(schemaName string, val *openapi3.SchemaRef) interface{} {
+	switch {
+	case val.Value.Type.Is(openapi3.TypeString):
+		return parseStringField(val)
+	case val.Value.Type.Is(openapi3.TypeBoolean):
+		return true
+	case val.Value.Type.Is(openapi3.TypeNumber):
+		return constNumber
+	case val.Value.Type.Is(openapi3.TypeInteger):
+		return constInt
+	case val.Value.Type.Is(openapi3.TypeArray):
+		return parseArrayField(schemaName, val)
+	case val.Value.Type.Is(openapi3.TypeObject):
+		return constStrObject
+	default:
+		return parseRefField(schemaName, val)
+	}
+}
+
+func parseStringField(val *openapi3.SchemaRef) interface{} {
+	if len(val.Value.Enum) > 0 {
+		return val.Value.Enum[0]
+	}
+	return constStrString
+}
+
+func parseArrayField(schemaName string, val *openapi3.SchemaRef) interface{} {
+	if val.Value.Items.Ref != "" {
+		refParts := strings.Split(val.Value.Items.Ref, "/")
+		ref := refParts[len(refParts)-1]
+		if ref == schemaName {
+			return constStrObject
+		}
+		return map[string]interface{}{
+			"ref":  ref,
+			"type": constStrArray,
+		}
+	} else if val.Value.Items.Value.Type.Is(openapi3.TypeString) {
+		return []string{openapi3.TypeString}
+	}
+	return nil
+}
+
+func parseRefField(schemaName string, val *openapi3.SchemaRef) interface{} {
+	if val.Ref != "" {
+		refParts := strings.Split(val.Ref, "/")
+		ref := refParts[len(refParts)-1]
+		if ref == schemaName {
+			return constStrObject
+		}
+		return map[string]interface{}{
+			"ref": ref,
+		}
+	}
+	return nil
 }
 
 func parseSchemaRefs(schemaName string, wg *sync.WaitGroup) {
@@ -230,12 +275,21 @@ func parseSchemaRefs(schemaName string, wg *sync.WaitGroup) {
 		wg.Done()
 	}()
 
-	for fieldName, fieldVal := range parsedSchemas[schemaName].(map[string]interface{}) {
+	schemas, ok := parsedSchemas[schemaName].(map[string]interface{})
+	if !ok {
+		log.Warn().Msg("parsedSchemas[schemaName] is not of type map[string]interface{}")
+		return
+	}
+	for fieldName, fieldVal := range schemas {
 		if _, ok := fieldVal.(map[string]interface{}); !ok {
 			continue
 		}
 
-		fv := fieldVal.(map[string]interface{})
+		fv, ok := fieldVal.(map[string]interface{})
+		if !ok {
+			log.Warn().Msg("fieldVal is not of type map")
+			continue
+		}
 		ref := fv["ref"]
 		refType := fv["type"]
 
@@ -243,16 +297,24 @@ func parseSchemaRefs(schemaName string, wg *sync.WaitGroup) {
 			continue
 		}
 
-		refStr := ref.(string)
-
-		if refType == "array" {
-			parsedSchemas[schemaName].(map[string]interface{})[fieldName] = []map[string]interface{}{
-				parsedSchemas[refStr].(map[string]interface{}),
+		refStr, ok := ref.(string)
+		if !ok {
+			log.Warn().Msg("ref is not of type string")
+			continue
+		}
+		if refType == constStrArray {
+			schemasRefStr, ok := parsedSchemas[refStr].(map[string]interface{})
+			if !ok {
+				log.Warn().Msg("parsedSchemas[refStr] is not of type map[string]interface{}")
+				continue
+			}
+			schemas[fieldName] = []map[string]interface{}{
+				schemasRefStr,
 			}
 			continue
 		}
 
-		parsedSchemas[schemaName].(map[string]interface{})[fieldName] = parsedSchemas[refStr]
+		schemas[fieldName] = parsedSchemas[refStr]
 	}
 }
 
@@ -260,18 +322,18 @@ func ParseSchemas() {
 	wg := &sync.WaitGroup{}
 	for schemaName := range Schemas {
 		wg.Add(1)
-		log.Debugf("Parsing %s schema", schemaName)
+		log.Debug().Msgf("Parsing %s schema", schemaName)
 		go parseSchema(schemaName, wg)
 	}
 	wg.Wait()
 
 	for schemaName := range parsedSchemas {
 		wg.Add(1)
-		log.Debugf("Parsing %s schema refs", schemaName)
+		log.Debug().Msgf("Parsing %s schema refs", schemaName)
 		go parseSchemaRefs(schemaName, wg)
 	}
 	wg.Wait()
-	log.Debugf("Finished parsing schemas")
+	log.Debug().Msgf("Finished parsing schemas")
 }
 
 func Middleware(endpointContext *EndpointContext, single bool) echo.MiddlewareFunc {
@@ -283,29 +345,3 @@ func Middleware(endpointContext *EndpointContext, single bool) echo.MiddlewareFu
 		}
 	}
 }
-
-// ShortNames method creates a list of short names which can be used to access APIs
-//func ShortNames(apisList map[string]map[string]interface{}) map[string]string {
-//	shortMap := make(map[string]string)
-//	for _, methods := range apisList {
-//		resources := make(map[string]string)
-//
-//		for _, val := range methods {
-//			if _, ok := val.(map[string]interface{}); !ok {
-//				continue
-//			}
-//			info := val.(map[string]interface{})
-//			resources[info["kind"].(string)] = info["group"].(string)
-//		}
-//
-//		for k, g := range resources {
-//			resourceName := strings.ToLower(utils.ToPlural(k))
-//			if _, ok := shortMap[resourceName]; !ok {
-//				shortMap[resourceName] = fmt.Sprintf("%s.%s", resourceName, g)
-//			} else {
-//				delete(shortMap, resourceName)
-//			}
-//		}
-//	}
-//	return shortMap
-//}

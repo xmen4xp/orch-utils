@@ -1,7 +1,11 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package declarative
 
 import (
-	"api-gw/pkg/utils"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -9,12 +13,13 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 )
 
 type EndpointContext struct {
 	echo.Context
 
-	SpecUri      string
+	SpecURI      string
 	Method       string     // e.g. PUT
 	KindName     string     // e.g. GlobalNamespace
 	ResourceName string     // e.g. globalnamespaces
@@ -27,8 +32,8 @@ type EndpointContext struct {
 
 	SchemaName string // OpenAPI.components.schema name used to create yaml spec
 	ShortName  string
-	ShortUri   string
-	Uri        string
+	ShortURI   string
+	URI        string
 }
 
 const (
@@ -38,13 +43,13 @@ const (
 	resourceNameShortPattern = resourceShortPattern + "/:name"
 )
 
-func SetupContext(uri string, method string, item *openapi3.Operation) *EndpointContext {
+func SetupContext(uri, method string, item *openapi3.Operation) *EndpointContext {
 	kindName := GetExtensionVal(item, NexusKindName)
 	groupName := GetExtensionVal(item, NexusGroupName)
 	shortName := GetExtensionVal(item, NexusShortName)
 	resourceName := strings.ToLower(utils.ToPlural(kindName))
 	crdName := resourceName + "." + groupName
-	requiredParams := extractUriParams(uri)
+	requiredParams := extractURIParams(uri)
 	identifier := GetExtensionVal(item, "x-nexus-identifier")
 
 	path := fmt.Sprintf(resourcePattern, groupName, resourceName)
@@ -60,7 +65,8 @@ func SetupContext(uri string, method string, item *openapi3.Operation) *Endpoint
 	if item.RequestBody != nil && item.RequestBody.Value != nil {
 		mediaType := item.RequestBody.Value.Content.Get("application/json")
 		if mediaType != nil {
-			schemaName = openapi3.DefaultRefNameResolver(mediaType.Schema.Ref)
+			refParts := strings.Split(mediaType.Schema.Ref, "/")
+			schemaName = refParts[len(refParts)-1]
 		}
 	}
 
@@ -69,7 +75,7 @@ func SetupContext(uri string, method string, item *openapi3.Operation) *Endpoint
 	}
 
 	return &EndpointContext{
-		SpecUri:      uri,
+		SpecURI:      uri,
 		KindName:     kindName,
 		ResourceName: resourceName,
 		GroupName:    groupName,
@@ -77,11 +83,11 @@ func SetupContext(uri string, method string, item *openapi3.Operation) *Endpoint
 		Params:       requiredParams,
 		Identifier:   identifier,
 		Single:       single,
-		Uri:          path,
+		URI:          path,
 		Method:       method,
 		SchemaName:   schemaName,
 		ShortName:    shortName,
-		ShortUri:     shortPath,
+		ShortURI:     shortPath,
 	}
 }
 
@@ -90,7 +96,7 @@ func IsArrayResponse(op *openapi3.Operation) bool {
 		return false
 	}
 
-	resp := op.Responses.Get(200)
+	resp := op.Responses.Status(http.StatusOK)
 	if resp == nil {
 		return false
 	}
@@ -100,14 +106,14 @@ func IsArrayResponse(op *openapi3.Operation) bool {
 		return false
 	}
 
-	if mediaType.Schema.Value.Type == "array" {
+	if mediaType.Schema.Value.Type.Is(openapi3.TypeArray) {
 		return true
 	}
 
 	return false
 }
 
-func extractUriParams(uri string) [][]string {
+func extractURIParams(uri string) [][]string {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(uri, -1)
 	if len(params) == 0 {

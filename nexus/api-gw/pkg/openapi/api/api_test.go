@@ -1,3 +1,8 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package api_test
 
 import (
@@ -5,22 +10,20 @@ import (
 	"net/http"
 
 	yamlv1 "github.com/ghodss/yaml"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/openapi/api"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
-	"api-gw/pkg/model"
-	"api-gw/pkg/openapi/api"
-
-	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 )
 
-var _ = Describe("OpenAPI tests", func() {
-	It("should create new datamodel", func() {
-		Expect(api.Schemas).To(BeEmpty())
+var _ = ginkgo.Describe("OpenAPI tests", ginkgo.Ordered, func() {
+	ginkgo.It("should create new datamodel", func() {
+		gomega.Expect(api.Schemas).To(gomega.BeEmpty())
 		api.New("vmware.org")
-		Expect(api.Schemas["vmware.org"].Info.Title).To(Equal("Nexus API GW APIs"))
+		gomega.Expect(api.Schemas["vmware.org"].Info.Title).To(gomega.Equal("Nexus API GW APIs"))
 
 		unstructuredObj := unstructured.Unstructured{
 			Object: map[string]interface{}{
@@ -32,80 +35,85 @@ var _ = Describe("OpenAPI tests", func() {
 
 		model.ConstructDatamodel(model.Upsert, "vmware2.org", &unstructuredObj)
 		api.New("vmware2.org")
-		Expect(api.Schemas["vmware2.org"].Info.Title).To(Equal("VMWare Datamodel"))
+		gomega.Expect(api.Schemas["vmware2.org"].Info.Title).To(gomega.Equal("VMWare Datamodel"))
 	})
 
-	It("should add custom description to node", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should add custom description to node", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leader/{orgchart.Leader}",
 			Methods: nexus.DefaultHTTPMethodsResponses,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{"roots.orgchart.vmware.org"}, nil, nil, false, "my custom description", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Name).To(Equal("orgchart.Leader"))
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Description).To(Equal("my custom description"))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].
+			Paths.Value(restURI.Uri).Get.Parameters[0].Value.Name).
+			To(gomega.Equal("orgchart.Leader"))
+		gomega.Expect(api.Schemas["vmware.org"].
+			Paths.Value(restURI.Uri).Get.Parameters[0].Value.Description).
+			To(gomega.Equal("my custom description"))
 	})
 
-	It("should add default description to node if custom is not present", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should add default description to node if custom is not present", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leader/{orgchart.Leader}",
 			Methods: nexus.DefaultHTTPMethodsResponses,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Name).To(Equal("orgchart.Leader"))
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get.Parameters[0].Value.Description).
-			To(Equal("Name of the orgchart.Leader node"))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Get.Parameters[0].Value.Name).
+			To(gomega.Equal("orgchart.Leader"))
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Get.Parameters[0].Value.Description).
+			To(gomega.Equal("Name of the orgchart.Leader node"))
 	})
 
-	It("should add list endpoint", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should add list endpoint", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leaders",
 			Methods: nexus.HTTPListResponse,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get).To(Not(BeNil()))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Get).To(gomega.Not(gomega.BeNil()))
 	})
 
-	It("should add PATCH endpoint", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should add PATCH endpoint", func() {
+		restURI := nexus.RestURIs{
 			Uri: "/leaders",
 			Methods: nexus.HTTPMethodsResponses{
 				http.MethodPatch: nexus.HTTPCodesResponse{
@@ -114,26 +122,26 @@ var _ = Describe("OpenAPI tests", func() {
 			},
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Patch).To(Not(BeNil()))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Patch).To(gomega.Not(gomega.BeNil()))
 	})
 
-	It("should add GET, PUT and PATCH status endpoints", func() {
-		statusUri := "/leader/status"
-		restUri := nexus.RestURIs{
-			Uri: statusUri,
+	ginkgo.It("should add GET, PUT and PATCH status endpoints", func() {
+		statusURI := "/leader/status"
+		restURI := nexus.RestURIs{
+			Uri: statusURI,
 			Methods: nexus.HTTPMethodsResponses{
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
 				http.MethodPut: nexus.DefaultHTTPPUTResponses,
@@ -143,73 +151,73 @@ var _ = Describe("OpenAPI tests", func() {
 			},
 		}
 
-		urisMap := map[string]model.RestUriInfo{
-			statusUri: {
+		urisMap := map[string]model.RestURIInfo{
+			statusURI: {
 				TypeOfURI: model.StatusURI,
 			},
 		}
-		model.ConstructMapUriToUriInfo(model.Upsert, urisMap)
+		model.ConstructMapURIToURIInfo(model.Upsert, urisMap)
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		api.New("vmware.org")
-		api.AddPath(restUri, "vmware.org")
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Get).To(Not(BeNil()))
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Put).To(Not(BeNil()))
-		Expect(api.Schemas["vmware.org"].Paths[restUri.Uri].Patch).To(Not(BeNil()))
+		api.AddPath(restURI, "vmware.org")
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Get).To(gomega.Not(gomega.BeNil()))
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Put).To(gomega.Not(gomega.BeNil()))
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Patch).To(gomega.Not(gomega.BeNil()))
 	})
 
-	It("should test Recreate func", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should test Recreate func", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leaders",
 			Methods: nexus.HTTPListResponse,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 		model.ConstructMapCRDTypeToRestUris(model.Upsert, "leaders.orgchart.vmware.org", nexus.RestAPISpec{
 			Uris: []nexus.RestURIs{
-				restUri,
+				restURI,
 			},
 		})
 		api.Recreate()
-		Expect(api.Schemas).To(HaveKey("vmware.org"))
-		Expect(api.Schemas["vmware.org"].Components.Responses).To(HaveKey("Listorgchart.Leader"))
+		gomega.Expect(api.Schemas).To(gomega.HaveKey("vmware.org"))
+		gomega.Expect(api.Schemas["vmware.org"].Components.Responses).To(gomega.HaveKey("Listorgchart.Leader"))
 	})
 
-	It("should test update notification for new crd", func() {
-		restUri := nexus.RestURIs{
+	ginkgo.It("should test update notification for new crd", func() {
+		restURI := nexus.RestURIs{
 			Uri:     "/leaders",
 			Methods: nexus.HTTPListResponse,
 		}
 
-		crdJson, err := yamlv1.YAMLToJSON([]byte(crdExample))
-		Expect(err).NotTo(HaveOccurred())
+		crdJSON, err := yamlv1.YAMLToJSON([]byte(crdExample))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var crd apiextensionsv1.CustomResourceDefinition
-		err = json.Unmarshal(crdJson, &crd)
-		Expect(err).NotTo(HaveOccurred())
+		err = json.Unmarshal(crdJSON, &crd)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		model.ConstructMapCRDTypeToNode(model.Upsert, "leaders.orgchart.vmware.org", "orgchart.Leader",
 			[]string{}, nil, nil, false, "", false)
-		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restUri})
+		model.ConstructMapURIToCRDType(model.Upsert, "leaders.orgchart.vmware.org", []nexus.RestURIs{restURI})
 
 		model.ConstructMapCRDTypeToSpec(model.Upsert, "leaders.orgchart.vmware.org", crd.Spec)
 
@@ -223,18 +231,19 @@ var _ = Describe("OpenAPI tests", func() {
 			},
 		})
 
-		// On the subsequent request, modified to `/leaders` in the nexus annotation and the cache will be updated with the new URI's
+		// On the subsequent request, modified to `/leaders`
+		// in the nexus annotation and the cache will be updated with the new URI's.
 		model.ConstructMapCRDTypeToRestUris(model.Upsert, "leaders.orgchart.vmware.org", nexus.RestAPISpec{
 			Uris: []nexus.RestURIs{
-				restUri,
+				restURI,
 			},
 		})
 
 		// should contain only updated URI's not the older URI's
 		uris, ok := model.GetRestUris("leaders.orgchart.vmware.org")
-		Expect(ok).Should(BeTrue())
-		Expect(len(uris)).To(Equal(1))
-		Expect(uris[0].Uri).To(Equal("/leaders"))
+		gomega.Expect(ok).Should(gomega.BeTrue())
+		gomega.Expect(len(uris)).To(gomega.Equal(1))
+		gomega.Expect(uris[0].Uri).To(gomega.Equal("/leaders"))
 
 		api.Recreate()
 
@@ -249,7 +258,7 @@ var _ = Describe("OpenAPI tests", func() {
 		go api.DatamodelUpdateNotification()
 		model.ConstructDatamodel(model.Delete, "vmware.org", &unstructuredObj)
 
-		Eventually(func() bool {
+		gomega.Eventually(func() bool {
 			return api.Schemas["vmware.org"].Info.Title == "VMWare Datamodel"
 		})
 	})

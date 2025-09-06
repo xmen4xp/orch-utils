@@ -1,25 +1,36 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package api
 
 import (
-	"api-gw/pkg/model"
-	"api-gw/pkg/utils"
+	"encoding/hex"
+	"fmt"
+	"hash"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	log "github.com/sirupsen/logrus"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/model"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/utils"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
+	"golang.org/x/crypto/sha3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
+	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
 )
 
-var Schemas = make(map[string]openapi3.T)
-
-var pathParamRegex, _ = regexp.Compile("{.*}")
+var (
+	Schemas = make(map[string]openapi3.T)
+	appName = "nexus-api-gw-openapi"
+	log     = logging.GetLogger(appName)
+)
 
 func New(datamodel string) {
-
-	// Check if datamodel info is present
+	// Check if datamodel info is present.
 	title := "Nexus API GW APIs"
 	if info, ok := model.DatamodelToDatamodelInfo[datamodel]; ok {
 		title = info.Title
@@ -48,11 +59,11 @@ func New(datamodel string) {
 				URL:         "https://localhost:5443",
 			},
 		},
-		Paths: openapi3.Paths{},
-		Components: openapi3.Components{
+		Paths: openapi3.NewPaths(),
+		Components: &openapi3.Components{
 			Schemas:       openapi3.Schemas{},
 			RequestBodies: openapi3.RequestBodies{},
-			Responses: openapi3.Responses{
+			Responses: openapi3.ResponseBodies{
 				"DefaultResponse": &openapi3.ResponseRef{
 					Value: openapi3.NewResponse().
 						WithDescription("Default response").
@@ -70,190 +81,205 @@ func New(datamodel string) {
 			},
 		},
 	}
+	log.Info().Msgf("Created schema for %s", datamodel)
 	Schemas[datamodel] = schema
 }
 
 func DatamodelUpdateNotification() {
-	for {
-		select {
-		case name := <-model.DatamodelsChan:
-			if schema, ok := Schemas[name]; ok {
-				model.DatamodelToDatamodelInfoMutex.Lock()
-				schema.Info.Title = model.DatamodelToDatamodelInfo[name].Title
-				model.DatamodelToDatamodelInfoMutex.Unlock()
-				log.Infof("Updated title: %s for %s openapi spec", schema.Info.Title, name)
-			}
+	log.Debug().Msg("Started datamodel update notification")
+	for name := range model.DatamodelsChan {
+		log.Debug().Msgf("Received datamodel update notification for %s", name)
+		if _, ok := Schemas[name]; !ok {
+			New(name)
+		}
+
+		if schema, ok := Schemas[name]; ok {
+			model.DatamodelToDatamodelInfoMutex.Lock()
+			schema.Info.Title = model.DatamodelToDatamodelInfo[name].Title
+			model.DatamodelToDatamodelInfoMutex.Unlock()
+			log.Info().Msgf("Updated title: %s for %s openapi spec", schema.Info.Title, name)
 		}
 	}
 }
 
-// Construct description for a method + uri combo.
-//
-// Description field in the openapi spec is constructed by using the method and the uri as the input.
-// The goal is to construct a description that is unique in an openapi spec.
-// Some code generators use this description field as the method name in their generated code.
-// So the description field should be constructed without special characters.
-func getDescription(method, uri string) string {
-	uriParts := strings.Split(uri, "/")
-	description := method
-	for _, path := range uriParts {
-		if pathParamRegex.MatchString(path) {
-			// Strip away the braces from path params, so we can use them.
-			p := strings.Replace(path, "{", "", -1)
-			p = strings.Replace(p, "}", "", -1)
-			description = description + "_" + strings.Replace(p, ".", "_", -1)
-		} else {
-			description = description + "_" + path
-		}
-	}
-	return description
-}
-
-// AddPath creates and adds paths for all the methods of a URI
+// AddPath creates and adds paths for all the methods of a URI.
 func AddPath(uri nexus.RestURIs, datamodel string) {
-	crdType := model.UriToCRDType[uri.Uri]
+	crdType := model.URIToCRDType[uri.Uri]
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
 	parseSpec(crdType, datamodel)
 
-	params := parseUriParams(uri.Uri, crdInfo.ParentHierarchy)
+	h := sha3.New256()
+	params := parseURIParams(uri.Uri, crdInfo.ParentHierarchy)
 	pathItem := &openapi3.PathItem{}
+
 	for method := range uri.Methods {
-		opId := getDescription(string(method), uri.Uri)
-		nameParts := strings.Split(crdInfo.Name, ".")
-
-		switch method {
-		case "LIST":
-			operation := &openapi3.Operation{
-				OperationID: opId,
-				Tags:        []string{nameParts[1]},
-				Parameters:  params,
-				Responses: openapi3.Responses{
-					"200": &openapi3.ResponseRef{
-						Ref: "#/components/responses/List" + crdInfo.Name,
-					},
-				},
-			}
-			pathItem.Get = operation
-		case http.MethodGet:
-			operation := &openapi3.Operation{
-				OperationID: opId,
-				Tags:        []string{nameParts[1]},
-				Parameters:  params,
-			}
-			if uriInfo, ok := model.GetUriInfo(uri.Uri); ok {
-				switch uriInfo.TypeOfURI {
-				case model.StatusURI:
-					operation.Responses = openapi3.Responses{
-						"200": &openapi3.ResponseRef{
-							Ref: "#/components/responses/Get" + crdInfo.Name + ".Status",
-						},
-					}
-				case model.SingleLinkURI:
-					operation.Responses = openapi3.Responses{
-						"200": &openapi3.ResponseRef{
-							Ref: "#/components/responses/Get" + crdInfo.Name + ".SingleLink",
-						},
-					}
-				case model.NamedLinkURI:
-					operation.Responses = openapi3.Responses{
-						"200": &openapi3.ResponseRef{
-							Ref: "#/components/responses/Get" + crdInfo.Name + ".NamedLink",
-						},
-					}
-				default:
-					operation.Responses = openapi3.Responses{
-						"200": &openapi3.ResponseRef{
-							Ref: "#/components/responses/Get" + crdInfo.Name,
-						},
-					}
-				}
-			} else {
-				operation.Responses = openapi3.Responses{
-					"200": &openapi3.ResponseRef{
-						Ref: "#/components/responses/DefaultResponse",
-					},
-				}
-			}
-			pathItem.Get = operation
-		case http.MethodPut:
-			operation := &openapi3.Operation{
-				OperationID: opId,
-				Tags:        []string{nameParts[1]},
-			}
-			if uriInfo, ok := model.GetUriInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
-				operation.RequestBody = &openapi3.RequestBodyRef{
-					Ref: "#/components/requestBodies/Create" + crdInfo.Name + ".Status",
-				}
-				operation.Responses = openapi3.Responses{
-					"200": &openapi3.ResponseRef{
-						Ref: "#/components/responses/DefaultResponse",
-					},
-				}
-				operation.Parameters = params
-			} else {
-				p := constructUpdateParam()
-				var putParams []*openapi3.ParameterRef
-				putParams = append(putParams, params...)
-				putParams = append(putParams, p)
-				operation.Parameters = putParams
-
-				operation.RequestBody = &openapi3.RequestBodyRef{
-					Ref: "#/components/requestBodies/Create" + crdInfo.Name,
-				}
-				operation.Responses = openapi3.Responses{
-					"200": &openapi3.ResponseRef{
-						Ref: "#/components/responses/DefaultResponse",
-					},
-				}
-			}
-			pathItem.Put = operation
-		case http.MethodPatch:
-			operation := &openapi3.Operation{
-				OperationID: opId,
-				Tags:        []string{nameParts[1]},
-				Parameters:  params,
-			}
-			operation.Responses = openapi3.Responses{
-				"200": &openapi3.ResponseRef{
-					Ref: "#/components/responses/DefaultResponse",
-				},
-				"404": &openapi3.ResponseRef{
-					Ref: "#/components/responses/NotFoundResponse",
-				},
-			}
-			if uriInfo, ok := model.GetUriInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
-				operation.RequestBody = &openapi3.RequestBodyRef{
-					Ref: "#/components/requestBodies/Create" + crdInfo.Name + ".Status",
-				}
-			} else {
-				operation.RequestBody = &openapi3.RequestBodyRef{
-					Ref: "#/components/requestBodies/Create" + crdInfo.Name,
-				}
-			}
-			pathItem.Patch = operation
-		case http.MethodDelete:
-			operation := &openapi3.Operation{
-				OperationID: opId,
-				Tags:        []string{nameParts[1]},
-				Responses: openapi3.Responses{
-					"200": &openapi3.ResponseRef{
-						Value: openapi3.NewResponse().WithDescription("No content"),
-					},
-				},
-				Parameters: params,
-			}
-			pathItem.Delete = operation
-		}
+		addOperationToPathItem(pathItem, string(method), uri, crdInfo, params, h)
 	}
 
-	log.Infof("adding %s path to %s", uri.Uri, datamodel)
-	Schemas[datamodel].Paths[uri.Uri] = pathItem
+	log.Info().Msgf("adding %s path to %s", uri.Uri, datamodel)
+	Schemas[datamodel].Paths.Set(uri.Uri, pathItem)
 }
 
-// parseSpec parses openapi schema spec and status subresource
-func parseSpec(crdType string, datamodel string) {
+func addOperationToPathItem(pathItem *openapi3.PathItem, method string, uri nexus.RestURIs,
+	crdInfo model.NodeInfo, params []*openapi3.ParameterRef, h hash.Hash,
+) {
+	formedStr := fmt.Sprintf("%s%s", method, uri.Uri)
+	h.Write([]byte(formedStr))
+	fmt.Fprintf(h, "%s%s", method, uri.Uri)
+	opID := hex.EncodeToString(h.Sum(nil))
+	nameParts := strings.Split(crdInfo.Name, ".")
+
+	switch method {
+	case "LIST":
+		addListOperation(pathItem, opID, nameParts, params, crdInfo)
+	case http.MethodGet:
+		addGetOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+	case http.MethodPut:
+		addPutOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+	case http.MethodPatch:
+		addPatchOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+	case http.MethodDelete:
+		addDeleteOperation(pathItem, opID, nameParts, params)
+	}
+}
+
+func addListOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
+	params []*openapi3.ParameterRef, crdInfo model.NodeInfo,
+) {
+	operation := &openapi3.Operation{
+		OperationID: opID,
+		Tags:        []string{nameParts[1]},
+		Parameters:  params,
+		Responses:   openapi3.NewResponses(),
+	}
+	operation.Responses.Set("200", &openapi3.ResponseRef{
+		Ref: "#/components/responses/List" + crdInfo.Name,
+	})
+	pathItem.Get = operation
+}
+
+func addGetOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+) {
+	operation := &openapi3.Operation{
+		OperationID: opID,
+		Tags:        []string{nameParts[1]},
+		Parameters:  params,
+	}
+	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok {
+		switch uriInfo.TypeOfURI {
+		case model.StatusURI:
+			operation.Responses = openapi3.NewResponses()
+			operation.Responses.Set("200", &openapi3.ResponseRef{
+				Ref: "#/components/responses/Get" + crdInfo.Name + ".Status",
+			})
+		case model.SingleLinkURI:
+			operation.Responses = openapi3.NewResponses()
+			operation.Responses.Set("200", &openapi3.ResponseRef{
+				Ref: "#/components/responses/Get" + crdInfo.Name + ".SingleLink",
+			})
+		case model.NamedLinkURI:
+			operation.Responses = openapi3.NewResponses()
+			operation.Responses.Set("200", &openapi3.ResponseRef{
+				Ref: "#/components/responses/Get" + crdInfo.Name + ".NamedLink",
+			})
+		default:
+			operation.Responses = openapi3.NewResponses()
+			operation.Responses.Set("200", &openapi3.ResponseRef{
+				Ref: "#/components/responses/Get" + crdInfo.Name,
+			})
+		}
+	} else {
+		operation.Responses = openapi3.NewResponses()
+		operation.Responses.Set("200", &openapi3.ResponseRef{
+			Ref: "#/components/responses/DefaultResponse",
+		})
+	}
+	pathItem.Get = operation
+}
+
+func addPutOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+) {
+	operation := &openapi3.Operation{
+		OperationID: opID,
+		Tags:        []string{nameParts[1]},
+	}
+	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
+		operation.RequestBody = &openapi3.RequestBodyRef{
+			Ref: "#/components/requestBodies/Create" + crdInfo.Name + ".Status",
+		}
+		operation.Responses = openapi3.NewResponses()
+		operation.Responses.Set("200", &openapi3.ResponseRef{
+			Ref: "#/components/responses/DefaultResponse",
+		})
+		operation.Parameters = params
+	} else {
+		p := constructUpdateParam()
+		var putParams []*openapi3.ParameterRef
+		putParams = append(putParams, params...)
+		putParams = append(putParams, p)
+		operation.Parameters = putParams
+
+		operation.RequestBody = &openapi3.RequestBodyRef{
+			Ref: "#/components/requestBodies/Create" + crdInfo.Name,
+		}
+		operation.Responses = openapi3.NewResponses()
+		operation.Responses.Set("200", &openapi3.ResponseRef{
+			Ref: "#/components/responses/DefaultResponse",
+		})
+	}
+	pathItem.Put = operation
+}
+
+func addPatchOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+) {
+	operation := &openapi3.Operation{
+		OperationID: opID,
+		Tags:        []string{nameParts[1]},
+		Parameters:  params,
+	}
+	operation.Responses = openapi3.NewResponses()
+	operation.Responses.Set("200", &openapi3.ResponseRef{
+		Ref: "#/components/responses/DefaultResponse",
+	})
+	operation.Responses.Set("404", &openapi3.ResponseRef{
+		Ref: "#/components/responses/NotFoundResponse",
+	})
+	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
+		operation.RequestBody = &openapi3.RequestBodyRef{
+			Ref: "#/components/requestBodies/Create" + crdInfo.Name + ".Status",
+		}
+	} else {
+		operation.RequestBody = &openapi3.RequestBodyRef{
+			Ref: "#/components/requestBodies/Create" + crdInfo.Name,
+		}
+	}
+	pathItem.Patch = operation
+}
+
+func addDeleteOperation(pathItem *openapi3.PathItem, opID string, nameParts []string, params []*openapi3.ParameterRef) {
+	operation := &openapi3.Operation{
+		OperationID: opID,
+		Tags:        []string{nameParts[1]},
+		Responses:   openapi3.NewResponses(),
+		Parameters:  params,
+	}
+	operation.Responses.Set("200", &openapi3.ResponseRef{
+		Value: openapi3.NewResponse().WithDescription("No content"),
+	})
+	pathItem.Delete = operation
+}
+
+// parseSpec parses openapi schema spec and status subresource.
+func parseSpec(crdType, datamodel string) {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
 	crdSpec := model.CrdTypeToSpec[crdType]
+
+	log.Debug().Msgf("Received datamodel update notification for %s", datamodel)
+	log.Debug().Msgf("CRD info %#v", crdInfo)
+	log.Debug().Msgf("CRD spec %#v", crdSpec)
 
 	getKey := makeKey(crdInfo.Name, "Get")
 	postKey := makeKey(crdInfo.Name, "Post")
@@ -289,7 +315,7 @@ func parseSpec(crdType string, datamodel string) {
 
 	Schemas[datamodel].Components.Schemas[listKey] = openapi3.NewSchemaRef("", jsonListSchema)
 
-	// TODO: Schema for single link and named link need to be generated
+	// TODO: Schema for single link and named link need to be generated.
 	jsonSingleLinkSchema := openapi3.NewObjectSchema()
 	jsonNamedLinkSchema := openapi3.NewArraySchema().WithItems(jsonSingleLinkSchema)
 	Schemas[datamodel].Components.Schemas[singleLinkKey] = openapi3.NewSchemaRef("", jsonSingleLinkSchema)
@@ -350,57 +376,69 @@ func parseSpec(crdType string, datamodel string) {
 	}
 }
 
-// ParseFields parses openapi schema fields
+// ParseFields parses openapi schema fields.
+// parseFields parses openapi schema fields.
 func parseFields(jsonSchema *openapi3.Schema, specProps map[string]v1.JSONSchemaProps) {
 	for name, prop := range specProps {
 		if strings.Contains(name, "Gvk") {
 			continue
 		}
-		// TODO: Support additional properties
-		format := prop.Format
-		switch prop.Type {
-		case "string":
-			switch format {
-			case "byte":
-				jsonSchema.WithProperty(name, openapi3.NewBytesSchema())
-			case "date-time":
-				jsonSchema.WithProperty(name, openapi3.NewDateTimeSchema())
-			default:
-				jsonSchema.WithProperty(name, openapi3.NewStringSchema())
-			}
-		case "boolean":
-			jsonSchema.WithProperty(name, openapi3.NewBoolSchema())
-		case "object":
-			schema := openapi3.NewSchema()
-			parseFields(schema, prop.Properties)
-			jsonSchema.WithProperty(name, schema)
-		case "integer":
-			switch format {
-			case "int32":
-				jsonSchema.WithProperty(name, openapi3.NewInt32Schema())
-			case "int64":
-				jsonSchema.WithProperty(name, openapi3.NewInt64Schema())
-			default:
-				jsonSchema.WithProperty(name, openapi3.NewIntegerSchema())
-			}
-		case "number":
-			jsonSchema.WithProperty(name, openapi3.NewFloat64Schema())
-		case "array":
-			schema := openapi3.NewSchema()
-			parseFields(schema, prop.Items.Schema.Properties)
-			arraySchema := openapi3.NewArraySchema().WithItems(schema)
-			jsonSchema.WithProperty(name, arraySchema)
-		default:
-			log.Infof("Unknown type %s", prop.Type)
-		}
+		addPropertyToSchema(jsonSchema, name, prop)
 	}
 }
 
-// parseUriParams parses the URI parameters
-func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.ParameterRef) {
+func addPropertyToSchema(jsonSchema *openapi3.Schema, name string, prop v1.JSONSchemaProps) {
+	switch prop.Type {
+	case "string":
+		addStringProperty(jsonSchema, name, prop)
+	case "boolean":
+		jsonSchema.WithProperty(name, openapi3.NewBoolSchema())
+	case "object":
+		schema := openapi3.NewSchema()
+		parseFields(schema, prop.Properties)
+		jsonSchema.WithProperty(name, schema)
+	case "integer":
+		addIntegerProperty(jsonSchema, name, prop)
+	case "number":
+		jsonSchema.WithProperty(name, openapi3.NewFloat64Schema())
+	case "array":
+		schema := openapi3.NewSchema()
+		parseFields(schema, prop.Items.Schema.Properties)
+		arraySchema := openapi3.NewArraySchema().WithItems(schema)
+		jsonSchema.WithProperty(name, arraySchema)
+	default:
+		log.Info().Msgf("Unknown type %s", prop.Type)
+	}
+}
+
+func addStringProperty(jsonSchema *openapi3.Schema, name string, prop v1.JSONSchemaProps) {
+	switch prop.Format {
+	case "byte":
+		jsonSchema.WithProperty(name, openapi3.NewBytesSchema())
+	case "date-time":
+		jsonSchema.WithProperty(name, openapi3.NewDateTimeSchema())
+	default:
+		jsonSchema.WithProperty(name, openapi3.NewStringSchema())
+	}
+}
+
+func addIntegerProperty(jsonSchema *openapi3.Schema, name string, prop v1.JSONSchemaProps) {
+	switch prop.Format {
+	case "int32":
+		jsonSchema.WithProperty(name, openapi3.NewInt32Schema())
+	case "int64":
+		jsonSchema.WithProperty(name, openapi3.NewInt64Schema())
+	default:
+		jsonSchema.WithProperty(name, openapi3.NewIntegerSchema())
+	}
+}
+
+// parseURIParams parses the URI parameters.
+func parseURIParams(uri string, hierarchy []string) []*openapi3.ParameterRef {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(uri, -1)
 
+	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy))
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
@@ -424,11 +462,6 @@ func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.Para
 		if crdInfo.IsSingleton {
 			continue
 		}
-
-		if _, ok := utils.OpenApiIgnoredParentPathParams[crdInfo.Name]; ok {
-			continue
-		}
-
 		var description string
 		if crdInfo.Description != "" {
 			description = crdInfo.Description
@@ -445,8 +478,9 @@ func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.Para
 			})
 		}
 	}
-	return
+	return parameters
 }
+
 func constructUpdateParam() *openapi3.ParameterRef {
 	return &openapi3.ParameterRef{
 		Value: openapi3.NewQueryParameter("update_if_exists").
@@ -466,17 +500,39 @@ func paramExist(param string, params [][]string) bool {
 }
 
 func Recreate() {
-	log.Debug("Recreating openapi spec")
+	log.Debug().Msg("Recreating openapi spec")
 	for crdType := range model.CrdTypeToRestUris {
+		log.Debug().Msgf("Recreating openapi spec for %s Datamodel name %s", crdType, utils.GetDatamodelName(crdType))
 		New(utils.GetDatamodelName(crdType))
 	}
 
 	for crdType, uris := range model.CrdTypeToRestUris {
 		datamodel := utils.GetDatamodelName(crdType)
 		for _, uri := range uris {
+			log.Debug().Msgf("Adding path %s for %s Datamodel name %s", uri.Uri, crdType, datamodel)
 			AddPath(uri, datamodel)
 		}
 	}
+}
+
+func LoadCombinedSpec() {
+	// Path to the OpenAPI specification JSON file
+	specFilePath := "/static/openapispecs/combined/combined_spec.yaml"
+
+	// Create a new OpenAPI loader
+	loader := openapi3.NewLoader()
+
+	// Load the OpenAPI specification from the file
+	doc, err := loader.LoadFromFile(specFilePath)
+	if err != nil {
+		log.Error().Msg(fmt.Sprintf("Failed to load OpenAPI spec: %v", err))
+		return
+	}
+
+	// Print the title of the OpenAPI specification
+	fmt.Printf("OpenAPI Title: %s\n", doc.Info.Title)
+
+	Schemas["edge-orchestrator.intel.com"] = *doc
 }
 
 func makeKey(crd, keyType string) string {

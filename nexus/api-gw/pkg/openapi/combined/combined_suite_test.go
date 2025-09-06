@@ -1,23 +1,26 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package combined_test
 
 import (
-	"api-gw/pkg/config"
 	"testing"
 
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
 	log "github.com/sirupsen/logrus"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 const (
-	Uri         = "/v1alpha1/project/{projectId}/global-namespaces"
-	ResourceUri = "/v1alpha1/project/{projectId}/global-namespaces/{id}"
-	ListUri     = "/v1alpha1/global-namespaces/test"
+	URI         = "/v1alpha1/project/{projectId}/global-namespaces"
+	ResourceURI = "/v1alpha1/project/{projectId}/global-namespaces/{id}"
+	ListURI     = "/v1alpha1/global-namespaces/test"
 )
 
-var (
-	spec = []byte(`openapi: 3.0.0
+var spec = []byte(`openapi: 3.0.0
 info:
   version: 1.0.0
   title: NSX-SM <Tenant/Operator> APIs
@@ -321,15 +324,14 @@ components:
         - domain_name
         - match_conditions
       additionalProperties: false`)
-)
 
 func TestDeclarative(t *testing.T) {
 	log.StandardLogger().ExitFunc = nil
-	RegisterFailHandler(Fail)
+	gomega.RegisterFailHandler(ginkgo.Fail)
 	config.Cfg = &config.Config{
-		TenantApiGwDomain: "http://test",
+		TenantAPIGwDomain: "http://test",
 	}
-	RunSpecs(t, "Declarative Suite")
+	ginkgo.RunSpecs(t, "Declarative Suite")
 }
 
 var crdExample = `
@@ -338,7 +340,36 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     nexus: |
-      {"name":"management.Leader","hierarchy":["roots.orgchart.vmware.org"],"children":{"humanresourceses.hr.vmware.org":{"fieldName":"HR","fieldNameGvk":"hRGvk","isNamed":false},"mgrs.management.vmware.org":{"fieldName":"EngManagers","fieldNameGvk":"engManagersGvk","isNamed":true}},"links":{"Role":{"fieldName":"Role","fieldNameGvk":"roleGvk","isNamed":false}},"is_singleton":true,"nexus-rest-api-gen":{"uris":[{"uri":"/root/{orgchart.Root}/leader/{management.Leader}","methods":{"DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},"auth":false},{"uri":"/leader","methods":{"DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},"PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},"auth":false},{"uri":"/leaders","methods":{"LIST":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}}},"auth":false}]}}
+      {"name":"management.Leader","hierarchy":["roots.orgchart.vmware.org"],
+      "children":{"humanresourceses.hr.vmware.org":{"fieldName":"HR","fieldNameGvk":"hRGvk","isNamed":false},
+      "mgrs.management.vmware.org":{"fieldName":"EngManagers","fieldNameGvk":"engManagersGvk","isNamed":true}
+      },
+      "links":{"Role":{"fieldName":"Role","fieldNameGvk":"roleGvk","isNamed":false}
+      },
+      "is_singleton":true,
+      "nexus-rest-api-gen":{
+      "uris":[
+      {"uri":"/root/{orgchart.Root}/leader/{management.Leader}",
+      "methods":{
+      "DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},
+      "501":{"description":"Not Implemented"}},
+      "GET":{"200":{"description":"OK"},
+      "404":{"description":"Not Found"},"501":{"description":"Not Implemented"}
+      },
+      "PUT":{
+      "200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}
+      },"auth":false},
+      {"uri":"/leader",
+      "methods":{
+      "DELETE":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "GET":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}},
+      "PUT":{"200":{"description":"OK"},"201":{"description":"Created"},"501":{"description":"Not Implemented"}}},
+      "auth":false},
+      {"uri":"/leaders",
+      "methods":{
+      "LIST":{"200":{"description":"OK"},"404":{"description":"Not Found"},"501":{"description":"Not Implemented"}}
+      },
+      "auth":false}]}}
   creationTimestamp: null
   name: leaders.management.vmware.org
 spec:
@@ -361,12 +392,14 @@ spec:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              internal value, and may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              submits requests to. Cannot be updated. In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object

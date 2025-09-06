@@ -1,18 +1,44 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
 
-FROM --platform=linux/amd64 golang:1.24 as builder
+FROM golang:1.24.6-bullseye AS builder
 
-ARG API_GW_COMPONENT_NAME 
+ARG API_GW_COMPONENT_NAME
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG FTP_PROXY
+ARG SOCKS_PROXY
+ARG NO_PROXY
+ARG USER_HOME
+
+COPY . /app
+COPY vendor/ /go/src/github.com/open-edge-platform/orch-utils/nexus-api-gw/vendor/
+
+ENV http_proxy=${HTTP_PROXY}
+ENV https_proxy=${HTTPS_PROXY}
+ENV ftp_proxy=${FTP_PROXY}
+ENV socks_proxy=${SOCKS_PROXY}
+ENV no_proxy=${NO_PROXY}
+
 WORKDIR /app
-COPY . /app/
-RUN ls -l /app
-WORKDIR /app/api-gw
-RUN go mod tidy
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/${API_GW_COMPONENT_NAME} ./cmd/api-gw
+ENV GOPRIVATE=github.com/open-edge-platform/*
+RUN set -x && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends netcat-openbsd=1.217-3 && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/${API_GW_COMPONENT_NAME}
 
-#FROM gcr.io/distroless/static
+#FROM gcr.io/distroless/static-debian12:nonroot
 FROM golang:1.24
+# Run as non-privileged user
+USER nobody
+
 WORKDIR /bin
-COPY --from=builder /app/api-gw/bin/api-gw .
-USER 65532:65532
-ENTRYPOINT ["/bin/api-gw"]
+COPY --from=builder /app/bin/api-gw /usr/local/bin/api-gw
+COPY --from=builder /app/deploy/config/api-gw-config.yaml /config/api-gw-config 
+# Copy policy
+#COPY --from=builder /app/pkg/auth/authz/authz.rego /usr/local/authz.rego
+
+# copy static api-doc file
+#COPY --from=builder /app/static/openapispecs/combined/combined_spec.yaml /static/openapispecs/combined/combined_spec.yaml
+ENTRYPOINT ["api-gw"]

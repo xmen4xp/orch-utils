@@ -1,26 +1,33 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
 
-const ApiGwConfigFileDefaullt = "/config/api-gw-config"
+const APIGwConfigFileDefaullt = "/config/api-gw-config"
 
 type Config struct {
-	Server             ServerConfig `json:"server" yaml:"server"`
-	EnableNexusRuntime bool         `json:"enable_nexus_runtime" yaml:"enable_nexus_runtime,omitempty"`
-	BackendService     string       `json:"backend_service" yaml:"backend_service,omitempty"`
-	TenantApiGwDomain  string       `json:"tenant_api_gw_domain" yaml:"tenant_api_gw_domain,omitempty"`
-	CustomNotFoundPage string       `json:"custom_not_found_page" yaml:"custom_not_found_page,omitempty"`
+	Server                  ServerConfig `json:"server" yaml:"server"`
+	EnableNexusRuntime      bool         `json:"enableNexusRuntime" yaml:"enableNexusRuntime,omitempty"`
+	DisableAuthz            bool         `json:"disableAuthz" yaml:"disableAuthz,omitempty"`
+	BackendService          string       `json:"backendService" yaml:"backendService,omitempty"`
+	TenancyService          bool         `json:"tenancyService" yaml:"tenancyService,omitempty"`
+	TenantAPIGwDomain       string       `json:"tenantApiGwDomain" yaml:"tenantApiGwDomain,omitempty"`
+	CustomNotFoundPage      string       `json:"customNotFoundPage" yaml:"customNotFoundPage,omitempty"`
+	ProxyInsecureSkipVerify bool         `json:"proxyInsecureSkipVerify" yaml:"proxyInsecureSkipVerify,omitempty"`
 }
 
 type ServerConfig struct {
-	HttpPort            string `json:"httpPort" yaml:"httpPort"`
+	HTTPPort            string `json:"httpPort" yaml:"httpPort"`
 	HealthProbeAddrress string `json:"healthProbeAddrress" yaml:"healthProbeAddrress"`
 	MetricsAddress      string `json:"metricsAddress" yaml:"metricsAddress"`
 	Address             string `json:"address" yaml:"address"`
@@ -30,91 +37,41 @@ type ServerConfig struct {
 
 var Cfg *Config
 
-type GlobalStaticRoutes struct {
-	Prefix []string `json:"Prefix" yaml:"Prefix"`
-	Suffix []string `json:"Suffix" yaml:"Suffix"`
-}
-
-var GlobalStaticRouteConfig *GlobalStaticRoutes
-
 func LoadConfig(configFile string) (*Config, error) {
-	var config *Config
+	config := &Config{}
 
-	config = &Config{}
 	if configFile == "" {
 		isPresent := false
 		configFile, isPresent = os.LookupEnv("APIGWCONFIG")
 		if !isPresent {
-			configFile = ApiGwConfigFileDefaullt
+			configFile = APIGwConfigFileDefaullt
 		}
 	}
 
 	file, err := os.Open(configFile)
 	if err != nil {
-		return config, fmt.Errorf("failed to open config file: %s", err)
+		return config, fmt.Errorf("failed to open config file: %w", err)
 	}
-	configStr, err := ioutil.ReadAll(file)
+	configStr, err := io.ReadAll(file)
 	if err != nil {
-		return config, fmt.Errorf("failed to read config file: %s", err)
+		return config, fmt.Errorf("failed to read config file: %w", err)
 	}
 	err = yaml.Unmarshal(configStr, &config)
 	if err != nil {
-		return config, fmt.Errorf("failed to parse config file: %s", err)
+		return config, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	log.Infof("read configmap values: %+v", config)
-
 	if config.Server.Address == "" {
-		return nil, fmt.Errorf("config doesn't contain Server.Address")
+		return config, fmt.Errorf("config doesn't contain Server.Address")
 	}
 
 	if config.Server.CertPath == "" {
-		return nil, fmt.Errorf("config doesn't contain Server.CertPath")
+		return config, fmt.Errorf("config doesn't contain Server.CertPath")
 	}
 
 	if config.Server.KeyPath == "" {
-		return nil, fmt.Errorf("config doesn't contain Server.KeyPath")
+		return config, fmt.Errorf("config doesn't contain Server.KeyPath")
 	}
 
 	return config, nil
-}
-
-type SKUMap struct {
-	SKU map[string][]string `json:"sku"`
-}
-
-var SKUConfig *SKUMap
-
-func LoadSKUConfig(configFile string) (*SKUMap, error) {
-	var config *SKUMap
-	file, err := os.Open(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open config file: %s", err)
-	}
-	configStr, err := ioutil.ReadAll(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %s", err)
-	}
-	err = yaml.Unmarshal(configStr, &config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %s", err)
-	}
-	return config, nil
-}
-
-func LoadStaticUrlsConfig(configFile string) (*GlobalStaticRoutes, error) {
-	var gsRoutes *GlobalStaticRoutes
-	file, err := os.Open(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open config file: %s", err)
-	}
-	configStr, err := ioutil.ReadAll(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %s", err)
-	}
-	err = yaml.Unmarshal(configStr, &gsRoutes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %s", err)
-	}
-	return gsRoutes, nil
 }

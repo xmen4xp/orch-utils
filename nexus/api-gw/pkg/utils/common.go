@@ -1,42 +1,32 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-FileCopyrightText: 2025 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package utils
 
 import (
-	"api-gw/pkg/authn"
-	"api-gw/pkg/client"
-	"api-gw/pkg/config"
-	"api-gw/pkg/envoy"
-	"api-gw/pkg/model"
-	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/open-edge-platform/orch-utils/nexus-api-gw/pkg/config"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
 )
 
-var VersionCalls []*model.ConnectorObject
+const (
+	DefaultNamespace = "default"
 
-const DEFAULT_NAMESPACE = "default"
+	DisplayNameLabelConst = "nexus/display_name"
+)
 
-type EnvoyCluster struct {
-	name string
-	host string
-}
-
-const DISPLAY_NAME_LABEL = "nexus/display_name"
-
-type DatamodelConfig struct {
-	IgnoredParentPathParams []string `yaml:"ignoredParentPathParams"`
-}
-
-var OpenApiIgnoredParentPathParams map[string]struct{} = make(map[string]struct{})
+var (
+	appName = "nexus-api-gw-utils"
+	log     = logging.GetLogger(appName)
+)
 
 func IsFileExists(filename string) bool {
 	info, err := os.Stat(filename)
@@ -58,97 +48,9 @@ func IsServerConfigValid(conf *config.Config) bool {
 func DumpReq(req *http.Request) {
 	requestDump, err := httputil.DumpRequest(req, true)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Msg(err.Error())
 	}
-	log.Debugf(string(requestDump))
-}
-
-func GetEnvoyInitParams() (*envoy.JwtAuthnConfig, map[string]*envoy.UpstreamConfig, map[string]*envoy.HeaderMatchedUpstream, error) {
-	var jwt *envoy.JwtAuthnConfig
-	jwts, err := client.NexusClient.Authentication().ListOIDCs(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		log.Errorln(err)
-		return nil, nil, nil, fmt.Errorf("failed to fetch OIDCs: %s", err)
-	} else {
-		if jwts != nil && len(jwts) > 0 {
-			if len(jwts) > 1 {
-				return nil, nil, nil, fmt.Errorf("more than 1 oidc objects found")
-			}
-			var issuer string
-			issuer, err = authn.GetIssuer(jwts[0])
-			if err != nil {
-				log.Errorln(err)
-				return nil, nil, nil, fmt.Errorf("failed to get issuer: %s", err)
-			}
-
-			var jwksUri string
-			jwksUri, err = authn.GetJwksUri(jwts[0])
-			if err != nil {
-				log.Errorln(err)
-				return nil, nil, nil, fmt.Errorf("failed to get jwks_uri: %s", err)
-			}
-
-			var callbackEndpoint string
-			callbackEndpoint, err = authn.GetCallbackEndpoint(jwts[0])
-			if err != nil {
-				log.Errorln(err)
-				return nil, nil, nil, fmt.Errorf("failed to get callback endpoint: %s", err)
-			}
-
-			jwt = &envoy.JwtAuthnConfig{
-				IdpName:          jwts[0].Name,
-				Issuer:           issuer,
-				JwksUri:          jwksUri,
-				CallbackEndpoint: callbackEndpoint,
-				JwtClaimUsername: jwts[0].Spec.JwtClaimUsername,
-			}
-		}
-	}
-
-	tenantConfigs, err := client.NexusClient.Tenantconfig().ListTenants(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		log.Errorln(err)
-		return nil, nil, nil, fmt.Errorf("failed to get tenantConfigs: %s", err)
-	}
-	for _, tenantConfig := range tenantConfigs {
-		envoy.TenantConfigs = append(envoy.TenantConfigs, &envoy.TenantConfig{
-			Name:   tenantConfig.Spec.Name,
-			Status: false,
-		})
-	}
-
-	var upstreams = make(map[string]*envoy.UpstreamConfig)
-	var headerMatchedUpstreams = make(map[string]*envoy.HeaderMatchedUpstream)
-	allUpstreams, err := client.NexusClient.Admin().ListProxyRules(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		log.Errorln(err)
-		return nil, nil, nil, fmt.Errorf("failed to get proxyrules: %s", err)
-	} else {
-		for _, u := range allUpstreams {
-			switch u.Spec.MatchCondition.Type {
-			case "jwt":
-				upstreams[u.Name] = &envoy.UpstreamConfig{
-					Name:          u.Name,
-					JwtClaimKey:   u.Spec.MatchCondition.Key,
-					JwtClaimValue: u.Spec.MatchCondition.Value,
-					Host:          u.Spec.Upstream.Host,
-					Port:          u.Spec.Upstream.Port,
-				}
-			case "header":
-				headerMatchedUpstreams[u.Name] = &envoy.HeaderMatchedUpstream{
-					Name:        u.Name,
-					HeaderName:  u.Spec.MatchCondition.Key,
-					HeaderValue: u.Spec.MatchCondition.Value,
-					Host:        u.Spec.Upstream.Host,
-					Port:        u.Spec.Upstream.Port,
-				}
-			default:
-				log.Errorln("invalid proxyrule match condition found")
-				return nil, nil, nil, fmt.Errorf("invalid proxyrule match condition found")
-			}
-		}
-	}
-	return jwt, upstreams, headerMatchedUpstreams, nil
+	log.Debug().Msg(string(requestDump))
 }
 
 func GetDatamodelName(crdType string) string {
@@ -163,8 +65,9 @@ func GetGroupResourceName(kind string) string {
 	return strings.ToLower(ToPlural(kind)) // eg roots
 }
 
-// GetParentHierarchy constructs the parent in the format <roots.orgchart.vmware.org:default>
-func GetParentHierarchy(parents []string, labels map[string]string) (hierarchy []string) {
+// GetParentHierarchy constructs the parent in the format <roots.orgchart.vmware.org:default>.
+func GetParentHierarchy(parents []string, labels map[string]string) []string {
+	var hierarchy []string
 	for _, parent := range parents {
 		for key, val := range labels {
 			if parent == key {
@@ -172,7 +75,7 @@ func GetParentHierarchy(parents []string, labels map[string]string) (hierarchy [
 			}
 		}
 	}
-	return
+	return hierarchy
 }
 
 /*
@@ -190,27 +93,5 @@ func ConstructGVR(crdType string) schema.GroupVersionResource {
 		Group:    strings.Join(parts[1:], "."),
 		Version:  "v1",
 		Resource: parts[0],
-	}
-}
-
-func InitOpenApiIgnoredParentPathParams(configFile string) {
-	var config DatamodelConfig
-	file, err := os.Open(configFile)
-	if err != nil {
-		log.Fatalf("failed to open config file %s with error %s", configFile, err)
-	}
-	configStr, err := io.ReadAll(file)
-	if err != nil {
-		log.Fatalf("failed to read config file %s with error %s", configFile, err)
-	}
-
-	err = yaml.Unmarshal(configStr, &config)
-	if err != nil {
-		log.Fatalf("failed to unmarshal config file %s with error %s", configFile, err)
-	}
-
-	for _, param := range config.IgnoredParentPathParams {
-		OpenApiIgnoredParentPathParams[param] = struct{}{}
-		fmt.Println("adding ignored param :", param)
 	}
 }
