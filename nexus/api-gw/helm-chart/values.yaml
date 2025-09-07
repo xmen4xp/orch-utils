@@ -1,0 +1,29 @@
+# Default values for api-gw.
+
+nexusApiGw:
+  replicaCount: 1
+  image:
+    repository: nexus/api-gw
+    pullPolicy: Never
+    tag: "latest"
+  serviceAccount:
+    create: true
+  gatewayMode: admin
+
+nexusK8sProxy:
+  replicaCount: 1
+  image:
+    repository: nexus/kubectl
+    pullPolicy: Never
+    tag: "latest"
+  serviceAccount:
+    create: true
+
+config:
+  server:
+    httpPort: "8082"
+  enableNexusRuntime: true
+  proxyInsecureSkipVerify: true
+
+nexusK8sProxyKubeconfig:
+  create: true

@@ -191,6 +191,19 @@ runtime.uninstall.kind: check.kind kind.uninstall api-gw.kind.stop
 	$(info Runtime is now uninstalled)
 	$(info ====================================================)
 
+.PHONY: container-build
+container-build:
+	cd nexus-runtime-manifests && CLUSTER_NAME=${CLUSTER_NAME} make container-build
+	cd api-gw && CLUSTER_NAME=${CLUSTER_NAME} make container-build
+	cd api && CLUSTER_NAME=${CLUSTER_NAME} make container-build
+
+.PHONY: runtime-kind-load-images
+runtime-kind-load-images:
+	$(info Loading images into kind cluster...)
+	cd nexus-runtime-manifests && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
+	cd api-gw && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
+	cd api && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
+
 .PHONY: runtime.install.kind
 runtime.install.kind: HOST_KUBECONFIG=$(realpath .)/nexus-runtime-manifests/kind/.${CLUSTER_NAME}/kubeconfig
 runtime.install.kind: check.kind kind.install api.install.kind api-gw.kind.run

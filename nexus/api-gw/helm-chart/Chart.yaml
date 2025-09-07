@@ -1,0 +1,4 @@
+apiVersion: v2
+name: api-gw
+version: 0.1.0
+description: A Helm chart for Nexus API GW

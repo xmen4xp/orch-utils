@@ -1,0 +1,11 @@
+apiVersion: v2
+name: nexus-master
+description: A Helm chart for Nexus master
+version: 0.1.0
+dependencies:
+- name: nexus-api
+  version: "0.0.1"
+  repository: "file://../api/helm-chart"
+- name: api-gw
+  version: "0.1.0"
+  repository: "file://../api-gw/helm-chart"

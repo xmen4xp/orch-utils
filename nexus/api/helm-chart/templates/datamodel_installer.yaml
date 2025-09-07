@@ -50,7 +50,8 @@ spec:
     spec:
       serviceAccountName: nexus-datamodel-install
       containers:
-      - image: {{ .Values.image }}
+      - image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
           - name: NAME
             value: {{ .Values.global.datamodelName }}

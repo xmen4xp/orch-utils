@@ -31,9 +31,9 @@ GOCMD                           := CGO_ENABLED=0 GOOS=$(shell go env GOOS) GOARC
 GOCMD_TEST                      := GOPRIVATE="github.com/open-edge-platform/*" go
 
 ifeq (${DOCKER_REGISTRY}, )
-DOCKER_TAG=nexus/${API_GW_COMPONENT_NAME}:${TAG}
+DOCKER_TAG=${API_GW_COMPONENT_NAME}:${TAG}
 else
-DOCKER_TAG=${DOCKER_REGISTRY}/nexus/${API_GW_COMPONENT_NAME}:${TAG}
+DOCKER_TAG=${DOCKER_REGISTRY}/${DOCKER_REPO}/${API_GW_COMPONENT_NAME}:${TAG}
 endif
 
 KUBECONFIG ?= ${ROOT_DIR}/nexus-runtime-manifests/kind/.test/kubeconfig
@@ -183,3 +183,7 @@ container-build: go-vendor
 container-push: ## Push container images to registry
 	docker push ${DOCKER_TAG}
 
+.PHONY: kind-load-images
+kind-load-images:
+	$(info Loading api-gw images into kind cluster...)
+	kind load docker-image --name ${CLUSTER_NAME} ${DOCKER_TAG}

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-nexus-k8s-proxy
+  labels:
+    app.kubernetes.io/name: nexus-k8s-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: nexus-k8s-proxy
+spec:
+  selector:
+    app.kubernetes.io/name: nexus-k8s-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: nexus-k8s-proxy
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

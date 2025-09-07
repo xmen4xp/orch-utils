@@ -15,9 +15,9 @@ DOCKER_NETWORK ?= nexus
 MOUNTED_KUBECONFIG ?= /etc/config/kubeconfig
 
 ifeq (${DATAMODEL_DOCKER_REGISTRY}, )
-DATAMODEL_DOCKER_TAG=nexus/${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG=${DATAMODEL_GROUP_NAME}:${TAG}
 else
-DATAMODEL_DOCKER_TAG=${DATAMODEL_DOCKER_REGISTRY}/nexus/${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG=${DATAMODEL_DOCKER_REGISTRY}/${DOCKER_REPO}/${DATAMODEL_GROUP_NAME}:${TAG}
 endif
 
 COMPILER_DOCKER_REGISTRY ?=
@@ -63,13 +63,13 @@ datamodel_build:
 
 .PHONY: docker.build
 docker.build:
-	@echo "${DATAMODEL_DOCKER_TAG}" > IMAGE
+	@echo "${DOCKER_TAG}" > IMAGE
 	@echo "${DATAMODEL_GROUP_NAME}" > NAME
-	docker build -t ${DATAMODEL_DOCKER_TAG} . -f Dockerfile
+	docker build -t ${DOCKER_TAG} . -f Dockerfile
 
 .PHONY: docker.publish
 docker.publish:
-	docker push $(DATAMODEL_DOCKER_TAG)
+	docker push $(DOCKER_TAG)
 
 .PHONY: dm.install
 dm.install:
@@ -79,21 +79,32 @@ dm.install:
 		--mount type=bind,source=${HOST_KUBECONFIG},target=${MOUNTED_KUBECONFIG},readonly \
 		-e KUBECONFIG=${MOUNTED_KUBECONFIG} \
 		-e NAME=${DATAMODEL_GROUP_NAME} \
-		-e IMAGE=${DATAMODEL_DOCKER_TAG} \
+		-e IMAGE=${DOCKER_TAG} \
 		-e https_proxy= \
 		-e http_proxy= \
 		-e HTTPS_PROXY= \
 		-e HTTP_PROXY= \
-		${DATAMODEL_DOCKER_TAG}
+		${DOCKER_TAG}
 
 .PHONY: kind.load
 kind.load: docker.build
-	kind load docker-image ${DATAMODEL_DOCKER_TAG} --name ${CLUSTER_NAME}
+	kind load docker-image ${DOCKER_TAG} --name ${CLUSTER_NAME}
 
 .PHONY: dm.install.helm
 dm.install.helm:
-	cd helm-chart; helm install api -n ${NEXUS_API_GW_K8S_NAMESPACE} --set global.datamodelName=api --set image=${DATAMODEL_DOCKER_TAG} --set imagePull=${DOCKER_IMAGE_PULL} .
+	cd helm-chart; helm install api -n ${NEXUS_API_GW_K8S_NAMESPACE} --set global.datamodelName=api --set image=${DOCKER_TAG} --set imagePull=${DOCKER_IMAGE_PULL} .
 
 .PHONY: dm.uninstall.helm
 dm.uninstall.helm:
 	helm uninstall api
+
+.PHONY: container-build
+container-build: docker.build
+
+.PHONY: container-push
+container-push: docker.publish
+
+.PHONY: kind-load-images
+kind-load-images:
+	$(info Loading api-gw images into kind cluster...)
+	kind load docker-image --name ${CLUSTER_NAME} ${DOCKER_TAG}

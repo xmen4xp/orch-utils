@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-nexus-k8s-proxy
+  labels:
+    app.kubernetes.io/name: nexus-k8s-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: nexus-k8s-proxy
+spec:
+  replicas: {{ .Values.nexusK8sProxy.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-k8s-proxy
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: nexus-k8s-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus-k8s-proxy
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: nexus-k8s-proxy
+    spec:
+      serviceAccountName: {{ .Release.Name }}-nexus-k8s-proxy
+      containers:
+        - name: nexus-k8s-proxy
+          image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.nexusK8sProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.nexusK8sProxy.image.pullPolicy }}
+          command: ["/kubectl", "proxy", "--port=80", "--address=0.0.0.0", "--disable-filter=true", "--v=1"]
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP

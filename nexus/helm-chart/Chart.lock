@@ -1,0 +1,9 @@
+dependencies:
+- name: nexus-api
+  repository: file://../api/helm-chart
+  version: 0.0.1
+- name: api-gw
+  repository: file://../api-gw/helm-chart
+  version: 0.1.0
+digest: sha256:23f3c5e4f8fc4479d00a5368a78c8689671e27acc81d0ccb90c792c8ae179f4f
+generated: "2025-09-07T09:19:09.980603-07:00"

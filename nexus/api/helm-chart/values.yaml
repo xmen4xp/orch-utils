@@ -1,2 +1,7 @@
 global:
   k8sProxyServiceName: nexus-k8s-proxy
+
+image:
+  repository: nexus/datamodel-installer
+  tag: latest
+  pullPolicy: Never

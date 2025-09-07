@@ -1,0 +1,22 @@
+# Global values for the master chart
+global:
+  datamodelName: nexus-datamodel
+
+nexus-api:
+  image:
+    repository: admin.nexus.com
+    tag: latest
+    pullPolicy: Never
+
+api-gw:
+  nexusApiGw:
+    image:
+      repository: api-gw
+      tag: latest
+      pullPolicy: Never
+  nexusK8sProxy:
+    image:
+      repository: nexus-k8s-proxy
+      tag: latest
+      pullPolicy: Never
+

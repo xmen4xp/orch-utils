@@ -1,0 +1,144 @@
+---
+# Source: api-gw/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-nexus-k8s-proxy
+  namespace: default
+  labels:
+    app.kubernetes.io/name: nexus-k8s-proxy
+    app.kubernetes.io/instance: "runtime"
+    app.kubernetes.io/managed-by: "Helm"
+---
+# Source: api-gw/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-nexus-api-gw
+  labels:
+    app.kubernetes.io/name: nexus-api-gw
+    app.kubernetes.io/instance: runtime
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: api-gw/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runtime-nexus-api-gw
+  labels:
+    app.kubernetes.io/name: nexus-api-gw
+    app.kubernetes.io/instance: runtime
+    app.kubernetes.io/managed-by: Helm
+data:
+  api-gw-config: |
+    enableNexusRuntime: true
+    proxyInsecureSkipVerify: true
+    server:
+      httpPort: "8082"
+---
+# Source: api-gw/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runtime-nexus-k8s-proxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: runtime-nexus-k8s-proxy
+    namespace: default
+---
+# Source: api-gw/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runtime-nexus-api-gw
+subjects:
+- kind: ServiceAccount
+  name: runtime-nexus-api-gw
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: api-gw/templates/nexus-api-gw-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-nexus-api-gw
+  labels:
+    app.kubernetes.io/name: nexus-api-gw
+    app.kubernetes.io/instance: runtime
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: nexus-api-gw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-api-gw
+      app.kubernetes.io/instance: runtime
+      app.kubernetes.io/component: nexus-api-gw
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus-api-gw
+        app.kubernetes.io/instance: runtime
+        app.kubernetes.io/component: nexus-api-gw
+    spec:
+      serviceAccountName: runtime-nexus-api-gw
+      containers:
+        - name: nexus-api-gw
+          image: "nexus/api-gw:latest"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GATEWAY_MODE
+              value: "admin"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config/api-gw-config
+              subPath: api-gw-config
+      volumes:
+        - name: config
+          configMap:
+            name: runtime-nexus-api-gw
+---
+# Source: api-gw/templates/nexus-k8s-proxy-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-nexus-k8s-proxy
+  labels:
+    app.kubernetes.io/name: nexus-k8s-proxy
+    app.kubernetes.io/instance: runtime
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: nexus-k8s-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-k8s-proxy
+      app.kubernetes.io/instance: runtime
+      app.kubernetes.io/component: nexus-k8s-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus-k8s-proxy
+        app.kubernetes.io/instance: runtime
+        app.kubernetes.io/component: nexus-k8s-proxy
+    spec:
+      serviceAccountName: runtime-nexus-k8s-proxy
+      containers:
+        - name: nexus-k8s-proxy
+          image: "nexus/kubectl:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
