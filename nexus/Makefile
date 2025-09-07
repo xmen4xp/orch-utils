@@ -193,16 +193,16 @@ runtime.uninstall.kind: check.kind kind.uninstall api-gw.kind.stop
 
 .PHONY: container-build
 container-build:
-	cd nexus-runtime-manifests && CLUSTER_NAME=${CLUSTER_NAME} make container-build
-	cd api-gw && CLUSTER_NAME=${CLUSTER_NAME} make container-build
-	cd api && CLUSTER_NAME=${CLUSTER_NAME} make container-build
+	cd nexus-runtime-manifests && DOCKER_TAG=${K8S_PROXY_DOCKER_TAG} make container-build
+	cd api && DOCKER_TAG=${API_DOCKER_TAG} COMPILER_DOCKER_TAG=${COMPILER_DOCKER_TAG} make container-build
+	cd api-gw && DOCKER_TAG=${API_GW_DOCKER_TAG} make container-build
 
 .PHONY: runtime-kind-load-images
 runtime-kind-load-images:
 	$(info Loading images into kind cluster...)
-	cd nexus-runtime-manifests && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
-	cd api-gw && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
-	cd api && CLUSTER_NAME=${CLUSTER_NAME} make kind-load-images
+	cd nexus-runtime-manifests && CLUSTER_NAME=${CLUSTER_NAME} DOCKER_TAG=${K8S_PROXY_DOCKER_TAG} make kind-load-images
+	cd api-gw && CLUSTER_NAME=${CLUSTER_NAME} DOCKER_TAG=${API_GW_DOCKER_TAG} make kind-load-images
+	cd api && CLUSTER_NAME=${CLUSTER_NAME} DOCKER_TAG=${API_DOCKER_TAG} make kind-load-images
 
 .PHONY: runtime.install.kind
 runtime.install.kind: HOST_KUBECONFIG=$(realpath .)/nexus-runtime-manifests/kind/.${CLUSTER_NAME}/kubeconfig

@@ -15,9 +15,9 @@ DOCKER_NETWORK ?= nexus
 MOUNTED_KUBECONFIG ?= /etc/config/kubeconfig
 
 ifeq (${DATAMODEL_DOCKER_REGISTRY}, )
-DOCKER_TAG=${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG ?= ${DATAMODEL_GROUP_NAME}:${TAG}
 else
-DOCKER_TAG=${DATAMODEL_DOCKER_REGISTRY}/${DOCKER_REPO}/${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG ?= ${DATAMODEL_DOCKER_REGISTRY}/${DOCKER_REPO}/${DATAMODEL_GROUP_NAME}:${TAG}
 endif
 
 COMPILER_DOCKER_REGISTRY ?=
@@ -25,9 +25,9 @@ IMAGE_NAME ?= nexus/compiler
 GOARCH ?= $(shell go env GOARCH)
 COMPILER_NAME ?= ${IMAGE_NAME}/${GOARCH}
 ifeq (${COMPILER_DOCKER_REGISTRY}, )
-COMPILER_DOCKER_TAG = ${COMPILER_NAME}:${COMPILER_TAG}
+COMPILER_DOCKER_TAG ?= ${COMPILER_NAME}:${COMPILER_TAG}
 else
-COMPILER_DOCKER_TAG = ${COMPILER_DOCKER_REGISTRY}/${COMPILER_NAME}:${COMPILER_TAG}
+COMPILER_DOCKER_TAG ?= ${COMPILER_DOCKER_REGISTRY}/${COMPILER_NAME}:${COMPILER_TAG}
 endif
 
 .PHONY: datamodel_build
@@ -99,7 +99,7 @@ dm.uninstall.helm:
 	helm uninstall api
 
 .PHONY: container-build
-container-build: docker.build
+container-build: datamodel_build docker.build
 
 .PHONY: container-push
 container-push: docker.publish

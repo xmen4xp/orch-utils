@@ -31,9 +31,9 @@ GOCMD                           := CGO_ENABLED=0 GOOS=$(shell go env GOOS) GOARC
 GOCMD_TEST                      := GOPRIVATE="github.com/open-edge-platform/*" go
 
 ifeq (${DOCKER_REGISTRY}, )
-DOCKER_TAG=${API_GW_COMPONENT_NAME}:${TAG}
+DOCKER_TAG ?= ${API_GW_COMPONENT_NAME}:${TAG}
 else
-DOCKER_TAG=${DOCKER_REGISTRY}/${DOCKER_REPO}/${API_GW_COMPONENT_NAME}:${TAG}
+DOCKER_TAG ?= ${DOCKER_REGISTRY}/${DOCKER_REPO}/${API_GW_COMPONENT_NAME}:${TAG}
 endif
 
 KUBECONFIG ?= ${ROOT_DIR}/nexus-runtime-manifests/kind/.test/kubeconfig
