@@ -163,7 +163,7 @@ dm.install:
 #
 .PHONY: dm.install.helm
 dm.install.helm:
-		cd helm-chart; helm install {{.ModuleName}} --set datamodelName={{.ModuleName}} --set namespace=${NEXUS_API_GW_K8S_NAMESPACE} --set image=${DATAMODEL_DOCKER_TAG} --set imagePull=${DOCKER_IMAGE_PULL} .
+		cd helm-chart; helm install {{.ModuleName}} --set datamodelName={{.ModuleName}} --set namespace=${NEXUS_API_GW_K8S_NAMESPACE} --set image=${DOCKER_TAG} --set imagePull=${DOCKER_IMAGE_PULL} .
 
 .PHONY: dm.uninstall.helm
 dm.uninstall.helm:

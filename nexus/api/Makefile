@@ -14,20 +14,24 @@ DOCKER_BASE_IMAGE=gcr.io/nsx-sm/photon-kubectl:latest
 DOCKER_NETWORK ?= nexus
 MOUNTED_KUBECONFIG ?= /etc/config/kubeconfig
 
+ifeq (${DOCKER_TAG}, )
 ifeq (${DATAMODEL_DOCKER_REGISTRY}, )
-DOCKER_TAG ?= ${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG=${DATAMODEL_GROUP_NAME}:${TAG}
 else
-DOCKER_TAG ?= ${DATAMODEL_DOCKER_REGISTRY}/${DOCKER_REPO}/${DATAMODEL_GROUP_NAME}:${TAG}
+DOCKER_TAG=${DATAMODEL_DOCKER_REGISTRY}/${DOCKER_REPO}/${DATAMODEL_GROUP_NAME}:${TAG}
+endif
 endif
 
 COMPILER_DOCKER_REGISTRY ?=
 IMAGE_NAME ?= nexus/compiler
 GOARCH ?= $(shell go env GOARCH)
 COMPILER_NAME ?= ${IMAGE_NAME}/${GOARCH}
+ifeq (${COMPILER_DOCKER_TAG}, )
 ifeq (${COMPILER_DOCKER_REGISTRY}, )
-COMPILER_DOCKER_TAG ?= ${COMPILER_NAME}:${COMPILER_TAG}
+COMPILER_DOCKER_TAG=${COMPILER_NAME}:${COMPILER_TAG}
 else
-COMPILER_DOCKER_TAG ?= ${COMPILER_DOCKER_REGISTRY}/${COMPILER_NAME}:${COMPILER_TAG}
+COMPILER_DOCKER_TAG=${COMPILER_DOCKER_REGISTRY}/${COMPILER_NAME}:${COMPILER_TAG}
+endif
 endif
 
 .PHONY: datamodel_build
@@ -106,5 +110,5 @@ container-push: docker.publish
 
 .PHONY: kind-load-images
 kind-load-images:
-	$(info Loading api-gw images into kind cluster...)
+	$(info Loading api image into kind cluster...)
 	kind load docker-image --name ${CLUSTER_NAME} ${DOCKER_TAG}
