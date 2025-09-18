@@ -26,6 +26,10 @@ spec:
       - name: wait-for-datamodel-cr
         image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.nexusK8sProxy.image.tag }}"
         imagePullPolicy: {{ .Values.nexusK8sProxy.image.pullPolicy }}
+        {{- if .Values.nexusK8sProxy.image.imagePullSecret }}
+        imagePullSecrets:
+          - name: {{ .Values.nexusK8sProxy.image.imagePullSecret }}
+        {{- end }}
         command: ["/bin/sh"]
         args:
           - "-c"
@@ -39,6 +43,10 @@ spec:
         - name: nexus-api-gw
           image: "{{ .Values.nexusApiGw.image.repository }}:{{ .Values.nexusApiGw.image.tag }}"
           imagePullPolicy: {{ .Values.nexusApiGw.image.pullPolicy }}
+          {{- if .Values.nexusApiGw.image.imagePullSecret }}
+          imagePullSecrets:
+            - name: {{ .Values.nexusApiGw.image.imagePullSecret }}
+          {{- end }}
           env:
             - name: GATEWAY_MODE
               value: {{ .Values.nexusApiGw.gatewayMode | quote }}

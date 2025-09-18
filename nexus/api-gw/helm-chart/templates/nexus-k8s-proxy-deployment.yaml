@@ -26,6 +26,10 @@ spec:
         - name: nexus-k8s-proxy
           image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.nexusK8sProxy.image.tag }}"
           imagePullPolicy: {{ .Values.nexusK8sProxy.image.pullPolicy }}
+          {{- if .Values.nexusK8sProxy.image.imagePullSecret }}
+          imagePullSecrets:
+            - name: {{ .Values.nexusK8sProxy.image.imagePullSecret }}
+          {{- end }}
           command: ["/kubectl", "proxy", "--port=80", "--address=0.0.0.0", "--disable-filter=true", "--v=1"]
           ports:
             - name: http

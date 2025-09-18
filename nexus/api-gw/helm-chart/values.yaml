@@ -5,6 +5,7 @@ nexusApiGw:
   image:
     repository: nexus/api-gw
     pullPolicy: Never
+    imagePullSecret: ""
     tag: "latest"
   serviceAccount:
     create: true
@@ -15,6 +16,7 @@ nexusK8sProxy:
   image:
     repository: nexus/kubectl
     pullPolicy: Never
+    imagePullSecret: ""
     tag: "latest"
   serviceAccount:
     create: true

@@ -5,3 +5,4 @@ image:
   repository: nexus/datamodel-installer
   tag: latest
   pullPolicy: Never
+  imagePullSecret: ""

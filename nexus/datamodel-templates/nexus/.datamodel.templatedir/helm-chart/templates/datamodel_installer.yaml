@@ -39,8 +39,8 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Values.datamodelName }}-dmi
-  namespace: {{ default  .Release.Namespace .Values.namespace }}
+  name: {{ .Values.global.datamodelName }}-dmi
+  namespace: {{ default  .Release.Namespace .Values.global.namespace }}
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 6
@@ -51,14 +51,18 @@ spec:
     spec:
       serviceAccountName: nexus-datamodel-install
       containers:
-      - env:
+      - image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        env:
           - name: NAME
-            value: {{ .Values.datamodelName }}
-        image: {{ .Values.image }}
+            value: {{ .Values.global.datamodelName }}
         {{- if .Values.imagePull }}
         imagePullPolicy: Always
         {{- else }}
         imagePullPolicy: IfNotPresent
+        {{- end }}
+        {{- if .Values.image.imagePullSecret }}
+        imagePullSecrets:
+          - name: {{ .Values.image.imagePullSecret }}
         {{- end }}
         name: datamodel-installer-job
       restartPolicy: Never

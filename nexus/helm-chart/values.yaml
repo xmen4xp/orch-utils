@@ -7,6 +7,7 @@ nexus-api:
     repository: admin.nexus.com
     tag: latest
     pullPolicy: Never
+    imagePullSecret: ""
 
 api-gw:
   nexusApiGw:
@@ -14,9 +15,11 @@ api-gw:
       repository: api-gw
       tag: latest
       pullPolicy: Never
+      imagePullSecret: ""
   nexusK8sProxy:
     image:
       repository: nexus-k8s-proxy
       tag: latest
       pullPolicy: Never
+      imagePullSecret: ""
 
