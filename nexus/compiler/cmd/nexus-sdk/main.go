@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/config"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/generator"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/mermaid"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/parser"
 )
 
@@ -20,6 +21,7 @@ func main() {
 	dslDir := flag.String("dsl", "datamodel", "DSL file location.")
 	crdDir := flag.String("crd-output", "_generated", "CRD file location.")
 	logLevel := flag.String("log-level", "ERROR", "Log level")
+	mermaidDir := flag.String("mermaid-output", "_generated", "Mermaid file location.")
 	flag.Parse()
 
 	lvl, err := log.ParseLevel(*logLevel)
@@ -58,5 +60,13 @@ func main() {
 	if err = generator.RenderCRDTemplate(conf.GroupName, conf.CrdModulePath, pkgs, graph,
 		*crdDir, methods, codes, nonNexusTypes, fileset, graphqlFiles); err != nil {
 		log.Fatalf("Error rendering crd template: %v", err)
+	}
+
+	// Generate mermaid graph visualization
+	log.Debugf("Generating mermaid graph visualization with %d root nodes to directory: %s", len(graph), *mermaidDir)
+	if err = mermaid.GenerateMermaidFile(graph, *mermaidDir); err != nil {
+		log.Warnf("Failed to generate mermaid graph: %v", err)
+	} else {
+		log.Debugf("Successfully generated mermaid graph visualization")
 	}
 }

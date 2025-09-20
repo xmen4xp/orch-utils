@@ -16,6 +16,7 @@ DATAMODEL_BASE_DOCKER_IMAGE=gcr.io/nsx-sm/photon-kubectl:latest
 DOCKER_NETWORK ?= nexus
 MOUNTED_KUBECONFIG ?= /etc/config/kubeconfig
 DOCKER_IMAGE_PULL ?= false
+LOG_LEVEL ?= error
 
 # values for nexus datamodel upgrade
 FORCE ?= true
@@ -90,6 +91,7 @@ datamodel_build:
 			-e CRD_MODULE_PATH=${CRD_MODULE_PATH} \
 			-e CONFIG_FILE=datamodel/nexus.yaml \
 			-e FORCE=$(FORCE) \
+			-e LOG_LEVEL=$(LOG_LEVEL) \
 			--user $(shell id -u):$(shell id -g) \
 			${COMPILER_DOCKER_TAG} /bin/bash -c 'make generate_code'; \
 	else \
@@ -101,8 +103,8 @@ datamodel_build:
 			-e CRD_MODULE_PATH=${CRD_MODULE_PATH} \
 			-e CICD_TOKEN=${CICD_TOKEN} \
 			-e FORCE=${FORCE} \
+			-e LOG_LEVEL=$(LOG_LEVEL) \
 			--user root:root \
-			-e FORCE=$(FORCE) \
 			${COMPILER_DOCKER_TAG}; \
 	fi
 	make openapispec.generate
