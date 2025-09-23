@@ -12,8 +12,19 @@ SHELL           := bash -eu -o pipefail
 VERSION         ?= $(shell cat VERSION)
 ARCH            ?= $(shell go env GOARCH)
 DOCKER_REGISTRY ?=
+DOCKER_REPO ?= nexus
 CLI_DIR ?= cli
 DOCKER_BUILD_MOUNT_DIR ?= /go/src
+
+OPENAPI_GENERATOR_COMPONENT_NAME ?= nexus-openapi-generator
+
+ifeq (${OPENAPI_GENERATOR_DOCKER_TAG}, )
+ifeq (${DOCKER_REGISTRY}, )
+OPENAPI_GENERATOR_DOCKER_TAG=${OPENAPI_GENERATOR_COMPONENT_NAME}:${VERSION}
+else
+OPENAPI_GENERATOR_DOCKER_TAG=${DOCKER_REGISTRY}/${DOCKER_REPO}/${OPENAPI_GENERATOR_COMPONENT_NAME}:${VERSION}
+endif
+endif
 
 # Detect platform and populate env variables.
 ifeq ($(shell uname), Darwin)
@@ -108,6 +119,8 @@ compiler.builder.tag:
 .PHONY: compiler.build
 compiler.build:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker
+	@echo "Building nexus openapi generator docker image..."
+	make openapi.generator.docker
 
 .PHONY: compiler.build.publish
 compiler.build.publish:
@@ -116,22 +129,22 @@ compiler.build.publish:
 .PHONY: compiler.tag
 compiler.tag:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} CUSTOM_COMPILER_DOCKER_TAG=${CUSTOM_COMPILER_DOCKER_TAG} make docker.tag
+	docker tag ${OPENAPI_GENERATOR_DOCKER_TAG} ${CUSTOM_OPENAPI_GENERATOR_DOCKER_TAG}
 
 .PHONY: compiler.clean
 compiler.clean:
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker.clean
 	cd compiler; DOCKER_REGISTRY=${DOCKER_REGISTRY} BUILDER_VERSION=${VERSION} VERSION=${VERSION} make docker.builder.clean
+	docker rmi -f ${OPENAPI_GENERATOR_DOCKER_TAG}
 
 .PHONY: compiler.test
 compiler.test:
 	cd compiler; make generate_example_in_container
 
-OPENAPI_GENERATOR_COMPONENT_NAME ?= openapi-generator
-OPENAPI_GENERATOR_DOCKER_IMAGE   ?= ${DOCKER_REGISTRY}nexus/${OPENAPI_GENERATOR_COMPONENT_NAME}:${VERSION}
 
 .PHONY: openapi.generator.docker
 openapi.generator.docker:
-	docker build --load -t ${OPENAPI_GENERATOR_DOCKER_IMAGE} -f openapi-generator/Dockerfile .
+	docker build --load -t ${OPENAPI_GENERATOR_DOCKER_TAG} -f openapi-generator/Dockerfile .
 
 .PHONY: ginkgo
 ## Note: should fix/enable these tests
@@ -144,7 +157,7 @@ compiler-docker-list:
 
 docker-list: compiler-docker-list ## Print names of docker container images
 	@echo "  nexus/$(OPENAPI_GENERATOR_COMPONENT_NAME):"
-	@echo "    name: '$(OPENAPI_GENERATOR_DOCKER_IMAGE)'"
+	@echo "    name: '$(OPENAPI_GENERATOR_DOCKER_TAG)'"
 	@echo "    version: '$(VERSION)'"
 	@echo "    gitTagPrefix: 'nexus/$(VERSION)'"
 	@echo "    buildTarget: 'docker-build-nexus/openapi-generator'"
