@@ -24,11 +24,11 @@ spec:
       serviceAccountName: {{ .Release.Name }}-nexus-api-gw
       initContainers:
       - name: wait-for-datamodel-cr
-        image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.nexusK8sProxy.image.tag }}"
-        imagePullPolicy: {{ .Values.nexusK8sProxy.image.pullPolicy }}
-        {{- if .Values.nexusK8sProxy.image.imagePullSecret }}
+        image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.global.releaseTag | default .Values.nexusK8sProxy.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        {{- if .Values.global.imagePullSecret }}
         imagePullSecrets:
-          - name: {{ .Values.nexusK8sProxy.image.imagePullSecret }}
+          - name: {{ .Values.global.imagePullSecret }}
         {{- end }}
         command: ["/bin/sh"]
         args:
@@ -41,11 +41,11 @@ spec:
             echo "nexus-datamodel CR found, proceeding..."
       containers:
         - name: nexus-api-gw
-          image: "{{ .Values.nexusApiGw.image.repository }}:{{ .Values.nexusApiGw.image.tag }}"
-          imagePullPolicy: {{ .Values.nexusApiGw.image.pullPolicy }}
-          {{- if .Values.nexusApiGw.image.imagePullSecret }}
+          image: "{{ .Values.nexusApiGw.image.repository }}:{{ .Values.global.releaseTag | default .Values.nexusApiGw.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- if .Values.global.imagePullSecret }}
           imagePullSecrets:
-            - name: {{ .Values.nexusApiGw.image.imagePullSecret }}
+            - name: {{ .Values.global.imagePullSecret }}
           {{- end }}
           env:
             - name: GATEWAY_MODE

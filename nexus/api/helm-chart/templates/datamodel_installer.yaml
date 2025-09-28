@@ -50,18 +50,14 @@ spec:
     spec:
       serviceAccountName: nexus-datamodel-install
       containers:
-      - image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      - image: "{{ .Values.image.repository }}:{{ .Values.global.releaseTag | default .Values.image.tag }}"
         env:
           - name: NAME
             value: {{ .Values.global.datamodelName }}
-        {{- if .Values.imagePull }}
-        imagePullPolicy: Always
-        {{- else }}
-        imagePullPolicy: IfNotPresent
-        {{- end }}
-        {{- if .Values.image.imagePullSecret }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        {{- if .Values.global.imagePullSecret }}
         imagePullSecrets:
-          - name: {{ .Values.image.imagePullSecret }}
+          - name: {{ .Values.imagePullSecret }}
         {{- end }}
         name: datamodel-installer-job
       restartPolicy: Never

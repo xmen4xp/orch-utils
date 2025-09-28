@@ -1,25 +1,22 @@
 # Global values for the master chart
 global:
   datamodelName: nexus-datamodel
+  imagePullSecret: ""
+  imagePullPolicy: "IfNotPresent"
+  releaseTag: "latest"
 
 nexus-api:
   image:
-    repository: admin.nexus.com
+    repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-api
     tag: latest
-    pullPolicy: Never
-    imagePullSecret: ""
 
 api-gw:
   nexusApiGw:
     image:
-      repository: api-gw
+      repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-api-gw
       tag: latest
-      pullPolicy: Never
-      imagePullSecret: ""
+
   nexusK8sProxy:
     image:
-      repository: nexus-k8s-proxy
+      repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-k8s-proxy
       tag: latest
-      pullPolicy: Never
-      imagePullSecret: ""
-
