@@ -1284,24 +1284,24 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 			for i := 0; i < 600; i++ {
 				// Check if parent exists
 				p, err := nc.GetParent(context.TODO())
-				if err != nil || p == nil {
+				if errors.IsNotFound(err) {
+					logger.Debugf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist in the server", nc.Project.Name)
+					return
+				} else if err != nil || p == nil {
+					if (i % 2) == 0 {
+						logger.Debugf("[RegisterEventHandler AddFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+					}
 					time.Sleep(500 * time.Millisecond)
 					continue
 				}
 				parent = p
 				break
 			}
+
 			if parent == nil {
-				hashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.Labels, nc.Labels["{{.Parent.CrdName}}"])
-				parent, err = c.client.{{.Parent.SimpleGroupTypeName}}().ForceRead{{.Parent.BaseNodeName}}ByName(context.TODO(), hashedName)
-				if err != nil {
-					if errors.IsNotFound(err) {
-						return
-					}
-					panic("error occurred while fetching parent " + err.Error())
-				}
-				panic(fmt.Sprintf("parent found (event loop is stalled) " + nc.DisplayName()))
+				panic(fmt.Sprintf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
 			}
+
 			if ! IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
 				AddChild("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name)
 			}
@@ -1335,24 +1335,21 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 				// Check if parent exists
 				p, err := nc.GetParent(context.TODO())
 				if errors.IsNotFound(err) {
+					logger.Debugf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s", nc.Project.Name)
 					break
 				} else if err != nil || p == nil {
+					if (i % 2) == 0 {
+						logger.Debugf("[RegisterEventHandler DeleteFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+					}
 					time.Sleep(500 * time.Millisecond)
 					continue
 				}
 				parent = p
 				break
 			}
+
 			if parent == nil {
-				hashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.Labels, nc.Labels["{{.Parent.CrdName}}"])
-				parent, err = c.client.{{.Parent.SimpleGroupTypeName}}().ForceRead{{.Parent.BaseNodeName}}ByName(context.TODO(), hashedName)
-				if err != nil {
-					if errors.IsNotFound(err) {
-						return
-					}
-					panic("error occurred while fetching parent " + err.Error())
-				}
-				panic(fmt.Sprintf("parent found (event loop is stalled) " + nc.DisplayName()))
+				panic(fmt.Sprintf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
 			}
 
 			if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
@@ -1402,24 +1399,22 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterAddCallback(cbfn func(obj *
 				for i := 0; i < 600; i++ {
 					// Check if parent exists
 					p, err := nc.GetParent(context.TODO())
-					if err != nil || p == nil {
+					if errors.IsNotFound(err) {
+						logger.Debugf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist", nc.Project.Name)
+						return
+					} else if err != nil || p == nil {
+						if (i % 2) == 0 {
+							logger.Debugf("[RegisterAddCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+						}
 						time.Sleep(500 * time.Millisecond)
 						continue
 					}
 					parent = p
 					break
 				}
-				if parent == nil {
-					hashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.Labels, nc.Labels["{{.Parent.CrdName}}"])
-					parent, err = c.client.{{.Parent.SimpleGroupTypeName}}().ForceRead{{.Parent.BaseNodeName}}ByName(context.TODO(), hashedName)
-					if err != nil {
-						if errors.IsNotFound(err) {
-							return
-						}
 
-						panic("error occurred while fetching parent " + err.Error())
-					}
-					panic(fmt.Sprintf("parent found (event loop is stalled) " + nc.DisplayName()))
+				if parent == nil {
+					panic(fmt.Sprintf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
 				}
 
 				if ! IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
@@ -1514,8 +1509,12 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterDeleteCallback(cbfn func(ob
 					// Check if parent exists
 					p, err := nc.GetParent(context.TODO())
 					if errors.IsNotFound(err) {
+						logger.Debugf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s", nc.Project.Name)
 						break
 					} else if err != nil || p == nil {
+						if (i % 2) == 0 {
+							logger.Debugf("[RegisterDeleteCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+						}
 						time.Sleep(500 * time.Millisecond)
 						continue
 					}
@@ -1524,16 +1523,7 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterDeleteCallback(cbfn func(ob
 				}
 
 				if parent == nil {
-					hashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.Labels, nc.Labels["{{.Parent.CrdName}}"])
-					parent, err = c.client.{{.Parent.SimpleGroupTypeName}}().ForceRead{{.Parent.BaseNodeName}}ByName(context.TODO(), hashedName)
-					if err != nil {
-						if errors.IsNotFound(err) {
-							return
-						}
-
-						panic("error occurred while fetching parent " + err.Error())
-					}
-					panic(fmt.Sprintf("parent found (event loop is stalled) " + nc.DisplayName()))
+					panic(fmt.Sprintf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
 				}
 				if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
 					RemoveChild("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name)
