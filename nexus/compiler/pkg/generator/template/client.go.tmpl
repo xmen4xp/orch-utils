@@ -1285,11 +1285,11 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 				// Check if parent exists
 				p, err := nc.GetParent(context.TODO())
 				if errors.IsNotFound(err) {
-					logger.Debugf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist in the server", nc.Project.Name)
+					logger.Debugf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist in the server", nc.{{$node.BaseNodeName}}.Name)
 					return
 				} else if err != nil || p == nil {
 					if (i % 2) == 0 {
-						logger.Debugf("[RegisterEventHandler AddFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+						logger.Debugf("[RegisterEventHandler AddFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
 					}
 					time.Sleep(500 * time.Millisecond)
 					continue
@@ -1299,7 +1299,7 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 			}
 
 			if parent == nil {
-				panic(fmt.Sprintf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
+				panic(fmt.Sprintf("[RegisterEventHandler AddFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
 			}
 
 			if ! IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
@@ -1335,11 +1335,11 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 				// Check if parent exists
 				p, err := nc.GetParent(context.TODO())
 				if errors.IsNotFound(err) {
-					logger.Debugf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s", nc.Project.Name)
+					logger.Debugf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
 					break
 				} else if err != nil || p == nil {
 					if (i % 2) == 0 {
-						logger.Debugf("[RegisterEventHandler DeleteFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+						logger.Debugf("[RegisterEventHandler DeleteFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
 					}
 					time.Sleep(500 * time.Millisecond)
 					continue
@@ -1349,7 +1349,7 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 			}
 
 			if parent == nil {
-				panic(fmt.Sprintf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
+				panic(fmt.Sprintf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
 			}
 
 			if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
@@ -1400,11 +1400,11 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterAddCallback(cbfn func(obj *
 					// Check if parent exists
 					p, err := nc.GetParent(context.TODO())
 					if errors.IsNotFound(err) {
-						logger.Debugf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist", nc.Project.Name)
+						logger.Debugf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s. Dropping the event as parent doesn't exist", nc.{{$node.BaseNodeName}}.Name)
 						return
 					} else if err != nil || p == nil {
 						if (i % 2) == 0 {
-							logger.Debugf("[RegisterAddCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+							logger.Debugf("[RegisterAddCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
 						}
 						time.Sleep(500 * time.Millisecond)
 						continue
@@ -1414,7 +1414,7 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterAddCallback(cbfn func(obj *
 				}
 
 				if parent == nil {
-					panic(fmt.Sprintf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
+					panic(fmt.Sprintf("[RegisterAddCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
 				}
 
 				if ! IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
@@ -1509,11 +1509,11 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterDeleteCallback(cbfn func(ob
 					// Check if parent exists
 					p, err := nc.GetParent(context.TODO())
 					if errors.IsNotFound(err) {
-						logger.Debugf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s", nc.Project.Name)
+						logger.Debugf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
 						break
 					} else if err != nil || p == nil {
 						if (i % 2) == 0 {
-							logger.Debugf("[RegisterDeleteCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.Project.Name, err, i)
+							logger.Debugf("[RegisterDeleteCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
 						}
 						time.Sleep(500 * time.Millisecond)
 						continue
@@ -1523,7 +1523,7 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterDeleteCallback(cbfn func(ob
 				}
 
 				if parent == nil {
-					panic(fmt.Sprintf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.Project.Name))
+					panic(fmt.Sprintf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
 				}
 				if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
 					RemoveChild("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name)
