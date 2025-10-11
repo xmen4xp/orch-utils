@@ -57,7 +57,7 @@ spec:
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         {{- if .Values.global.imagePullSecret }}
         imagePullSecrets:
-          - name: {{ .Values.imagePullSecret }}
+          - name: {{ .Values.global.imagePullSecret }}
         {{- end }}
         name: datamodel-installer-job
       restartPolicy: Never
