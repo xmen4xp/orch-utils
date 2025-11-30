@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #graphql's and compiler's builder/Dockerfile should be in sync
-FROM golang:1.24.6
+FROM golang:1.25.4
 
 # Create a non-root user with home directory
 RUN useradd -m -d /home/appuser appuser && \
@@ -33,7 +33,7 @@ RUN git config --global --add safe.directory '*' \
     && go install github.com/onsi/gomega/...@v1.18.0 \
     && go install golang.org/x/tools/cmd/goimports@latest \
     && go install github.com/mikefarah/yq/v4@v4.45.1 \
-    && go install -buildvcs=false k8s.io/kube-openapi/cmd/openapi-gen@v0.0.0-20250304201544-e5f78fe3ede9 \
+    && go install -buildvcs=false k8s.io/kube-openapi/cmd/openapi-gen@v0.0.0-20251125145642-4e65d59e963e \
     && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.6 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
