@@ -78,7 +78,7 @@ func initBinaries() {
 		goarch := runtime.GOARCH
 		fmt.Printf("Detected OS: %s, Architecture: %s\n", goos, goarch)
 
-		url := fmt.Sprintf("https://go.kubebuilder.io/test-tools/1.25.4/%s/%s", goos, goarch)
+		url := fmt.Sprintf("https://go.kubebuilder.io/test-tools/1.24.2/%s/%s", goos, goarch)
 		fmt.Printf("Downloading envtest binaries from: %s\n", url)
 
 		// Create a context with a timeout

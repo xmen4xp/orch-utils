@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.25.4-bookworm AS builder
+FROM golang:1.24.6-bullseye AS builder
 
 ARG API_GW_COMPONENT_NAME
 ARG HTTP_PROXY
@@ -24,10 +24,10 @@ WORKDIR /app
 RUN set -x && \
     apt-get update -y && \
     apt-get install -y --no-install-recommends netcat-openbsd=1.217-3 && \
-    make build
+    make build 
 
 #FROM gcr.io/distroless/static-debian12:nonroot
-FROM golang:1.25.4
+FROM golang:1.24
 # Run as non-privileged user
 USER nobody
 
