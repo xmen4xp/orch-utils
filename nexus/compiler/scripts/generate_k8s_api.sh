@@ -30,7 +30,7 @@ echo "DEFAULT_CLIENT_VERSION_TAG=$DEFAULT_CLIENT_VERSION_TAG"
 #  git checkout -f $DEFAULT_CLIENT_VERSION_TAG
 #popd
 pushd _generated
-go get golang.org/x/tools@v0.5.0
+go get golang.org/x/tools@v0.29.0
 ../_deps/github.com/kubernetes/code-generator/generate-groups.sh all "${GENERATED_PACKAGE}/client" "${GENERATED_PACKAGE}/apis" "${API_NAMES}" --go-header-file "../scripts/boilerplate.go.txt"
 popd
 
