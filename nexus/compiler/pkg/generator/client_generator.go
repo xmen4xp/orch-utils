@@ -81,6 +81,18 @@ func generateNexusClientVars(baseGroupName, crdModulePath string, pkgs parser.Pa
 
 		}
 	}
+
+	// Collect all unique external imports from nodes with external status types
+	externalImportsMap := make(map[string]bool)
+	for _, node := range vars.Nodes {
+		if node.IsExternalStatusType && node.StatusTypeImport != "" {
+			externalImportsMap[node.StatusTypeImport] = true
+		}
+	}
+	for imp := range externalImportsMap {
+		vars.ExternalImports += imp + "\n"
+	}
+
 	return vars, nil
 }
 
@@ -109,6 +121,11 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 		clientGroupVars.StatusType = parser.GetFieldType(statusField)
 		// Check if status type is from an external package (contains a dot indicating package prefix)
 		clientGroupVars.IsExternalStatusType = strings.Contains(clientGroupVars.StatusType, ".")
+		// If external status type, find and store the import path
+		if clientGroupVars.IsExternalStatusType {
+			pkgAlias := strings.Split(clientGroupVars.StatusType, ".")[0]
+			clientGroupVars.StatusTypeImport = findImportByAlias(pkg, pkgAlias)
+		}
 		statusName, err := parser.GetFieldName(statusField)
 		if err != nil {
 			log.Fatalf("failed to determine field name: %v", err)
@@ -306,6 +323,7 @@ type apiGroupsClientVars struct {
 	StatusNameFirstLower   string
 	StatusType             string
 	IsExternalStatusType   bool
+	StatusTypeImport       string
 	BaseImportName         string
 	GroupResourceType      string
 	GroupResourceNameTitle string
@@ -347,4 +365,32 @@ type apiGroupsClientVarsLink struct {
 	GroupResourceNameTitle string
 	GroupResourceType      string
 	CrdName                string
+}
+
+// findImportByAlias finds the import path for a given package alias in the package's imports.
+// For example, if the package has `import appsv1 "k8s.io/api/apps/v1"`, and we pass "appsv1",
+// this function returns `appsv1 "k8s.io/api/apps/v1"`.
+func findImportByAlias(pkg parser.Package, alias string) string {
+	for _, imp := range pkg.GetImports() {
+		var importAlias string
+		if imp.Name != nil {
+			// Named import like: appsv1 "k8s.io/api/apps/v1"
+			importAlias = imp.Name.String()
+		} else {
+			// Unnamed import - derive alias from path
+			unquoted, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				continue
+			}
+			parts := strings.Split(unquoted, "/")
+			importAlias = parts[len(parts)-1]
+		}
+		if importAlias == alias {
+			if imp.Name != nil {
+				return imp.Name.String() + " " + imp.Path.Value
+			}
+			return imp.Path.Value
+		}
+	}
+	return ""
 }
