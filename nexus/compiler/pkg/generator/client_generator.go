@@ -107,6 +107,8 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	if statusField != nil {
 		clientGroupVars.HasStatus = true
 		clientGroupVars.StatusType = parser.GetFieldType(statusField)
+		// Check if status type is from an external package (contains a dot indicating package prefix)
+		clientGroupVars.IsExternalStatusType = strings.Contains(clientGroupVars.StatusType, ".")
 		statusName, err := parser.GetFieldName(statusField)
 		if err != nil {
 			log.Fatalf("failed to determine field name: %v", err)
@@ -303,6 +305,7 @@ type apiGroupsClientVars struct {
 	StatusName             string
 	StatusNameFirstLower   string
 	StatusType             string
+	IsExternalStatusType   bool
 	BaseImportName         string
 	GroupResourceType      string
 	GroupResourceNameTitle string

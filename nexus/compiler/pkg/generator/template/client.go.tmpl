@@ -84,7 +84,7 @@ func subscribe(key string, informer cache.SharedIndexInformer){
 	subscriptionMap.Store(key,s)
 }
 
-func (c *Clientset) SubscribeAll() {	
+func (c *Clientset) SubscribeAll() {
 	var key string
 	{{ range $key, $node := .Nodes }}
 	key = "{{$node.CrdName}}"
@@ -518,7 +518,7 @@ func (group *{{$node.GroupTypeName}}) Create{{$node.BaseNodeName}}ByName(ctx con
 {{if .HasStatus}}
 // Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName sets user defined status
 func (group *{{$node.GroupTypeName}}) Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName(ctx context.Context,
-	objToUpdate *{{$node.GroupBaseImport}}, status *{{$node.BaseImportName}}.{{$node.StatusType}}) (*{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}, error) {
+	objToUpdate *{{$node.GroupBaseImport}}, status *{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}) (*{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}, error) {
 	logger.Debugf("[Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName] Received objToUpdate:%s",objToUpdate.GetName())
 
 	gvr := schema.GroupVersionResource{
@@ -784,7 +784,7 @@ func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Update(ctx conte
 
 {{if .HasStatus}}
 // Set{{.StatusName}} sets user defined status
-func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Set{{.StatusName}}(ctx context.Context, status *{{$node.BaseImportName}}.{{$node.StatusType}}) error {
+func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Set{{.StatusName}}(ctx context.Context, status *{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}) error {
 	logger.Debugf("[{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}} Set{{.StatusName}}] Set status for object with name %s", obj.GetName())
 	result, err := obj.client.{{$node.SimpleGroupTypeName}}().Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName(ctx, obj.{{$node.BaseNodeName}}, status)
 	if err != nil {
@@ -796,7 +796,7 @@ func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Set{{.StatusName
 }
 
 // Get{{$node.StatusName}} to get user defined status
-func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Get{{$node.StatusName}}(ctx context.Context) (*{{$node.BaseImportName}}.{{$node.StatusType}}, error) {
+func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Get{{$node.StatusName}}(ctx context.Context) (*{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}, error) {
 	getObj, err := obj.client.{{$node.SimpleGroupTypeName}}().Get{{$node.BaseNodeName}}ByName(ctx, obj.GetName())
 	if err != nil {
 		return nil, err
@@ -807,7 +807,7 @@ func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Get{{$node.Statu
 // Clear{{$node.StatusName}} to clear user defined status
 func (obj *{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}}) Clear{{$node.StatusName}}(ctx context.Context) error {
 	logger.Debugf("[{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}} Clear{{$node.StatusName}}] Set status for object with name %s", obj.GetName())
-	result, err := obj.client.{{$node.SimpleGroupTypeName}}().Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName(ctx, obj.{{$node.BaseNodeName}}, &{{$node.BaseImportName}}.{{$node.StatusType}}{})
+	result, err := obj.client.{{$node.SimpleGroupTypeName}}().Set{{$node.BaseNodeName}}{{$node.StatusName}}ByName(ctx, obj.{{$node.BaseNodeName}}, &{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}{})
 	if err != nil {
 		logger.Errorf("[{{$node.SimpleGroupTypeName}}{{$node.BaseNodeName}} Clear{{$node.StatusName}}] Clear status for object with name %s failed with error %v", obj.GetName(), err)
 		return err
@@ -1552,7 +1552,7 @@ func (c *{{$node.GroupResourceType}}Chainer) Clear{{$node.StatusName}}(ctx conte
 }
 
 // Get{{$node.StatusName}} to get user defined status
-func (c *{{$node.GroupResourceType}}Chainer) Get{{$node.StatusName}}(ctx context.Context) (result *{{$node.BaseImportName}}.{{$node.StatusType}}, err error) {
+func (c *{{$node.GroupResourceType}}Chainer) Get{{$node.StatusName}}(ctx context.Context) (result *{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}, err error) {
 	hashedName := helper.GetHashedName("{{$node.CrdName}}", c.parentLabels, c.name)
 	obj, err := c.client.{{$node.SimpleGroupTypeName}}().Get{{$node.BaseNodeName}}ByName(ctx, hashedName)
 	if err != nil {
@@ -1562,7 +1562,7 @@ func (c *{{$node.GroupResourceType}}Chainer) Get{{$node.StatusName}}(ctx context
 }
 
 // Set{{$node.StatusName}} sets user defined status
-func (c *{{$node.GroupResourceType}}Chainer) Set{{$node.StatusName}}(ctx context.Context, status *{{$node.BaseImportName}}.{{$node.StatusType}}) (err error) {
+func (c *{{$node.GroupResourceType}}Chainer) Set{{$node.StatusName}}(ctx context.Context, status *{{if $node.IsExternalStatusType}}{{$node.StatusType}}{{else}}{{$node.BaseImportName}}.{{$node.StatusType}}{{end}}) (err error) {
 	hashedName := helper.GetHashedName("{{$node.CrdName}}", c.parentLabels, c.name)
 	logger.Debugf("[{{$node.GroupResourceType}}Chainer Set{{$node.StatusName}}] Set status for object with name %s", hashedName)
 	obj, err := c.client.{{$node.SimpleGroupTypeName}}().Get{{$node.BaseNodeName}}ByName(ctx, hashedName)
