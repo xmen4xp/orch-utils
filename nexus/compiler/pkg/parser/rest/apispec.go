@@ -52,6 +52,8 @@ func extractApiSpecRestURI(uri *ast.CompositeLit, httpMethods map[string]nexus.H
 			restUri.Uri = key
 		case "QueryParams":
 			restUri.QueryParams = extractApiSpecQueryParams(kv)
+		case "Headers":
+			restUri.Headers = extractApiSpecHeaders(kv)
 		case "Methods":
 			restUri.Methods = extractApiSpecMethods(kv, httpMethods, httpCodes)
 		}
@@ -96,6 +98,23 @@ func extractApiSpecQueryParams(kv *ast.KeyValueExpr) []string {
 	return params
 }
 
+func extractApiSpecHeaders(kv *ast.KeyValueExpr) []string {
+	var params []string
+	switch val := kv.Value.(type) {
+	case *ast.CompositeLit:
+		for _, v := range val.Elts {
+			lit := v.(*ast.BasicLit)
+
+			param, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				log.Errorf("Error %v", err)
+			}
+			params = append(params, param)
+		}
+	}
+	return params
+}
+
 func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser.NodeHelper, crdName string) {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	crdHelper := parentsMap[crdName]
@@ -115,15 +134,28 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 
 		uriParams := r.FindAllStringSubmatch(uri.Uri, -1)
 		if _, ok := uri.Methods["LIST"]; ok {
-			if nodeExist(crdHelper.RestName, uriParams) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
+			if nodeExist(crdHelper.RestName, uriParams) || headerExist(crdHelper.RestName, uri.Headers) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
 				log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied as a param because endpoint is a list. URI: %s", crdHelper.RestName, uri.Uri)
 			}
 		}
 
-		// Check if node name is in both URI and Query param
-		// We are ignoring checking for node in URL because endpoint can be a list, and then we don't need this param
-		if nodeExist(crdHelper.RestName, uriParams) && queryParamExist(crdHelper.RestName, uri.QueryParams) {
-			log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied to both URI Param and Query Param. URI: %s", crdHelper.RestName, uri.Uri)
+		// Check if node name is in multiple locations (URI, Header, Query param)
+		// Parent info must exist in exactly ONE location
+		inURI := nodeExist(crdHelper.RestName, uriParams)
+		inHeader := headerExist(crdHelper.RestName, uri.Headers)
+		inQuery := queryParamExist(crdHelper.RestName, uri.QueryParams)
+		locations := 0
+		if inURI {
+			locations++
+		}
+		if inHeader {
+			locations++
+		}
+		if inQuery {
+			locations++
+		}
+		if locations > 1 {
+			log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied to multiple locations (URI/Header/Query). Found in %d locations. URI: %s", crdHelper.RestName, locations, uri.Uri)
 		}
 
 		for _, parentCrd := range crdHelper.Parents {
@@ -134,15 +166,30 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 				continue
 			}
 
-			if nodeExist(parentName, uriParams) && queryParamExist(parentName, uri.QueryParams) {
-				log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied to both URI Param and Query Param. URI: %s", parentName, uri.Uri)
+			// Check if parent is in multiple locations
+			parentInURI := nodeExist(parentName, uriParams)
+			parentInHeader := headerExist(parentName, uri.Headers)
+			parentInQuery := queryParamExist(parentName, uri.QueryParams)
+			parentLocations := 0
+			if parentInURI {
+				parentLocations++
+			}
+			if parentInHeader {
+				parentLocations++
+			}
+			if parentInQuery {
+				parentLocations++
 			}
 
-			if !nodeExist(parentName, uriParams) && !queryParamExist(parentName, uri.QueryParams) {
+			if parentLocations > 1 {
+				log.Fatalf("RestApiSpec: Provided parent name (%s) cannot be applied to multiple locations (URI/Header/Query). Found in %d locations. URI: %s", parentName, parentLocations, uri.Uri)
+			}
+
+			if parentLocations == 0 {
 				if _, exists := ignoredParentPathParams[parentName]; exists {
-					log.Warnf("RestApiSpec: Provided node name (%s) not found for uri: %s. Ignoring and proceeding, as it is configured as ignored parent path param", parentName, uri.Uri)
+					log.Warnf("RestApiSpec: Provided parent name (%s) not found for uri: %s. Ignoring and proceeding, as it is configured as ignored parent path param", parentName, uri.Uri)
 				} else {
-					log.Fatalf("RestApiSpec: Provided node name (%s) not found for uri: %s", parentName, uri.Uri)
+					log.Fatalf("RestApiSpec: Provided parent name (%s) not found for uri: %s", parentName, uri.Uri)
 				}
 			}
 		}
@@ -162,6 +209,16 @@ func nodeExist(name string, params [][]string) bool {
 }
 
 func queryParamExist(name string, params []string) bool {
+	for _, p := range params {
+		if p == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func headerExist(name string, params []string) bool {
 	for _, p := range params {
 		if p == name {
 			return true

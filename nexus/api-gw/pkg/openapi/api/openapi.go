@@ -110,7 +110,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	parseSpec(crdType, datamodel)
 
 	h := sha3.New256()
-	params := parseURIParams(uri.Uri, crdInfo.ParentHierarchy)
+	params := parseURIParams(uri, crdInfo.ParentHierarchy)
 	pathItem := &openapi3.PathItem{}
 
 	for method := range uri.Methods {
@@ -434,12 +434,12 @@ func addIntegerProperty(jsonSchema *openapi3.Schema, name string, prop v1.JSONSc
 	}
 }
 
-// parseURIParams parses the URI parameters.
-func parseURIParams(uri string, hierarchy []string) []*openapi3.ParameterRef {
+// parseURIParams parses the URI parameters and headers.
+func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.ParameterRef {
 	r := regexp.MustCompile(`{([^{}]+)}`)
-	params := r.FindAllStringSubmatch(uri, -1)
+	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
-	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy))
+	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy)+len(restURI.Headers))
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
@@ -452,6 +452,25 @@ func parseURIParams(uri string, hierarchy []string) []*openapi3.ParameterRef {
 		}
 		parameters = append(parameters, &openapi3.ParameterRef{
 			Value: openapi3.NewPathParameter(param[1]).
+				WithRequired(true).
+				WithSchema(openapi3.NewStringSchema()).
+				WithDescription(description),
+		})
+	}
+
+	// Add header parameters
+	for _, headerName := range restURI.Headers {
+		description := "Header for " + headerName
+		for _, nodeInfo := range model.CrdTypeToNodeInfo {
+			if nodeInfo.Name == headerName {
+				if nodeInfo.Description != "" {
+					description = nodeInfo.Description
+					break
+				}
+			}
+		}
+		parameters = append(parameters, &openapi3.ParameterRef{
+			Value: openapi3.NewHeaderParameter(headerName).
 				WithRequired(true).
 				WithSchema(openapi3.NewStringSchema()).
 				WithDescription(description),
