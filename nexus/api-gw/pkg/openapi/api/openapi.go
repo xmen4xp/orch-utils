@@ -489,7 +489,8 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 			description = "Name of the " + crdInfo.Name + " node"
 		}
 
-		if !paramExist(crdInfo.Name, params) {
+		// Skip if parent is already in URI path or headers
+		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.Headers) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -513,6 +514,15 @@ func constructUpdateParam() *openapi3.ParameterRef {
 func paramExist(param string, params [][]string) bool {
 	for _, p := range params {
 		if p[1] == param {
+			return true
+		}
+	}
+	return false
+}
+
+func headerParamExist(param string, headers []string) bool {
+	for _, h := range headers {
+		if h == param {
 			return true
 		}
 	}
