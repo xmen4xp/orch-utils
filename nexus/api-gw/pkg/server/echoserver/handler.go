@@ -66,7 +66,7 @@ func (s *EchoServer) GetHandler(c echo.Context) error {
 func getCRDInfoAndName(nc *NexusContext) (string, model.NodeInfo, string, error) {
 	crdName := model.URIToCRDType[nc.NexusURI]
 	crdInfo := model.CrdTypeToNodeInfo[crdName]
-	name := getNameFromParamsOrQuery(nc, crdInfo)
+	name := getNameFromRequest(nc, crdInfo)
 	if name == "" {
 		log.Error().Msgf("could not find required param: %s", crdInfo.Name)
 		return "", model.NodeInfo{}, "", fmt.Errorf("could not find required param: %s", crdInfo.Name)
@@ -74,8 +74,9 @@ func getCRDInfoAndName(nc *NexusContext) (string, model.NodeInfo, string, error)
 	return crdName, crdInfo, name, nil
 }
 
-func getNameFromParamsOrQuery(nc *NexusContext, crdInfo model.NodeInfo) string {
+func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 	name := nexus.DEFAULT_KEY
+	// Priority 1: URI params
 	for _, param := range nc.ParamNames() {
 		if param == crdInfo.Name {
 			name = nc.Param(param)
@@ -83,9 +84,16 @@ func getNameFromParamsOrQuery(nc *NexusContext, crdInfo model.NodeInfo) string {
 				log.Debug().Msgf("Could not find required param %s for request %s", crdInfo.Name, nc.Request().RequestURI)
 				return ""
 			}
+			return name
 		}
 	}
 
+	// Priority 2: Headers
+	if headerVal := nc.Request().Header.Get(crdInfo.Name); headerVal != "" {
+		return headerVal
+	}
+
+	// Priority 3: Query params
 	if nc.QueryParams().Has(crdInfo.Name) {
 		name = nc.QueryParams().Get(crdInfo.Name)
 	}
@@ -644,8 +652,13 @@ func parseLabels(c echo.Context, parents []string) map[string]string {
 	labels := make(map[string]string)
 	for _, parent := range parents {
 		if c, ok := model.CrdTypeToNodeInfo[parent]; ok {
+			// Priority 1: URI params
 			if v := nc.Param(c.Name); v != "" {
 				labels[parent] = v
+				// Priority 2: Headers
+			} else if v := nc.Request().Header.Get(c.Name); v != "" {
+				labels[parent] = v
+				// Priority 3: Query params
 			} else if nc.QueryParams().Has(c.Name) {
 				labels[parent] = nc.QueryParams().Get(c.Name)
 			} else {

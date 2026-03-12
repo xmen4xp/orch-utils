@@ -24,7 +24,7 @@ WORKDIR /app
 RUN set -x && \
     apt-get update -y && \
     apt-get install -y --no-install-recommends netcat-openbsd=1.217-3 && \
-    make build 
+    make build
 
 #FROM gcr.io/distroless/static-debian12:nonroot
 FROM golang:1.24

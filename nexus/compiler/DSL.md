@@ -166,7 +166,7 @@ type FullName struct {
 // Leader is a graph node and a Go type.
 type Leader struct {
 	nexus.Node
-	
+
 	EmployeeID int
 	Name       FullName
 
@@ -185,7 +185,7 @@ type Employee struct {
 // OfficeSpace is a graph node and a Go type.
 type OfficeSpace struct {
   nexus.Node
-  
+
   Id int
 }
 ```
@@ -240,20 +240,20 @@ type FullName struct {
 
 type Organization struct {
 	nexus.Node
-	
+
 	CEO             Leader  `nexus:"child"`
 	GLobalLocations Address `nexus:"children"`
 }
 // Leader is a graph node and a Go type.
 type Leader struct {
 	nexus.Node
-	
+
 	EmployeeID     int
 	Name           FullName
 
     Office         OfficeSpace `nexus:"child"`
     Employees      Employee    `nexus:"children"`
-	
+
 	BaseLocation   Address `nexus:"link"`
 	TeamLocations  Address `nexus:"links"`
 }
@@ -271,13 +271,13 @@ type Employee struct {
 // OfficeSpace is a graph node and a Go type.
 type OfficeSpace struct {
     nexus.Node
-  
+
     Id int
 }
 
 type Address struct {
     nexus.Node
-	
+
     Country    string
     PostalCode string
     Street     string
@@ -394,9 +394,9 @@ type GNS struct {
 
 ```graphql
 type GNS {
-    
+
     GeoDiscovery(id: ID): [GeoDiscovery!]
-      
+
     svcMetric: ServiceMetricTypeEnum
 
     serviceVersions(name: String): [ServiceVersion!]
@@ -479,7 +479,7 @@ They are defined in file `cosmos-datamodel/common/parameters.graphql`
 
 Spec fields of nexus nodes can be extended with additional validation.
 
-For field which should be validated you can add the following comment above a field with format 
+For field which should be validated you can add the following comment above a field with format
 
 `//nexus-validation: Validation pattern`.
 
@@ -586,7 +586,7 @@ type Foo struct {
 
 ## REST API
 
-Nexus DSL provides the syntax to access a Nexus node through one or more REST API's. 
+Nexus DSL provides the syntax to access a Nexus node through one or more REST API's.
 
 The syntax for declaration of REST API for a Nexus node has 2 parts in Nexus DSL:
 
@@ -601,8 +601,19 @@ Declares one or more REST API's.
 Each API spec captures information about the REST API, such as:
 
 * URI
+* Query Parameters (optional)
+* Headers (optional)
 * Allowed http methods
 * Desired Response codes
+
+#### Parent Hierarchy Resolution
+
+Parent hierarchy information can be specified in three ways with the following priority order:
+1. **URI parameters** (highest priority) - e.g., `/v1alpha2/root/{root.Root}/leader/{role.Leader}`
+2. **Headers** - e.g., `Headers: []string{"root.Root"}`
+3. **Query parameters** (lowest priority) - e.g., `QueryParams: []string{"root.Root"}`
+
+**Important**: Each parent must appear in exactly ONE location (URI, header, or query param). The compiler will validate this and fail if a parent appears in multiple locations.
 
 #### Associate nexus.RestAPISpec with Nexus node
 
@@ -624,7 +635,7 @@ import (
 var LeaderRestAPISpec = nexus.RestAPISpec{
   Uris: []nexus.RestURIs{
     {
-      Uri: "/v1alpha2/root/{root}/leader/{role.Leader}",
+      Uri: "/v1alpha2/root/{root.Root}/leader/{role.Leader}",
       Methods: nexus.HTTPMethodsResponses{
         http.MethodGet: nexus.DefaultHTTPGETResponses,
       },
@@ -632,7 +643,7 @@ var LeaderRestAPISpec = nexus.RestAPISpec{
     {
       Uri: "/v1alpha2/leader",
       QueryParams: []string{
-        "root",
+        "root.Root",
         "role.Leader"
       },
       Methods: nexus.HTTPMethodsResponses{
@@ -640,7 +651,16 @@ var LeaderRestAPISpec = nexus.RestAPISpec{
       },
     },
     {
-      Uri:     "/v1alpha2/root/{root}/leader",
+      Uri: "/v1alpha2/leader/{role.Leader}",
+      Headers: []string{
+        "root.Root",
+      },
+      Methods: nexus.HTTPMethodsResponses{
+        http.MethodGet: nexus.DefaultHTTPGETResponses,
+      },
+    },
+    {
+      Uri:     "/v1alpha2/root/{root.Root}/leader",
       Methods: nexus.HTTPListResponse,
     },
   },
@@ -658,7 +678,7 @@ The above example, defined a variable LeaderRestAPISpec of type nexus.RestAPISpe
 
 ## Custom GraphQL Query spec
 
-Custom GraphQl query spec is a way of extending GraphQl server with queries to external GRPC servers. 
+Custom GraphQl query spec is a way of extending GraphQl server with queries to external GRPC servers.
 
 To add custom queries you need to use `nexus.GraphQLQuerySpec` struct imported from
 [nexus](https://github.com/vmware-tanzu/graph-framework-for-microservices/blob/main/nexus/nexus/nexus.go) package.

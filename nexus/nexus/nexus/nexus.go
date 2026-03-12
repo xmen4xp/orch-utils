@@ -48,6 +48,7 @@ type SecretSpec struct{}
 type RestURIs struct {
 	Uri         string               `json:"uri"`
 	QueryParams []string             `json:"query_params,omitempty"`
+	Headers     []string             `json:"headers,omitempty"`
 	Methods     HTTPMethodsResponses `json:"methods"`
 }
 

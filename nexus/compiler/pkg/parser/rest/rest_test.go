@@ -150,4 +150,102 @@ var _ = Describe("Rest tests", func() {
 
 		Expect(fail).To(BeTrue())
 	})
+
+	It("should validate RestAPISpec with headers", func() {
+		defer func() { log.StandardLogger().ExitFunc = nil }()
+
+		fail := false
+		log.StandardLogger().ExitFunc = func(int) {
+			fail = true
+		}
+
+		restApiSpec := nexus.RestAPISpec{
+			Uris: []nexus.RestURIs{
+				{
+					Uri: "/v1alpha2/dns/{gns.Dns}",
+					Headers: []string{
+						"config.Config",
+					},
+					Methods: nexus.DefaultHTTPMethodsResponses,
+				},
+			},
+		}
+		rest.ValidateRestApiSpec(restApiSpec, parentsMap, "dnses.gns.tsm.tanzu.vmware.com")
+		Expect(fail).To(BeFalse())
+	})
+
+	It("should fail validation when parent is in both URI and Header", func() {
+		defer func() { log.StandardLogger().ExitFunc = nil }()
+
+		fail := false
+		log.StandardLogger().ExitFunc = func(int) {
+			fail = true
+		}
+
+		restApiSpec := nexus.RestAPISpec{
+			Uris: []nexus.RestURIs{
+				{
+					Uri: "/v1alpha2/config/{config.Config}/dns/{gns.Dns}",
+					Headers: []string{
+						"config.Config",
+					},
+					Methods: nexus.DefaultHTTPMethodsResponses,
+				},
+			},
+		}
+		rest.ValidateRestApiSpec(restApiSpec, parentsMap, "dnses.gns.tsm.tanzu.vmware.com")
+		Expect(fail).To(BeTrue())
+	})
+
+	It("should fail validation when parent is in both Header and Query", func() {
+		defer func() { log.StandardLogger().ExitFunc = nil }()
+
+		fail := false
+		log.StandardLogger().ExitFunc = func(int) {
+			fail = true
+		}
+
+		restApiSpec := nexus.RestAPISpec{
+			Uris: []nexus.RestURIs{
+				{
+					Uri: "/v1alpha2/dns/{gns.Dns}",
+					Headers: []string{
+						"config.Config",
+					},
+					QueryParams: []string{
+						"config.Config",
+					},
+					Methods: nexus.DefaultHTTPMethodsResponses,
+				},
+			},
+		}
+		rest.ValidateRestApiSpec(restApiSpec, parentsMap, "dnses.gns.tsm.tanzu.vmware.com")
+		Expect(fail).To(BeTrue())
+	})
+
+	It("should fail validation when node name is in Header for list endpoint", func() {
+		defer func() { log.StandardLogger().ExitFunc = nil }()
+
+		fail := false
+		log.StandardLogger().ExitFunc = func(int) {
+			fail = true
+		}
+
+		restApiSpec := nexus.RestAPISpec{
+			Uris: []nexus.RestURIs{
+				{
+					Uri: "/v1alpha2/dnses",
+					Headers: []string{
+						"gns.Dns",
+					},
+					QueryParams: []string{
+						"config.Config",
+					},
+					Methods: nexus.HTTPListResponse,
+				},
+			},
+		}
+		rest.ValidateRestApiSpec(restApiSpec, parentsMap, "dnses.gns.tsm.tanzu.vmware.com")
+		Expect(fail).To(BeTrue())
+	})
 })
