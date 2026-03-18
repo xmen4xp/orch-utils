@@ -88,8 +88,8 @@ func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 		}
 	}
 
-	// Priority 2: Headers
-	if headerVal := nc.Request().Header.Get(crdInfo.Name); headerVal != "" {
+	// Priority 2: Headers (check alias first, then primary name)
+	if headerVal := GetHeaderValue(nc.Request(), crdInfo.Name); headerVal != "" {
 		return headerVal
 	}
 
@@ -99,6 +99,19 @@ func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 	}
 
 	return name
+}
+
+// GetHeaderValue looks up a header value by name, checking alias first if configured.
+// Priority: alias header > primary header name
+func GetHeaderValue(req *http.Request, name string) string {
+	if config.Cfg != nil && config.Cfg.HeaderAliases != nil {
+		if alias, ok := config.Cfg.HeaderAliases[name]; ok {
+			if val := req.Header.Get(alias); val != "" {
+				return val
+			}
+		}
+	}
+	return req.Header.Get(name)
 }
 
 func getHashedNameAndGVR(crdName string, crdInfo model.NodeInfo,
@@ -655,8 +668,8 @@ func parseLabels(c echo.Context, parents []string) map[string]string {
 			// Priority 1: URI params
 			if v := nc.Param(c.Name); v != "" {
 				labels[parent] = v
-				// Priority 2: Headers
-			} else if v := nc.Request().Header.Get(c.Name); v != "" {
+				// Priority 2: Headers (check alias first, then primary name)
+			} else if v := GetHeaderValue(nc.Request(), c.Name); v != "" {
 				labels[parent] = v
 				// Priority 3: Query params
 			} else if nc.QueryParams().Has(c.Name) {
