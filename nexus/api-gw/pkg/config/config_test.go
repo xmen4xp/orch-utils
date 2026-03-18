@@ -105,3 +105,26 @@ server:
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse config file")
 }
+
+func TestLoadConfigWithHeaderAliases(t *testing.T) {
+	configWithAliases := `
+server:
+  httpPort: "8080"
+  address: "127.0.0.1"
+  certPath: "/certs/cert.pem"
+  keyPath: "/certs/key.pem"
+headerAliases:
+  "orgs.Org": "x-org-id"
+  "projects.Project": "x-project-id"
+`
+
+	tempConfigFile := createTempConfigFile(t, configWithAliases)
+	defer os.Remove(tempConfigFile)
+
+	conf, err := config.LoadConfig(tempConfigFile)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, conf.HeaderAliases)
+	assert.Equal(t, "x-org-id", conf.HeaderAliases["orgs.Org"])
+	assert.Equal(t, "x-project-id", conf.HeaderAliases["projects.Project"])
+}

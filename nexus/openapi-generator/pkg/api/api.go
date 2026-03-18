@@ -103,7 +103,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
 	parseSpec(crdType, datamodel)
 
-	params := parseUriParams(uri.Uri, crdInfo.ParentHierarchy)
+	params := parseUriParams(uri, crdInfo.ParentHierarchy)
 	pathItem := &openapi3.PathItem{}
 	for method := range uri.Methods {
 		opId := getDescription(string(method), uri.Uri)
@@ -383,10 +383,10 @@ func parseFields(jsonSchema *openapi3.Schema, specProps map[string]v1.JSONSchema
 	}
 }
 
-// parseUriParams parses the URI parameters
-func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.ParameterRef) {
+// parseUriParams parses the URI parameters and headers.
+func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*openapi3.ParameterRef) {
 	r := regexp.MustCompile(`{([^{}]+)}`)
-	params := r.FindAllStringSubmatch(uri, -1)
+	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
@@ -400,6 +400,25 @@ func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.Para
 		}
 		parameters = append(parameters, &openapi3.ParameterRef{
 			Value: openapi3.NewPathParameter(param[1]).
+				WithRequired(true).
+				WithSchema(openapi3.NewStringSchema()).
+				WithDescription(description),
+		})
+	}
+
+	// Add header parameters
+	for _, headerName := range restURI.Headers {
+		description := "Header for " + headerName
+		for _, nodeInfo := range model.CrdTypeToNodeInfo {
+			if nodeInfo.Name == headerName {
+				if nodeInfo.Description != "" {
+					description = nodeInfo.Description
+					break
+				}
+			}
+		}
+		parameters = append(parameters, &openapi3.ParameterRef{
+			Value: openapi3.NewHeaderParameter(headerName).
 				WithRequired(true).
 				WithSchema(openapi3.NewStringSchema()).
 				WithDescription(description),
@@ -423,7 +442,8 @@ func parseUriParams(uri string, hierarchy []string) (parameters []*openapi3.Para
 			description = "Name of the " + crdInfo.Name + " node"
 		}
 
-		if !paramExist(crdInfo.Name, params) {
+		// Skip if parent is already in URI path or headers
+		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.Headers) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -447,6 +467,15 @@ func constructUpdateParam() *openapi3.ParameterRef {
 func paramExist(param string, params [][]string) bool {
 	for _, p := range params {
 		if p[1] == param {
+			return true
+		}
+	}
+	return false
+}
+
+func headerParamExist(param string, headers []string) bool {
+	for _, h := range headers {
+		if h == param {
 			return true
 		}
 	}

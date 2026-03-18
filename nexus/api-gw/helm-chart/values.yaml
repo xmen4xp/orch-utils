@@ -26,6 +26,9 @@ config:
     httpPort: "8082"
   enableNexusRuntime: true
   proxyInsecureSkipVerify: true
+  headerAliases:
+    "orgs.Org": "x-org-id"
+    "projects.Project": "x-project-id"
 
 nexusK8sProxyKubeconfig:
   create: true

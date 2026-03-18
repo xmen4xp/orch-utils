@@ -54,7 +54,7 @@ func setupServer() (*echoserver.EchoServer, chan struct{}) {
 	k8sClient := k8sFake.NewSimpleClientset()
 	client.Client = fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), GRVToListKind)
 
-	serverObj := echoserver.InitEcho(stopCh, config.Cfg, k8sClient)
+	serverObj := echoserver.InitEcho(stopCh, config.Cfg, k8sClient, nil)
 
 	return serverObj, stopCh
 }
