@@ -15,6 +15,8 @@ require (
 	k8s.io/apiextensions-apiserver v0.32.3
 )
 
+replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus => ../nexus
+
 require (
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
