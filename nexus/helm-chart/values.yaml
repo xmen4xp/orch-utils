@@ -7,16 +7,16 @@ global:
 
 nexus-api:
   image:
-    repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-api
+    repository: ghcr.io/ciscohyperdraive/oss-nexus-api
     tag: latest
 
 api-gw:
   nexusApiGw:
     image:
-      repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-api-gw
+      repository: ghcr.io/ciscohyperdraive/oss-nexus-api-gw
       tag: latest
 
   nexusK8sProxy:
     image:
-      repository: ghcr.io/ciscohyperdraive/nexus/oss-nexus-k8s-proxy
+      repository: ghcr.io/ciscohyperdraive/oss-nexus-k8s-proxy
       tag: latest
