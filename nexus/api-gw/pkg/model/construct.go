@@ -77,21 +77,82 @@ func ConstructDatamodel(eventType EventType, name string, unstructuredObj *unstr
 	}
 
 	log.Debug().Msgf("ConstructDatamodel: Spec: %#v", spec)
-	if title, ok := spec["title"]; ok {
-		titleInString, ok := title.(string)
-		if !ok {
-			fmt.Println("title is not of type string")
-			return
-		}
-		datamodelName := name
-		DatamodelToDatamodelInfo[datamodelName] = DatamodelInfo{
-			Title: titleInString,
-		}
 
-		log.Debug().Msgf("ConstructDatamodel: Datamodel info: %v", DatamodelToDatamodelInfo)
-
-		DatamodelsChan <- datamodelName
+	datamodelInfo := DatamodelInfo{
+		SecuritySchemes: make(map[string]SecurityScheme),
 	}
+
+	if title, ok := spec["title"]; ok {
+		if titleInString, ok := title.(string); ok {
+			datamodelInfo.Title = titleInString
+		}
+	}
+
+	if description, ok := spec["description"]; ok {
+		if descInString, ok := description.(string); ok {
+			datamodelInfo.Description = descInString
+		}
+	}
+
+	if version, ok := spec["version"]; ok {
+		if versionInString, ok := version.(string); ok {
+			datamodelInfo.Version = versionInString
+		}
+	}
+
+	if securitySchemes, ok := spec["securitySchemes"].(map[string]interface{}); ok {
+		for schemeName, schemeData := range securitySchemes {
+			if schemeMap, ok := schemeData.(map[string]interface{}); ok {
+				scheme := SecurityScheme{}
+				if t, ok := schemeMap["type"].(string); ok {
+					scheme.Type = t
+				}
+				if s, ok := schemeMap["scheme"].(string); ok {
+					scheme.Scheme = s
+				}
+				if bf, ok := schemeMap["bearerFormat"].(string); ok {
+					scheme.BearerFormat = bf
+				}
+				if in, ok := schemeMap["in"].(string); ok {
+					scheme.In = in
+				}
+				if n, ok := schemeMap["name"].(string); ok {
+					scheme.Name = n
+				}
+				if desc, ok := schemeMap["description"].(string); ok {
+					scheme.Description = desc
+				}
+				datamodelInfo.SecuritySchemes[schemeName] = scheme
+			}
+		}
+	}
+
+	if security, ok := spec["security"].([]interface{}); ok {
+		for _, secItem := range security {
+			if secMap, ok := secItem.(map[string]interface{}); ok {
+				secReq := make(map[string][]string)
+				for key, val := range secMap {
+					if valArray, ok := val.([]interface{}); ok {
+						strArray := make([]string, 0, len(valArray))
+						for _, v := range valArray {
+							if strVal, ok := v.(string); ok {
+								strArray = append(strArray, strVal)
+							}
+						}
+						secReq[key] = strArray
+					}
+				}
+				datamodelInfo.Security = append(datamodelInfo.Security, secReq)
+			}
+		}
+	}
+
+	datamodelName := name
+	DatamodelToDatamodelInfo[datamodelName] = datamodelInfo
+
+	log.Debug().Msgf("ConstructDatamodel: Datamodel info: %v", DatamodelToDatamodelInfo)
+
+	DatamodelsChan <- datamodelName
 }
 
 func ConstructMapURIToCRDType(eventType EventType, crdType string, apiURIs []nexus.RestURIs) {

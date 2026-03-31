@@ -26,15 +26,31 @@ func New(datamodel string) {
 	if info, ok := model.DatamodelToDatamodelInfo[datamodel]; ok {
 		title = info.Title
 	}
+	description := ""
+	version := "1.0.0"
+
+	// Apply OpenAPI config from nexus.yaml if available
+	if model.OpenApiConfig != nil && model.OpenApiConfig.Info != nil {
+		if model.OpenApiConfig.Info.Title != "" {
+			title = model.OpenApiConfig.Info.Title
+		}
+		if model.OpenApiConfig.Info.Description != "" {
+			description = model.OpenApiConfig.Info.Description
+		}
+		if model.OpenApiConfig.Info.Version != "" {
+			version = model.OpenApiConfig.Info.Version
+		}
+	}
+
 	schema := openapi3.T{
 		OpenAPI: "3.0.0",
 		Info: &openapi3.Info{
 			Title:          title,
-			Description:    "",
+			Description:    description,
 			TermsOfService: "",
 			Contact:        nil,
 			License:        nil,
-			Version:        "1.0.0",
+			Version:        version,
 		},
 		Servers: openapi3.Servers{
 			&openapi3.Server{
@@ -52,8 +68,9 @@ func New(datamodel string) {
 		},
 		Paths: &openapi3.Paths{},
 		Components: &openapi3.Components{
-			Schemas:       openapi3.Schemas{},
-			RequestBodies: openapi3.RequestBodies{},
+			Schemas:         openapi3.Schemas{},
+			RequestBodies:   openapi3.RequestBodies{},
+			SecuritySchemes: openapi3.SecuritySchemes{},
 			Responses: openapi3.ResponseBodies{
 				"DefaultResponse": &openapi3.ResponseRef{
 					Value: openapi3.NewResponse().
@@ -72,7 +89,54 @@ func New(datamodel string) {
 			},
 		},
 	}
+
+	// Apply security schemes from config
+	if model.OpenApiConfig != nil && model.OpenApiConfig.SecuritySchemes != nil {
+		for schemeName, schemeConfig := range model.OpenApiConfig.SecuritySchemes {
+			secScheme := &openapi3.SecurityScheme{
+				Type:         schemeConfig.Type,
+				Scheme:       schemeConfig.Scheme,
+				BearerFormat: schemeConfig.BearerFormat,
+				In:           schemeConfig.In,
+				Name:         schemeConfig.Name,
+				Description:  schemeConfig.Description,
+			}
+			schema.Components.SecuritySchemes[schemeName] = &openapi3.SecuritySchemeRef{Value: secScheme}
+		}
+	}
+
+	// Apply global security requirements
+	if model.OpenApiConfig != nil && len(model.OpenApiConfig.Security) > 0 {
+		schema.Security = make(openapi3.SecurityRequirements, 0, len(model.OpenApiConfig.Security))
+		for _, secReq := range model.OpenApiConfig.Security {
+			schema.Security = append(schema.Security, secReq)
+		}
+	}
+
 	Schemas[datamodel] = schema
+}
+
+// getGlobalSecurityHeaders returns a map of header names that are covered by global security schemes
+func getGlobalSecurityHeaders() map[string]bool {
+	headers := make(map[string]bool)
+
+	if model.OpenApiConfig == nil {
+		return headers
+	}
+
+	// Check all security schemes used in global security requirements
+	for _, secReq := range model.OpenApiConfig.Security {
+		for schemeName := range secReq {
+			if scheme, exists := model.OpenApiConfig.SecuritySchemes[schemeName]; exists {
+				// Only collect apiKey type schemes in headers
+				if scheme.Type == "apiKey" && scheme.In == "header" && scheme.Name != "" {
+					headers[scheme.Name] = true
+				}
+			}
+		}
+	}
+
+	return headers
 }
 
 // Construct description for a method + uri combo.
@@ -120,6 +184,13 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 				Parameters:  params,
 				Responses:   resp,
 			}
+			// Apply operation-level security override if specified
+			if uri.Security != nil {
+				operation.Security = &openapi3.SecurityRequirements{}
+				for _, secReq := range *uri.Security {
+					*operation.Security = append(*operation.Security, secReq)
+				}
+			}
 			pathItem.Get = operation
 		case http.MethodGet:
 			operation := &openapi3.Operation{
@@ -161,6 +232,13 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 				})
 				operation.Responses = resp
 			}
+			// Apply operation-level security override if specified
+			if uri.Security != nil {
+				operation.Security = &openapi3.SecurityRequirements{}
+				for _, secReq := range *uri.Security {
+					*operation.Security = append(*operation.Security, secReq)
+				}
+			}
 			pathItem.Get = operation
 		case http.MethodPut:
 			operation := &openapi3.Operation{
@@ -193,6 +271,13 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 				})
 				operation.Responses = resp
 			}
+			// Apply operation-level security override if specified
+			if uri.Security != nil {
+				operation.Security = &openapi3.SecurityRequirements{}
+				for _, secReq := range *uri.Security {
+					*operation.Security = append(*operation.Security, secReq)
+				}
+			}
 			pathItem.Put = operation
 		case http.MethodPatch:
 			operation := &openapi3.Operation{
@@ -217,6 +302,13 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 					Ref: "#/components/requestBodies/Create" + crdInfo.Name,
 				}
 			}
+			// Apply operation-level security override if specified
+			if uri.Security != nil {
+				operation.Security = &openapi3.SecurityRequirements{}
+				for _, secReq := range *uri.Security {
+					*operation.Security = append(*operation.Security, secReq)
+				}
+			}
 			pathItem.Patch = operation
 		case http.MethodDelete:
 			resp := &openapi3.Responses{}
@@ -228,6 +320,13 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 				Tags:        []string{nameParts[1]},
 				Responses:   resp,
 				Parameters:  params,
+			}
+			// Apply operation-level security override if specified
+			if uri.Security != nil {
+				operation.Security = &openapi3.SecurityRequirements{}
+				for _, secReq := range *uri.Security {
+					*operation.Security = append(*operation.Security, secReq)
+				}
 			}
 			pathItem.Delete = operation
 		}
@@ -388,6 +487,9 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
+	// Get global security headers to check which headers are covered
+	globalSecurityHeaders := getGlobalSecurityHeaders()
+
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
@@ -406,8 +508,13 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 		})
 	}
 
-	// Add header parameters
+	// Add header parameters only if not covered by global security
 	for headerName, nodeType := range restURI.HeaderParams {
+		// Skip if this header is already covered by global security schemes
+		if _, covered := globalSecurityHeaders[headerName]; covered {
+			log.Debugf("Skipping header param %s as it's covered by global security", headerName)
+			continue
+		}
 		description := "Header for " + nodeType
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
 			if nodeInfo.Name == nodeType {
@@ -554,6 +661,7 @@ func addStatusUri(uriPath string, typeOfUri model.URIType, parentUri nexus.RestU
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 			// http.MethodPut: nexus.DefaultHTTPPUTResponses,
 		},
+		Security: parentUri.Security, // Inherit security from parent URI
 	}
 	urisMap[uriPath] = model.RestURIInfo{
 		TypeOfURI: typeOfUri,

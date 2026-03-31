@@ -145,6 +145,7 @@ func addStatusURI(uriPath string, typeOfURI model.URIType, parentURI nexus.RestU
 		PathParams:   parentURI.PathParams,
 		QueryParams:  parentURI.QueryParams,
 		HeaderParams: parentURI.HeaderParams,
+		Security:     parentURI.Security,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 			http.MethodPut: nexus.DefaultHTTPPUTResponses,

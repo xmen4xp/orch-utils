@@ -66,7 +66,20 @@ func ConstructEchoPathParamURL(uri string) string {
 }
 
 type DatamodelInfo struct {
-	Title string
+	Title           string
+	Description     string
+	Version         string
+	SecuritySchemes map[string]SecurityScheme
+	Security        []map[string][]string
+}
+
+type SecurityScheme struct {
+	Type         string
+	Scheme       string
+	BearerFormat string
+	In           string
+	Name         string
+	Description  string
 }
 
 // LinkGvk : This model used to carry fully qualified object <gvk> and

@@ -33,18 +33,31 @@ var (
 func New(datamodel string) {
 	// Check if datamodel info is present.
 	title := "Nexus API GW APIs"
-	if info, ok := model.DatamodelToDatamodelInfo[datamodel]; ok {
-		title = info.Title
+	description := ""
+	version := "1.0.0"
+
+	info, hasDatamodelInfo := model.DatamodelToDatamodelInfo[datamodel]
+	if hasDatamodelInfo {
+		if info.Title != "" {
+			title = info.Title
+		}
+		if info.Description != "" {
+			description = info.Description
+		}
+		if info.Version != "" {
+			version = info.Version
+		}
 	}
+
 	schema := openapi3.T{
 		OpenAPI: "3.0.0",
 		Info: &openapi3.Info{
 			Title:          title,
-			Description:    "",
+			Description:    description,
 			TermsOfService: "",
 			Contact:        nil,
 			License:        nil,
-			Version:        "1.0.0",
+			Version:        version,
 		},
 		Servers: openapi3.Servers{
 			&openapi3.Server{
@@ -62,8 +75,9 @@ func New(datamodel string) {
 		},
 		Paths: openapi3.NewPaths(),
 		Components: &openapi3.Components{
-			Schemas:       openapi3.Schemas{},
-			RequestBodies: openapi3.RequestBodies{},
+			Schemas:         openapi3.Schemas{},
+			RequestBodies:   openapi3.RequestBodies{},
+			SecuritySchemes: openapi3.SecuritySchemes{},
 			Responses: openapi3.ResponseBodies{
 				"DefaultResponse": &openapi3.ResponseRef{
 					Value: openapi3.NewResponse().
@@ -82,7 +96,33 @@ func New(datamodel string) {
 			},
 		},
 	}
-	log.Info().Msgf("Created schema for %s", datamodel)
+
+	// Apply security schemes from DatamodelInfo (from CRD)
+	if hasDatamodelInfo {
+		for schemeName, scheme := range info.SecuritySchemes {
+			secScheme := &openapi3.SecurityScheme{
+				Type:         scheme.Type,
+				Scheme:       scheme.Scheme,
+				BearerFormat: scheme.BearerFormat,
+				In:           scheme.In,
+				Name:         scheme.Name,
+				Description:  scheme.Description,
+			}
+			schema.Components.SecuritySchemes[schemeName] = &openapi3.SecuritySchemeRef{
+				Value: secScheme,
+			}
+		}
+
+		// Apply global security requirements
+		if len(info.Security) > 0 {
+			schema.Security = make(openapi3.SecurityRequirements, 0, len(info.Security))
+			for _, secReq := range info.Security {
+				schema.Security = append(schema.Security, secReq)
+			}
+		}
+	}
+
+	log.Info().Msgf("Created schema for %s with %d security schemes", datamodel, len(schema.Components.SecuritySchemes))
 	Schemas[datamodel] = schema
 }
 
@@ -96,9 +136,48 @@ func DatamodelUpdateNotification() {
 
 		if schema, ok := Schemas[name]; ok {
 			model.DatamodelToDatamodelInfoMutex.Lock()
-			schema.Info.Title = model.DatamodelToDatamodelInfo[name].Title
+			info := model.DatamodelToDatamodelInfo[name]
+
+			// Update Info section
+			if info.Title != "" {
+				schema.Info.Title = info.Title
+			}
+			if info.Description != "" {
+				schema.Info.Description = info.Description
+			}
+			if info.Version != "" {
+				schema.Info.Version = info.Version
+			}
+
+			// Update security schemes
+			if schema.Components.SecuritySchemes == nil {
+				schema.Components.SecuritySchemes = openapi3.SecuritySchemes{}
+			}
+			for schemeName, scheme := range info.SecuritySchemes {
+				secScheme := &openapi3.SecurityScheme{
+					Type:         scheme.Type,
+					Scheme:       scheme.Scheme,
+					BearerFormat: scheme.BearerFormat,
+					In:           scheme.In,
+					Name:         scheme.Name,
+					Description:  scheme.Description,
+				}
+				schema.Components.SecuritySchemes[schemeName] = &openapi3.SecuritySchemeRef{
+					Value: secScheme,
+				}
+			}
+
+			// Update global security requirements
+			if len(info.Security) > 0 {
+				schema.Security = make(openapi3.SecurityRequirements, 0, len(info.Security))
+				for _, secReq := range info.Security {
+					schema.Security = append(schema.Security, secReq)
+				}
+			}
+
 			model.DatamodelToDatamodelInfoMutex.Unlock()
-			log.Info().Msgf("Updated title: %s for %s openapi spec", schema.Info.Title, name)
+			log.Info().Msgf("Updated openapi spec for %s: title=%s, security_schemes=%d",
+				name, schema.Info.Title, len(schema.Components.SecuritySchemes))
 		}
 	}
 }
@@ -110,11 +189,11 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	parseSpec(crdType, datamodel)
 
 	h := sha3.New256()
-	params := parseURIParams(uri, crdInfo.ParentHierarchy)
+	params := parseURIParams(uri, crdInfo.ParentHierarchy, datamodel)
 	pathItem := &openapi3.PathItem{}
 
 	for method := range uri.Methods {
-		addOperationToPathItem(pathItem, string(method), uri, crdInfo, params, h)
+		addOperationToPathItem(pathItem, string(method), uri, crdInfo, params, h, datamodel)
 	}
 
 	log.Info().Msgf("adding %s path to %s", uri.Uri, datamodel)
@@ -122,7 +201,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 }
 
 func addOperationToPathItem(pathItem *openapi3.PathItem, method string, uri nexus.RestURIs,
-	crdInfo model.NodeInfo, params []*openapi3.ParameterRef, h hash.Hash,
+	crdInfo model.NodeInfo, params []*openapi3.ParameterRef, h hash.Hash, datamodel string,
 ) {
 	formedStr := fmt.Sprintf("%s%s", method, uri.Uri)
 	h.Write([]byte(formedStr))
@@ -130,28 +209,40 @@ func addOperationToPathItem(pathItem *openapi3.PathItem, method string, uri nexu
 	opID := hex.EncodeToString(h.Sum(nil))
 	nameParts := strings.Split(crdInfo.Name, ".")
 
+	// Get operation-level security override if specified
+	var opSecurity *openapi3.SecurityRequirements
+	if uri.Security != nil {
+		opSecurity = &openapi3.SecurityRequirements{}
+		for _, secReq := range *uri.Security {
+			*opSecurity = append(*opSecurity, secReq)
+		}
+	}
+
 	switch method {
 	case "LIST":
-		addListOperation(pathItem, opID, nameParts, params, crdInfo)
+		addListOperation(pathItem, opID, nameParts, params, crdInfo, opSecurity)
 	case http.MethodGet:
-		addGetOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+		addGetOperation(pathItem, opID, nameParts, params, uri, crdInfo, opSecurity)
 	case http.MethodPut:
-		addPutOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+		addPutOperation(pathItem, opID, nameParts, params, uri, crdInfo, opSecurity)
 	case http.MethodPatch:
-		addPatchOperation(pathItem, opID, nameParts, params, uri, crdInfo)
+		addPatchOperation(pathItem, opID, nameParts, params, uri, crdInfo, opSecurity)
 	case http.MethodDelete:
-		addDeleteOperation(pathItem, opID, nameParts, params)
+		addDeleteOperation(pathItem, opID, nameParts, params, opSecurity)
 	}
 }
 
 func addListOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
-	params []*openapi3.ParameterRef, crdInfo model.NodeInfo,
+	params []*openapi3.ParameterRef, crdInfo model.NodeInfo, security *openapi3.SecurityRequirements,
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
 		Tags:        []string{nameParts[1]},
 		Parameters:  params,
 		Responses:   openapi3.NewResponses(),
+	}
+	if security != nil {
+		operation.Security = security
 	}
 	operation.Responses.Set("200", &openapi3.ResponseRef{
 		Ref: "#/components/responses/List" + crdInfo.Name,
@@ -160,12 +251,15 @@ func addListOperation(pathItem *openapi3.PathItem, opID string, nameParts []stri
 }
 
 func addGetOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
-	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo, security *openapi3.SecurityRequirements,
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
 		Tags:        []string{nameParts[1]},
 		Parameters:  params,
+	}
+	if security != nil {
+		operation.Security = security
 	}
 	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok {
 		switch uriInfo.TypeOfURI {
@@ -200,11 +294,14 @@ func addGetOperation(pathItem *openapi3.PathItem, opID string, nameParts []strin
 }
 
 func addPutOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
-	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo, security *openapi3.SecurityRequirements,
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
 		Tags:        []string{nameParts[1]},
+	}
+	if security != nil {
+		operation.Security = security
 	}
 	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
 		operation.RequestBody = &openapi3.RequestBodyRef{
@@ -234,12 +331,15 @@ func addPutOperation(pathItem *openapi3.PathItem, opID string, nameParts []strin
 }
 
 func addPatchOperation(pathItem *openapi3.PathItem, opID string, nameParts []string,
-	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo,
+	params []*openapi3.ParameterRef, uri nexus.RestURIs, crdInfo model.NodeInfo, security *openapi3.SecurityRequirements,
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
 		Tags:        []string{nameParts[1]},
 		Parameters:  params,
+	}
+	if security != nil {
+		operation.Security = security
 	}
 	operation.Responses = openapi3.NewResponses()
 	operation.Responses.Set("200", &openapi3.ResponseRef{
@@ -260,12 +360,15 @@ func addPatchOperation(pathItem *openapi3.PathItem, opID string, nameParts []str
 	pathItem.Patch = operation
 }
 
-func addDeleteOperation(pathItem *openapi3.PathItem, opID string, nameParts []string, params []*openapi3.ParameterRef) {
+func addDeleteOperation(pathItem *openapi3.PathItem, opID string, nameParts []string, params []*openapi3.ParameterRef, security *openapi3.SecurityRequirements) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
 		Tags:        []string{nameParts[1]},
 		Responses:   openapi3.NewResponses(),
 		Parameters:  params,
+	}
+	if security != nil {
+		operation.Security = security
 	}
 	operation.Responses.Set("200", &openapi3.ResponseRef{
 		Value: openapi3.NewResponse().WithDescription("No content"),
@@ -435,7 +538,7 @@ func addIntegerProperty(jsonSchema *openapi3.Schema, name string, prop v1.JSONSc
 }
 
 // parseURIParams parses the URI parameters and headers.
-func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.ParameterRef {
+func parseURIParams(restURI nexus.RestURIs, hierarchy []string, datamodel string) []*openapi3.ParameterRef {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
@@ -458,8 +561,12 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 		})
 	}
 
-	// Add header parameters
+	// Add header parameters only if they're not covered by security schemes
 	for headerName, nodeType := range restURI.HeaderParams {
+		// Skip if this header is covered by a security scheme
+		if isHeaderInSecuritySchemes(headerName, datamodel) {
+			continue
+		}
 		description := "Header for " + nodeType
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
 			if nodeInfo.Name == nodeType {
@@ -489,8 +596,8 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 			description = "Name of the " + crdInfo.Name + " node"
 		}
 
-		// Skip if parent is already in URI path or headers
-		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.HeaderParams) {
+		// Skip if parent is already in URI path, PathParams map, or headers
+		if !paramExist(crdInfo.Name, params) && !pathParamMapsToNodeType(crdInfo.Name, restURI.PathParams) && !headerParamExist(crdInfo.Name, restURI.HeaderParams) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -523,6 +630,34 @@ func paramExist(param string, params [][]string) bool {
 func headerParamExist(param string, headers map[string]string) bool {
 	for _, nodeType := range headers {
 		if nodeType == param {
+			return true
+		}
+	}
+	return false
+}
+
+// pathParamMapsToNodeType checks if any PathParams value maps to the given node type
+func pathParamMapsToNodeType(nodeType string, pathParams map[string]string) bool {
+	for _, mappedNodeType := range pathParams {
+		if mappedNodeType == nodeType {
+			return true
+		}
+	}
+	return false
+}
+
+// isHeaderInSecuritySchemes checks if a header is already covered by security schemes in the specified datamodel
+func isHeaderInSecuritySchemes(headerName string, datamodel string) bool {
+	model.DatamodelToDatamodelInfoMutex.RLock()
+	defer model.DatamodelToDatamodelInfoMutex.RUnlock()
+
+	dmInfo, ok := model.DatamodelToDatamodelInfo[datamodel]
+	if !ok {
+		return false
+	}
+
+	for _, scheme := range dmInfo.SecuritySchemes {
+		if scheme.Type == "apiKey" && scheme.In == "header" && scheme.Name == headerName {
 			return true
 		}
 	}
@@ -567,4 +702,31 @@ func LoadCombinedSpec() {
 
 func makeKey(crd, keyType string) string {
 	return crd + "." + keyType
+}
+
+// getGlobalSecurityHeaders returns a map of header names that are covered by global security schemes
+func getGlobalSecurityHeaders(datamodel string) map[string]bool {
+	headers := make(map[string]bool)
+
+	model.DatamodelToDatamodelInfoMutex.RLock()
+	defer model.DatamodelToDatamodelInfoMutex.RUnlock()
+
+	info, ok := model.DatamodelToDatamodelInfo[datamodel]
+	if !ok {
+		return headers
+	}
+
+	// Check all security schemes used in global security requirements
+	for _, secReq := range info.Security {
+		for schemeName := range secReq {
+			if scheme, exists := info.SecuritySchemes[schemeName]; exists {
+				// Only collect apiKey type schemes in headers
+				if scheme.Type == "apiKey" && scheme.In == "header" && scheme.Name != "" {
+					headers[scheme.Name] = true
+				}
+			}
+		}
+	}
+
+	return headers
 }

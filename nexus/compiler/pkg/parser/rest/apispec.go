@@ -58,10 +58,57 @@ func extractApiSpecRestURI(uri *ast.CompositeLit, httpMethods map[string]nexus.H
 			restUri.HeaderParams = extractApiSpecMapParams(kv)
 		case "Methods":
 			restUri.Methods = extractApiSpecMethods(kv, httpMethods, httpCodes)
+		case "Security":
+			restUri.Security = extractApiSpecSecurity(kv)
 		}
 	}
 
 	return restUri
+}
+
+func extractApiSpecSecurity(kv *ast.KeyValueExpr) *[]map[string][]string {
+	// Security is a pointer to a slice of maps: &[]map[string][]string
+	switch val := kv.Value.(type) {
+	case *ast.UnaryExpr:
+		// Handle &[]map[string][]string
+		if val.Op.String() == "&" {
+			if compLit, ok := val.X.(*ast.CompositeLit); ok {
+				security := []map[string][]string{}
+				for _, elt := range compLit.Elts {
+					// Each element is a map[string][]string
+					if mapLit, ok := elt.(*ast.CompositeLit); ok {
+						secReq := make(map[string][]string)
+						for _, mapElt := range mapLit.Elts {
+							if mapKv, ok := mapElt.(*ast.KeyValueExpr); ok {
+								// Key is the scheme name (e.g., "ApiKeyAuth")
+								key, err := strconv.Unquote(types.ExprString(mapKv.Key))
+								if err != nil {
+									log.Warnf("Error parsing security scheme name: %v", err)
+									continue
+								}
+								// Value is []string (scopes), but for apiKey it's typically empty
+								scopes := []string{}
+								if scopesLit, ok := mapKv.Value.(*ast.CompositeLit); ok {
+									for _, scope := range scopesLit.Elts {
+										if basicLit, ok := scope.(*ast.BasicLit); ok {
+											scopeVal, err := strconv.Unquote(basicLit.Value)
+											if err == nil {
+												scopes = append(scopes, scopeVal)
+											}
+										}
+									}
+								}
+								secReq[key] = scopes
+							}
+						}
+						security = append(security, secReq)
+					}
+				}
+				return &security
+			}
+		}
+	}
+	return nil
 }
 
 func extractApiSpecMethods(methods *ast.KeyValueExpr, httpMethods map[string]nexus.HTTPMethodsResponses, httpCodes map[string]nexus.HTTPCodesResponse) nexus.HTTPMethodsResponses {

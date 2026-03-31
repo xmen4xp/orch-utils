@@ -46,11 +46,12 @@ type SecretSpec struct{}
 
 // RestURIs and associated data.
 type RestURIs struct {
-	Uri          string               `json:"uri"`
-	PathParams   map[string]string    `json:"path_params,omitempty"`
-	QueryParams  map[string]string    `json:"query_params,omitempty"`
-	HeaderParams map[string]string    `json:"headers,omitempty"`
-	Methods      HTTPMethodsResponses `json:"methods"`
+	Uri          string                 `json:"uri"`
+	PathParams   map[string]string      `json:"path_params,omitempty"`
+	QueryParams  map[string]string      `json:"query_params,omitempty"`
+	HeaderParams map[string]string      `json:"headers,omitempty"`
+	Methods      HTTPMethodsResponses   `json:"methods"`
+	Security     *[]map[string][]string `json:"security,omitempty"` // Operation-level security override. Use empty array [] to disable security.
 }
 
 type RestAPISpec struct {

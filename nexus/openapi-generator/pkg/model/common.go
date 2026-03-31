@@ -22,10 +22,33 @@ const (
 )
 
 type DatamodelConfig struct {
-	IgnoredParentPathParams []string `yaml:"ignoredParentPathParams"`
+	IgnoredParentPathParams []string       `yaml:"ignoredParentPathParams"`
+	OpenAPI                 *OpenAPIConfig `yaml:"openapi,omitempty"`
+}
+
+type OpenAPIConfig struct {
+	Info            *InfoConfig                      `yaml:"info,omitempty"`
+	SecuritySchemes map[string]*SecuritySchemeConfig `yaml:"securitySchemes,omitempty"`
+	Security        []map[string][]string            `yaml:"security,omitempty"`
+}
+
+type InfoConfig struct {
+	Title       string `yaml:"title,omitempty"`
+	Description string `yaml:"description,omitempty"`
+	Version     string `yaml:"version,omitempty"`
+}
+
+type SecuritySchemeConfig struct {
+	Type         string `yaml:"type"`
+	Scheme       string `yaml:"scheme,omitempty"`
+	BearerFormat string `yaml:"bearerFormat,omitempty"`
+	In           string `yaml:"in,omitempty"`
+	Name         string `yaml:"name,omitempty"`
+	Description  string `yaml:"description,omitempty"`
 }
 
 var OpenApiIgnoredParentPathParams map[string]struct{} = make(map[string]struct{})
+var OpenApiConfig *OpenAPIConfig
 
 type NexusAnnotation struct {
 	Name                 string                     `json:"name,omitempty"`
@@ -91,5 +114,14 @@ func InitOpenApiIgnoredParentPathParams(configFile string) {
 	for _, param := range config.IgnoredParentPathParams {
 		OpenApiIgnoredParentPathParams[param] = struct{}{}
 		fmt.Println("adding ignored param :", param)
+	}
+
+	// Store OpenAPI configuration for use during spec generation
+	if config.OpenAPI != nil {
+		OpenApiConfig = config.OpenAPI
+		fmt.Println("Loaded OpenAPI configuration from nexus.yaml")
+		if config.OpenAPI.SecuritySchemes != nil {
+			fmt.Printf("Found %d security schemes\n", len(config.OpenAPI.SecuritySchemes))
+		}
 	}
 }
