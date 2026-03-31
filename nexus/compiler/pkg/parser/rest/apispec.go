@@ -106,7 +106,6 @@ func extractApiSpecMapParams(kv *ast.KeyValueExpr) map[string]string {
 }
 
 func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser.NodeHelper, crdName string) {
-	r := regexp.MustCompile(`{([^{}]+)}`)
 	crdHelper := parentsMap[crdName]
 
 	ignoredParentPathParams := make(map[string]struct{})
@@ -122,16 +121,15 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 			log.Fatalf("RestApiSpec: Duplicate found: %s and %s", u, uri.Uri)
 		}
 
-		uriParams := r.FindAllStringSubmatch(uri.Uri, -1)
 		if _, ok := uri.Methods["LIST"]; ok {
-			if nodeExist(crdHelper.RestName, uriParams) || headerExist(crdHelper.RestName, uri.HeaderParams) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
+			if pathParamExist(crdHelper.RestName, uri.PathParams) || headerExist(crdHelper.RestName, uri.HeaderParams) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
 				log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied as a param because endpoint is a list. URI: %s", crdHelper.RestName, uri.Uri)
 			}
 		}
 
 		// Check if node name is in multiple locations (URI, Header, Query param)
 		// Parent info must exist in exactly ONE location
-		inURI := nodeExist(crdHelper.RestName, uriParams)
+		inURI := pathParamExist(crdHelper.RestName, uri.PathParams)
 		inHeader := headerExist(crdHelper.RestName, uri.HeaderParams)
 		inQuery := queryParamExist(crdHelper.RestName, uri.QueryParams)
 		locations := 0
@@ -157,7 +155,7 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 			}
 
 			// Check if parent is in multiple locations
-			parentInURI := nodeExist(parentName, uriParams)
+			parentInURI := pathParamExist(parentName, uri.PathParams)
 			parentInHeader := headerExist(parentName, uri.HeaderParams)
 			parentInQuery := queryParamExist(parentName, uri.QueryParams)
 			parentLocations := 0
@@ -209,6 +207,16 @@ func queryParamExist(name string, params map[string]string) bool {
 }
 
 func headerExist(name string, params map[string]string) bool {
+	for _, nodeType := range params {
+		if nodeType == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func pathParamExist(name string, params map[string]string) bool {
 	for _, nodeType := range params {
 		if nodeType == name {
 			return true
