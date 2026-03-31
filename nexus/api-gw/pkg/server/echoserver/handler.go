@@ -80,7 +80,13 @@ func getCRDInfoAndName(nc *NexusContext) (string, model.NodeInfo, string, error)
 
 func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 	name := nexus.DEFAULT_KEY
-	// Priority 1: URI params
+	// Priority 1: URI params (check path param cache)
+	if pathParamName, ok := model.GetPathNameForNodeType(nc.NexusURI, crdInfo.Name); ok {
+		if val := nc.Param(pathParamName); val != "" {
+			return val
+		}
+	}
+	// Fallback: check all params by name
 	for _, param := range nc.ParamNames() {
 		if param == crdInfo.Name {
 			name = nc.Param(param)
@@ -92,12 +98,20 @@ func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 		}
 	}
 
-	// Priority 2: Headers (check alias first, then primary name)
-	if headerVal := GetHeaderValue(nc.Request(), crdInfo.Name); headerVal != "" {
-		return headerVal
+	// Priority 2: Headers (use cache to get header name from node type)
+	if headerName, ok := model.GetHeaderNameForNodeType(nc.NexusURI, crdInfo.Name); ok {
+		if headerVal := nc.Request().Header.Get(headerName); headerVal != "" {
+			return headerVal
+		}
 	}
 
-	// Priority 3: Query params
+	// Priority 3: Query params (use cache to get query param name from node type)
+	if queryParamName, ok := model.GetQueryNameForNodeType(nc.NexusURI, crdInfo.Name); ok {
+		if nc.QueryParams().Has(queryParamName) {
+			return nc.QueryParams().Get(queryParamName)
+		}
+	}
+	// Fallback: check by node type name directly
 	if nc.QueryParams().Has(crdInfo.Name) {
 		name = nc.QueryParams().Get(crdInfo.Name)
 	}
@@ -105,16 +119,10 @@ func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 	return name
 }
 
-// GetHeaderValue looks up a header value by name, checking alias first if configured.
-// Priority: alias header > primary header name
+// GetHeaderValue looks up a header value by name.
+// Deprecated: This function is kept for backward compatibility but no longer uses header aliases.
+// New code should use model.GetHeaderNameForNodeType with the URI context for proper lookups.
 func GetHeaderValue(req *http.Request, name string) string {
-	if config.Cfg != nil && config.Cfg.HeaderAliases != nil {
-		if alias, ok := config.Cfg.HeaderAliases[name]; ok {
-			if val := req.Header.Get(alias); val != "" {
-				return val
-			}
-		}
-	}
 	return req.Header.Get(name)
 }
 
@@ -723,13 +731,31 @@ func parseLabels(c echo.Context, parents []string) map[string]string {
 	labels := make(map[string]string)
 	for _, parent := range parents {
 		if c, ok := model.CrdTypeToNodeInfo[parent]; ok {
-			// Priority 1: URI params
+			// Priority 1: URI params (check cache for path param name)
+			if pathParamName, cacheOk := model.GetPathNameForNodeType(nc.NexusURI, c.Name); cacheOk {
+				if v := nc.Param(pathParamName); v != "" {
+					labels[parent] = v
+					continue
+				}
+			}
+			// Fallback: check by node type name
 			if v := nc.Param(c.Name); v != "" {
 				labels[parent] = v
-				// Priority 2: Headers (check alias first, then primary name)
-			} else if v := GetHeaderValue(nc.Request(), c.Name); v != "" {
-				labels[parent] = v
-				// Priority 3: Query params
+				// Priority 2: Headers (use cache to get header name from node type)
+			} else if headerName, cacheOk := model.GetHeaderNameForNodeType(nc.NexusURI, c.Name); cacheOk {
+				if v := nc.Request().Header.Get(headerName); v != "" {
+					labels[parent] = v
+				} else {
+					labels[parent] = nexus.DEFAULT_KEY
+				}
+				// Priority 3: Query params (use cache to get query param name from node type)
+			} else if queryParamName, cacheOk := model.GetQueryNameForNodeType(nc.NexusURI, c.Name); cacheOk {
+				if nc.QueryParams().Has(queryParamName) {
+					labels[parent] = nc.QueryParams().Get(queryParamName)
+				} else {
+					labels[parent] = nexus.DEFAULT_KEY
+				}
+				// Fallback: check by node type name
 			} else if nc.QueryParams().Has(c.Name) {
 				labels[parent] = nc.QueryParams().Get(c.Name)
 			} else {

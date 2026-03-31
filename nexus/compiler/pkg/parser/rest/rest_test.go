@@ -66,12 +66,12 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri:         "/v1alpha2/dns",
-					QueryParams: []string{"config.Config", "gns.Dns"},
+					QueryParams: map[string]string{"config": "config.Config", "dns": "gns.Dns"},
 					Methods:     nexus.DefaultHTTPMethodsResponses,
 				},
 				{
 					Uri:         "/v1alpha2/dnses",
-					QueryParams: []string{"config.Config"},
+					QueryParams: map[string]string{"config": "config.Config"},
 					Methods:     nexus.HTTPListResponse,
 				},
 			},
@@ -94,8 +94,8 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/dnses",
-					QueryParams: []string{
-						"config.Config",
+					QueryParams: map[string]string{
+						"config": "config.Config",
 					},
 					Methods: nexus.HTTPListResponse,
 				},
@@ -117,8 +117,8 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/dnses/{gns.Dns}",
-					QueryParams: []string{
-						"config.Config",
+					QueryParams: map[string]string{
+						"config": "config.Config",
 					},
 					Methods: nexus.HTTPListResponse,
 				},
@@ -163,8 +163,8 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/dns/{gns.Dns}",
-					Headers: []string{
-						"config.Config",
+					HeaderParams: map[string]string{
+						"x-config-id": "config.Config",
 					},
 					Methods: nexus.DefaultHTTPMethodsResponses,
 				},
@@ -186,8 +186,8 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/config/{config.Config}/dns/{gns.Dns}",
-					Headers: []string{
-						"config.Config",
+					HeaderParams: map[string]string{
+						"x-config-id": "config.Config",
 					},
 					Methods: nexus.DefaultHTTPMethodsResponses,
 				},
@@ -209,11 +209,11 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/dns/{gns.Dns}",
-					Headers: []string{
-						"config.Config",
+					HeaderParams: map[string]string{
+						"x-config-id": "config.Config",
 					},
-					QueryParams: []string{
-						"config.Config",
+					QueryParams: map[string]string{
+						"config": "config.Config",
 					},
 					Methods: nexus.DefaultHTTPMethodsResponses,
 				},
@@ -235,11 +235,11 @@ var _ = Describe("Rest tests", func() {
 			Uris: []nexus.RestURIs{
 				{
 					Uri: "/v1alpha2/dnses",
-					Headers: []string{
-						"gns.Dns",
+					HeaderParams: map[string]string{
+						"x-dns-id": "gns.Dns",
 					},
-					QueryParams: []string{
-						"config.Config",
+					QueryParams: map[string]string{
+						"config": "config.Config",
 					},
 					Methods: nexus.HTTPListResponse,
 				},

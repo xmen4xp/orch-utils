@@ -16,15 +16,15 @@ import (
 const APIGwConfigFileDefaullt = "/config/api-gw-config"
 
 type Config struct {
-	Server                  ServerConfig      `json:"server" yaml:"server"`
-	EnableNexusRuntime      bool              `json:"enableNexusRuntime" yaml:"enableNexusRuntime,omitempty"`
-	DisableAuthz            bool              `json:"disableAuthz" yaml:"disableAuthz,omitempty"`
-	BackendService          string            `json:"backendService" yaml:"backendService,omitempty"`
-	TenancyService          bool              `json:"tenancyService" yaml:"tenancyService,omitempty"`
-	TenantAPIGwDomain       string            `json:"tenantApiGwDomain" yaml:"tenantApiGwDomain,omitempty"`
-	CustomNotFoundPage      string            `json:"customNotFoundPage" yaml:"customNotFoundPage,omitempty"`
-	ProxyInsecureSkipVerify bool              `json:"proxyInsecureSkipVerify" yaml:"proxyInsecureSkipVerify,omitempty"`
-	HeaderAliases           map[string]string `json:"headerAliases" yaml:"headerAliases,omitempty"`
+	Server                  ServerConfig `json:"server" yaml:"server"`
+	EnableNexusRuntime      bool         `json:"enableNexusRuntime" yaml:"enableNexusRuntime,omitempty"`
+	DisableAuthz            bool         `json:"disableAuthz" yaml:"disableAuthz,omitempty"`
+	BackendService          string       `json:"backendService" yaml:"backendService,omitempty"`
+	TenancyService          bool         `json:"tenancyService" yaml:"tenancyService,omitempty"`
+	TenantAPIGwDomain       string       `json:"tenantApiGwDomain" yaml:"tenantApiGwDomain,omitempty"`
+	CustomNotFoundPage      string       `json:"customNotFoundPage" yaml:"customNotFoundPage,omitempty"`
+	ProxyInsecureSkipVerify bool         `json:"proxyInsecureSkipVerify" yaml:"proxyInsecureSkipVerify,omitempty"`
+	// HeaderAliases has been removed - parameter name mapping is now automatic via HeaderParams in RestURIs
 }
 
 type ServerConfig struct {

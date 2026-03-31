@@ -67,7 +67,9 @@ type SecretSpec struct{}
 type RestURIs struct {
 	//nolint:stylecheck,revive // Inherited from opensource.
 	Uri         string               `json:"uri"`
-	QueryParams []string             `json:"query_params,omitempty"`
+	PathParams  map[string]string    `json:"path_params,omitempty"`
+	QueryParams map[string]string    `json:"query_params,omitempty"`
+	Headers     map[string]string    `json:"headers,omitempty"`
 	Methods     HTTPMethodsResponses `json:"methods"`
 }
 

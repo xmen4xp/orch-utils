@@ -407,10 +407,10 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 	}
 
 	// Add header parameters
-	for _, headerName := range restURI.Headers {
-		description := "Header for " + headerName
+	for headerName, nodeType := range restURI.HeaderParams {
+		description := "Header for " + nodeType
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
-			if nodeInfo.Name == headerName {
+			if nodeInfo.Name == nodeType {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
 					break
@@ -443,7 +443,7 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 		}
 
 		// Skip if parent is already in URI path or headers
-		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.Headers) {
+		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.HeaderParams) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -473,9 +473,9 @@ func paramExist(param string, params [][]string) bool {
 	return false
 }
 
-func headerParamExist(param string, headers []string) bool {
-	for _, h := range headers {
-		if h == param {
+func headerParamExist(param string, headers map[string]string) bool {
+	for _, nodeType := range headers {
+		if nodeType == param {
 			return true
 		}
 	}
@@ -495,7 +495,7 @@ func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestURII
 		for method := range uri.Methods {
 			if method == http.MethodGet {
 				statusUriPath := uri.Uri + "/status"
-				addStatusUri(statusUriPath, model.StatusURI, urisMap, newUris)
+				addStatusUri(statusUriPath, model.StatusURI, uri, urisMap, newUris)
 
 				for _, c := range []map[string]model.NodeHelperChild{n.Children, n.Links} {
 					processChildOrLink(c, uri, urisMap, newUris)
@@ -514,14 +514,17 @@ func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestUR
 		} else {
 			t = model.SingleLinkURI
 		}
-		addUri(uriPath, t, urisMap, newUris)
+		addUri(uriPath, t, uri, urisMap, newUris)
 	}
 }
 
 // addUri adds the uriPath </root/{orgchart.Root}/leader/{management.Leader}/HR> to the urisMap and to the uris list.
-func addUri(uriPath string, typeOfUri model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+func addUri(uriPath string, typeOfUri model.URIType, parentUri nexus.RestURIs, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
 	newUri := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:          uriPath,
+		PathParams:   parentUri.PathParams,
+		QueryParams:  parentUri.QueryParams,
+		HeaderParams: parentUri.HeaderParams,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 		},
@@ -532,9 +535,12 @@ func addUri(uriPath string, typeOfUri model.URIType, urisMap map[string]model.Re
 	*uris = append(*uris, newUri)
 }
 
-func addStatusUri(uriPath string, typeOfUri model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+func addStatusUri(uriPath string, typeOfUri model.URIType, parentUri nexus.RestURIs, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
 	newUri := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:          uriPath,
+		PathParams:   parentUri.PathParams,
+		QueryParams:  parentUri.QueryParams,
+		HeaderParams: parentUri.HeaderParams,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 			// http.MethodPut: nexus.DefaultHTTPPUTResponses,

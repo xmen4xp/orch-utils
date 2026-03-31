@@ -609,11 +609,13 @@ Each API spec captures information about the REST API, such as:
 #### Parent Hierarchy Resolution
 
 Parent hierarchy information can be specified in three ways with the following priority order:
-1. **URI parameters** (highest priority) - e.g., `/v1alpha2/root/{root.Root}/leader/{role.Leader}`
-2. **Headers** - e.g., `Headers: []string{"root.Root"}`
-3. **Query parameters** (lowest priority) - e.g., `QueryParams: []string{"root.Root"}`
+1. **URI parameters** (highest priority) - e.g., `/v1alpha2/root/{root}/leader/{leader}` with `PathParams: map[string]string{"root": "root.Root", "leader": "role.Leader"}`
+2. **Headers** - e.g., `HeaderParams: map[string]string{"x-root-id": "root.Root"}`
+3. **Query parameters** (lowest priority) - e.g., `QueryParams: map[string]string{"root": "root.Root"}`
 
 **Important**: Each parent must appear in exactly ONE location (URI, header, or query param). The compiler will validate this and fail if a parent appears in multiple locations.
+
+**Note**: The new format uses maps where keys are the user-facing parameter names (e.g., "x-root-id", "root") and values are the node types in the data model hierarchy (e.g., "root.Root"). This provides better separation between API interface and internal data model.
 
 #### Associate nexus.RestAPISpec with Nexus node
 
@@ -635,32 +637,42 @@ import (
 var LeaderRestAPISpec = nexus.RestAPISpec{
   Uris: []nexus.RestURIs{
     {
-      Uri: "/v1alpha2/root/{root.Root}/leader/{role.Leader}",
+      Uri: "/v1alpha2/root/{root}/leader/{leader}",
+      PathParams: map[string]string{
+        "root":   "root.Root",
+        "leader": "role.Leader",
+      },
       Methods: nexus.HTTPMethodsResponses{
         http.MethodGet: nexus.DefaultHTTPGETResponses,
       },
     },
     {
       Uri: "/v1alpha2/leader",
-      QueryParams: []string{
-        "root.Root",
-        "role.Leader"
+      QueryParams: map[string]string{
+        "root":   "root.Root",
+        "leader": "role.Leader",
       },
       Methods: nexus.HTTPMethodsResponses{
         http.MethodGet: nexus.DefaultHTTPGETResponses,
       },
     },
     {
-      Uri: "/v1alpha2/leader/{role.Leader}",
-      Headers: []string{
-        "root.Root",
+      Uri: "/v1alpha2/leader/{leader}",
+      PathParams: map[string]string{
+        "leader": "role.Leader",
+      },
+      HeaderParams: map[string]string{
+        "x-root-id": "root.Root",
       },
       Methods: nexus.HTTPMethodsResponses{
         http.MethodGet: nexus.DefaultHTTPGETResponses,
       },
     },
     {
-      Uri:     "/v1alpha2/root/{root.Root}/leader",
+      Uri: "/v1alpha2/root/{root}/leaders",
+      PathParams: map[string]string{
+        "root": "root.Root",
+      },
       Methods: nexus.HTTPListResponse,
     },
   },
@@ -815,16 +827,20 @@ package gns                                                                     
 var GNSRestAPISpec = nexus.RestAPISpec{
 	Uris: []nexus.RestURIs{                                                       <--- List of REST URL on which the Nexus Node should be exposed
 		{
-			Uri:     "/v1alpha2/projects/{project}/global-namespace/{gns.Gns}",   <--- REST URL on which the Nexus Node should be exposed
+			Uri:     "/v1alpha2/projects/{project}/global-namespace/{gns}",      <--- REST URL on which the Nexus Node should be exposed
+			PathParams: map[string]string{                                        <--- Map of path parameter names to node types
+				"project": "projects.Project",
+				"gns":     "gns.Gns",
+			},
 			Methods: nexus.HTTPMethodsResponses{                                  <--- Methods and responses to be enabled on this REST URL
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
 			},
 		},
 		{
 			Uri:     "/v1alpha2/global-namespace",                                <--- REST URL on which the Nexus Node should be exposed
-			QueryParams: []string{
-				"project",                                                        <--- Instead of URI param we are using QueryParams to specify project
-			    "gns.Gns"
+			QueryParams: map[string]string{                                       <--- Instead of URI param we are using QueryParams to specify project
+				"project": "projects.Project",                                    <--- Keys are API parameter names, values are node types
+				"gns":     "gns.Gns",
 			},
 			Methods: nexus.HTTPMethodsResponses{                                  <--- Methods and responses to be enabled on this REST URL
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
@@ -832,6 +848,9 @@ var GNSRestAPISpec = nexus.RestAPISpec{
 		},
 		{
 			Uri:     "/v1alpha2/projects/{project}/global-namespaces",            <--- REST URL on which the Nexus Node should be exposed
+			PathParams: map[string]string{
+				"project": "projects.Project",
+			},
 			Methods: nexus.HTTPListResponse,                                      <--- nexus.HTTPListResponse indicates that this request will return a list of objects
 		},
 	},

@@ -97,7 +97,7 @@ func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestURII
 		for method := range uri.Methods {
 			if method == http.MethodGet {
 				statusURIPath := uri.Uri + "/status"
-				addStatusURI(statusURIPath, model.StatusURI, urisMap, newUris)
+				addStatusURI(statusURIPath, model.StatusURI, uri, urisMap, newUris)
 
 				for _, c := range []map[string]model.NodeHelperChild{n.Children, n.Links} {
 					processChildOrLink(c, uri, urisMap, newUris)
@@ -118,14 +118,17 @@ func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestUR
 		} else {
 			t = model.SingleLinkURI
 		}
-		addURI(uriPath, t, urisMap, newUris)
+		addURI(uriPath, t, uri, urisMap, newUris)
 	}
 }
 
 // addURI adds the uriPath </root/{orgchart.Root}/leader/{management.Leader}/HR> to the urisMap and to the uris list.
-func addURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+func addURI(uriPath string, typeOfURI model.URIType, parentURI nexus.RestURIs, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
 	newURI := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:          uriPath,
+		PathParams:   parentURI.PathParams,
+		QueryParams:  parentURI.QueryParams,
+		HeaderParams: parentURI.HeaderParams,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 		},
@@ -136,9 +139,12 @@ func addURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.Re
 	*uris = append(*uris, newURI)
 }
 
-func addStatusURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+func addStatusURI(uriPath string, typeOfURI model.URIType, parentURI nexus.RestURIs, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
 	newURI := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:          uriPath,
+		PathParams:   parentURI.PathParams,
+		QueryParams:  parentURI.QueryParams,
+		HeaderParams: parentURI.HeaderParams,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 			http.MethodPut: nexus.DefaultHTTPPUTResponses,

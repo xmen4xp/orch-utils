@@ -26,27 +26,38 @@ var (
 	CrdTypeChan = make(chan string, constDefaultChanSize)
 
 	CrdTypeToRestUris      = make(map[string][]nexus.RestURIs)
-	crdTypeToRestUrisMutex = &sync.Mutex{}
+	crdTypeToRestUrisMutex = &sync.RWMutex{}
 
 	// CRD name to CRD type (Gns.gns => gns.vmware.org).
 	URIToCRDType      = make(map[string]string)
-	uriToCRDTypeMutex = &sync.Mutex{}
+	uriToCRDTypeMutex = &sync.RWMutex{}
 
 	// URI to info about this URI.
 	URIToURIInfo      = make(map[string]RestURIInfo)
-	URIToURIInfoMutex = &sync.Mutex{}
+	URIToURIInfoMutex = &sync.RWMutex{}
 
 	// CRD Type to NodeInfo (gns.vmware.org => NodeInfo{}).
 	CrdTypeToNodeInfo      = make(map[string]NodeInfo)
-	crdTypeToNodeInfoMutex = &sync.Mutex{}
+	crdTypeToNodeInfoMutex = &sync.RWMutex{}
 
 	// CRD Type to k8s spec (gns.vmware.org => CustomResourceDefinitionSpec).
 	CrdTypeToSpec      = make(map[string]apiextensionsv1.CustomResourceDefinitionSpec)
-	crdTypeToSpecMutex = &sync.Mutex{}
+	crdTypeToSpecMutex = &sync.RWMutex{}
 
 	DatamodelsChan                = make(chan string, constDefaultChanSize)
 	DatamodelToDatamodelInfo      = make(map[string]DatamodelInfo)
-	DatamodelToDatamodelInfoMutex = &sync.Mutex{}
+	DatamodelToDatamodelInfoMutex = &sync.RWMutex{}
+
+	// Cache for fast parameter name lookups: URI -> nodeType -> parameterName
+	// These are built from PathParams, QueryParams, and HeaderParams maps
+	URIToNodeTypeHeaderMap      = make(map[string]map[string]string)
+	URIToNodeTypeHeaderMapMutex = &sync.RWMutex{}
+
+	URIToNodeTypeQueryMap      = make(map[string]map[string]string)
+	URIToNodeTypeQueryMapMutex = &sync.RWMutex{}
+
+	URIToNodeTypePathMap      = make(map[string]map[string]string)
+	URIToNodeTypePathMapMutex = &sync.RWMutex{}
 )
 
 func ConstructDatamodel(eventType EventType, name string, unstructuredObj *unstructured.Unstructured) {
@@ -125,16 +136,16 @@ func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parent
 }
 
 func GetCRDTypeToNodeInfo(crdType string) (NodeInfo, bool) {
-	crdTypeToNodeInfoMutex.Lock()
-	defer crdTypeToNodeInfoMutex.Unlock()
+	crdTypeToNodeInfoMutex.RLock()
+	defer crdTypeToNodeInfoMutex.RUnlock()
 
 	info, ok := CrdTypeToNodeInfo[crdType]
 	return info, ok
 }
 
 func GetDatamodel(name string) (DatamodelInfo, bool) {
-	DatamodelToDatamodelInfoMutex.Lock()
-	defer DatamodelToDatamodelInfoMutex.Unlock()
+	DatamodelToDatamodelInfoMutex.RLock()
+	defer DatamodelToDatamodelInfoMutex.RUnlock()
 
 	info, ok := DatamodelToDatamodelInfo[name]
 	return info, ok
@@ -152,8 +163,8 @@ func ConstructMapCRDTypeToSpec(eventType EventType, crdType string, spec apiexte
 }
 
 func GetRestUris(crdType string) ([]nexus.RestURIs, bool) {
-	crdTypeToRestUrisMutex.Lock()
-	defer crdTypeToRestUrisMutex.Unlock()
+	crdTypeToRestUrisMutex.RLock()
+	defer crdTypeToRestUrisMutex.RUnlock()
 
 	uris, ok := CrdTypeToRestUris[crdType]
 	return uris, ok
@@ -165,11 +176,16 @@ func ConstructMapCRDTypeToRestUris(eventType EventType, crdType string, restSpec
 
 	if eventType == Delete {
 		delete(CrdTypeToRestUris, crdType)
+		// Also clear parameter name caches for deleted URIs
+		ClearParameterCachesForCRD(crdType)
 		return
 	}
 
 	log.Debug().Msgf("Constructing map CRD type to rest uris for %s %v", crdType, restSpec.Uris)
 	CrdTypeToRestUris[crdType] = restSpec.Uris
+
+	// Build parameter name caches for fast lookups
+	BuildParameterCaches(restSpec.Uris)
 
 	// Push new uris to chan.
 	RestURIChan <- restSpec.Uris
@@ -190,8 +206,108 @@ func ConstructMapURIToURIInfo(eventType EventType, m map[string]RestURIInfo) {
 }
 
 func GetURIInfo(uriPath string) (RestURIInfo, bool) {
-	URIToURIInfoMutex.Lock()
-	defer URIToURIInfoMutex.Unlock()
+	URIToURIInfoMutex.RLock()
+	defer URIToURIInfoMutex.RUnlock()
 	info, ok := URIToURIInfo[uriPath]
 	return info, ok
+}
+
+// BuildParameterCaches builds reverse lookup caches from RestURIs for O(1) parameter name lookups.
+func BuildParameterCaches(uris []nexus.RestURIs) {
+	for _, uri := range uris {
+		// Build header cache: nodeType -> headerName
+		if len(uri.HeaderParams) > 0 {
+			URIToNodeTypeHeaderMapMutex.Lock()
+			if URIToNodeTypeHeaderMap[uri.Uri] == nil {
+				URIToNodeTypeHeaderMap[uri.Uri] = make(map[string]string)
+			}
+			for headerName, nodeType := range uri.HeaderParams {
+				URIToNodeTypeHeaderMap[uri.Uri][nodeType] = headerName
+			}
+			URIToNodeTypeHeaderMapMutex.Unlock()
+		}
+
+		// Build query cache: nodeType -> queryParamName
+		if len(uri.QueryParams) > 0 {
+			URIToNodeTypeQueryMapMutex.Lock()
+			if URIToNodeTypeQueryMap[uri.Uri] == nil {
+				URIToNodeTypeQueryMap[uri.Uri] = make(map[string]string)
+			}
+			for queryName, nodeType := range uri.QueryParams {
+				URIToNodeTypeQueryMap[uri.Uri][nodeType] = queryName
+			}
+			URIToNodeTypeQueryMapMutex.Unlock()
+		}
+
+		// Build path cache: nodeType -> pathParamName
+		if len(uri.PathParams) > 0 {
+			URIToNodeTypePathMapMutex.Lock()
+			if URIToNodeTypePathMap[uri.Uri] == nil {
+				URIToNodeTypePathMap[uri.Uri] = make(map[string]string)
+			}
+			for pathName, nodeType := range uri.PathParams {
+				URIToNodeTypePathMap[uri.Uri][nodeType] = pathName
+			}
+			URIToNodeTypePathMapMutex.Unlock()
+		}
+	}
+}
+
+// ClearParameterCachesForCRD clears all parameter caches for URIs belonging to a CRD.
+func ClearParameterCachesForCRD(crdType string) {
+	uris, ok := CrdTypeToRestUris[crdType]
+	if !ok {
+		return
+	}
+
+	URIToNodeTypeHeaderMapMutex.Lock()
+	for _, uri := range uris {
+		delete(URIToNodeTypeHeaderMap, uri.Uri)
+	}
+	URIToNodeTypeHeaderMapMutex.Unlock()
+
+	URIToNodeTypeQueryMapMutex.Lock()
+	for _, uri := range uris {
+		delete(URIToNodeTypeQueryMap, uri.Uri)
+	}
+	URIToNodeTypeQueryMapMutex.Unlock()
+
+	URIToNodeTypePathMapMutex.Lock()
+	for _, uri := range uris {
+		delete(URIToNodeTypePathMap, uri.Uri)
+	}
+	URIToNodeTypePathMapMutex.Unlock()
+}
+
+// GetHeaderNameForNodeType returns the header parameter name for a given node type and URI.
+func GetHeaderNameForNodeType(uri, nodeType string) (string, bool) {
+	URIToNodeTypeHeaderMapMutex.RLock()
+	defer URIToNodeTypeHeaderMapMutex.RUnlock()
+	if m, ok := URIToNodeTypeHeaderMap[uri]; ok {
+		headerName, found := m[nodeType]
+		return headerName, found
+	}
+	return "", false
+}
+
+// GetQueryNameForNodeType returns the query parameter name for a given node type and URI.
+func GetQueryNameForNodeType(uri, nodeType string) (string, bool) {
+	URIToNodeTypeQueryMapMutex.RLock()
+	defer URIToNodeTypeQueryMapMutex.RUnlock()
+	if m, ok := URIToNodeTypeQueryMap[uri]; ok {
+		queryName, found := m[nodeType]
+		return queryName, found
+	}
+	return "", false
+}
+
+// GetPathNameForNodeType returns the path parameter name for a given node type and URI.
+func GetPathNameForNodeType(uri, nodeType string) (string, bool) {
+	URIToNodeTypePathMapMutex.RLock()
+	defer URIToNodeTypePathMapMutex.RUnlock()
+	if m, ok := URIToNodeTypePathMap[uri]; ok {
+		pathName, found := m[nodeType]
+		return pathName, found
+	}
+	return "", false
 }

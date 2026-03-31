@@ -35,29 +35,29 @@ var GNSRestAPISpec = nexus.RestAPISpec{
 	Uris: []nexus.RestURIs{
 		{
 			Uri: "/v1alpha2/global-namespace/{gns.Gns}",
-			QueryParams: []string{
-				"config.Config",
+			QueryParams: map[string]string{
+				"config": "config.Config",
 			},
 			Methods: nexus.DefaultHTTPMethodsResponses,
 		},
 		{
 			Uri: "/v1alpha2/global-namespaces",
-			QueryParams: []string{
-				"config.Config",
+			QueryParams: map[string]string{
+				"config": "config.Config",
 			},
 			Methods: nexus.HTTPListResponse,
 		},
 		{
 			Uri: "/test-foo",
-			QueryParams: []string{
-				"config.Config",
+			QueryParams: map[string]string{
+				"config": "config.Config",
 			},
 			Methods: FooCustomMethodsResponses,
 		},
 		{
 			Uri: "/test-bar",
-			QueryParams: []string{
-				"config.Config",
+			QueryParams: map[string]string{
+				"config": "config.Config",
 			},
 			Methods: BarCustomMethodsResponses,
 		},
@@ -68,16 +68,16 @@ var DNSRestAPISpec = nexus.RestAPISpec{
 	Uris: []nexus.RestURIs{
 		{
 			Uri: "/v1alpha2/dns",
-			QueryParams: []string{
-				"config.Config",
-				"gns.Dns",
+			QueryParams: map[string]string{
+				"config": "config.Config",
+				"dns":    "gns.Dns",
 			},
 			Methods: nexus.DefaultHTTPMethodsResponses,
 		},
 		{
 			Uri: "/v1alpha2/dnses",
-			QueryParams: []string{
-				"config.Config",
+			QueryParams: map[string]string{
+				"config": "config.Config",
 			},
 			Methods: nexus.HTTPListResponse,
 		},

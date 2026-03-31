@@ -439,7 +439,7 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
-	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy)+len(restURI.Headers))
+	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy)+len(restURI.HeaderParams))
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
@@ -459,10 +459,10 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	}
 
 	// Add header parameters
-	for _, headerName := range restURI.Headers {
-		description := "Header for " + headerName
+	for headerName, nodeType := range restURI.HeaderParams {
+		description := "Header for " + nodeType
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
-			if nodeInfo.Name == headerName {
+			if nodeInfo.Name == nodeType {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
 					break
@@ -490,7 +490,7 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 		}
 
 		// Skip if parent is already in URI path or headers
-		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.Headers) {
+		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.HeaderParams) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -520,9 +520,9 @@ func paramExist(param string, params [][]string) bool {
 	return false
 }
 
-func headerParamExist(param string, headers []string) bool {
-	for _, h := range headers {
-		if h == param {
+func headerParamExist(param string, headers map[string]string) bool {
+	for _, nodeType := range headers {
+		if nodeType == param {
 			return true
 		}
 	}

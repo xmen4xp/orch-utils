@@ -15,8 +15,8 @@ var OptionalParentPathParamRestAPISpec = nexus.RestAPISpec{
 		},
 		{
 			Uri: "/v1/optionalparentpathparams",
-			QueryParams: []string{
-				"gns.Gns",
+			QueryParams: map[string]string{
+				"gns": "gns.Gns",
 			},
 			Methods: nexus.HTTPListResponse,
 		},

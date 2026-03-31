@@ -50,10 +50,12 @@ func extractApiSpecRestURI(uri *ast.CompositeLit, httpMethods map[string]nexus.H
 				log.Errorf("Error %v", err)
 			}
 			restUri.Uri = key
+		case "PathParams":
+			restUri.PathParams = extractApiSpecMapParams(kv)
 		case "QueryParams":
-			restUri.QueryParams = extractApiSpecQueryParams(kv)
-		case "Headers":
-			restUri.Headers = extractApiSpecHeaders(kv)
+			restUri.QueryParams = extractApiSpecMapParams(kv)
+		case "HeaderParams":
+			restUri.HeaderParams = extractApiSpecMapParams(kv)
 		case "Methods":
 			restUri.Methods = extractApiSpecMethods(kv, httpMethods, httpCodes)
 		}
@@ -81,35 +83,23 @@ func extractApiSpecMethods(methods *ast.KeyValueExpr, httpMethods map[string]nex
 	return nil
 }
 
-func extractApiSpecQueryParams(kv *ast.KeyValueExpr) []string {
-	var params []string
+func extractApiSpecMapParams(kv *ast.KeyValueExpr) map[string]string {
+	params := make(map[string]string)
 	switch val := kv.Value.(type) {
 	case *ast.CompositeLit:
 		for _, v := range val.Elts {
-			lit := v.(*ast.BasicLit)
-
-			param, err := strconv.Unquote(lit.Value)
+			kvExpr := v.(*ast.KeyValueExpr)
+			key, err := strconv.Unquote(types.ExprString(kvExpr.Key))
 			if err != nil {
-				log.Errorf("Error %v", err)
+				log.Errorf("Error parsing key: %v", err)
+				continue
 			}
-			params = append(params, param)
-		}
-	}
-	return params
-}
-
-func extractApiSpecHeaders(kv *ast.KeyValueExpr) []string {
-	var params []string
-	switch val := kv.Value.(type) {
-	case *ast.CompositeLit:
-		for _, v := range val.Elts {
-			lit := v.(*ast.BasicLit)
-
-			param, err := strconv.Unquote(lit.Value)
+			value, err := strconv.Unquote(types.ExprString(kvExpr.Value))
 			if err != nil {
-				log.Errorf("Error %v", err)
+				log.Errorf("Error parsing value: %v", err)
+				continue
 			}
-			params = append(params, param)
+			params[key] = value
 		}
 	}
 	return params
@@ -134,7 +124,7 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 
 		uriParams := r.FindAllStringSubmatch(uri.Uri, -1)
 		if _, ok := uri.Methods["LIST"]; ok {
-			if nodeExist(crdHelper.RestName, uriParams) || headerExist(crdHelper.RestName, uri.Headers) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
+			if nodeExist(crdHelper.RestName, uriParams) || headerExist(crdHelper.RestName, uri.HeaderParams) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
 				log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied as a param because endpoint is a list. URI: %s", crdHelper.RestName, uri.Uri)
 			}
 		}
@@ -142,7 +132,7 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 		// Check if node name is in multiple locations (URI, Header, Query param)
 		// Parent info must exist in exactly ONE location
 		inURI := nodeExist(crdHelper.RestName, uriParams)
-		inHeader := headerExist(crdHelper.RestName, uri.Headers)
+		inHeader := headerExist(crdHelper.RestName, uri.HeaderParams)
 		inQuery := queryParamExist(crdHelper.RestName, uri.QueryParams)
 		locations := 0
 		if inURI {
@@ -168,7 +158,7 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 
 			// Check if parent is in multiple locations
 			parentInURI := nodeExist(parentName, uriParams)
-			parentInHeader := headerExist(parentName, uri.Headers)
+			parentInHeader := headerExist(parentName, uri.HeaderParams)
 			parentInQuery := queryParamExist(parentName, uri.QueryParams)
 			parentLocations := 0
 			if parentInURI {
@@ -208,9 +198,9 @@ func nodeExist(name string, params [][]string) bool {
 	return false
 }
 
-func queryParamExist(name string, params []string) bool {
-	for _, p := range params {
-		if p == name {
+func queryParamExist(name string, params map[string]string) bool {
+	for _, nodeType := range params {
+		if nodeType == name {
 			return true
 		}
 	}
@@ -218,9 +208,9 @@ func queryParamExist(name string, params []string) bool {
 	return false
 }
 
-func headerExist(name string, params []string) bool {
-	for _, p := range params {
-		if p == name {
+func headerExist(name string, params map[string]string) bool {
+	for _, nodeType := range params {
+		if nodeType == name {
 			return true
 		}
 	}

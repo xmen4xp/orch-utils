@@ -31,16 +31,20 @@ package gns                                                                     
 var GNSRestAPISpec = nexus.RestAPISpec{
 	Uris: []nexus.RestURIs{                                                       <--- List of REST URL on which the Nexus Node should be exposed
 		{
-			Uri:     "/v1alpha2/projects/{project}/global-namespace/{gns.Gns}",   <--- REST URL on which the Nexus Node should be exposed
+			Uri:     "/v1alpha2/projects/{project}/global-namespace/{gns}",      <--- REST URL on which the Nexus Node should be exposed
+			PathParams: map[string]string{                                        <--- Map of path parameter names to node types
+				"project": "projects.Project",
+				"gns":     "gns.Gns",
+			},
 			Methods: nexus.HTTPMethodsResponses{                                  <--- Methods and responses to be enabled on this REST URL
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
 			},
 		},
 		{
 			Uri:     "/v1alpha2/global-namespace",                                <--- REST URL on which the Nexus Node should be exposed
-			QueryParams: []string{
-				"project",                                                        <--- Instead of URI param we are using QueryParams to specify project
-			    "gns.Gns"
+			QueryParams: map[string]string{                                       <--- Instead of URI param we are using QueryParams to specify project
+				"project": "projects.Project",                                    <--- Keys are API parameter names, values are node types
+				"gns":     "gns.Gns",
 			},
 			Methods: nexus.HTTPMethodsResponses{                                  <--- Methods and responses to be enabled on this REST URL
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
@@ -48,6 +52,9 @@ var GNSRestAPISpec = nexus.RestAPISpec{
 		},
 		{
 			Uri:     "/v1alpha2/projects/{project}/global-namespaces",            <--- REST URL on which the Nexus Node should be exposed
+			PathParams: map[string]string{
+				"project": "projects.Project",
+			},
 			Methods: nexus.HTTPListResponse,                                      <--- nexus.HTTPListResponse indicates that this request will return a list of objects
 		},
 	},
