@@ -178,6 +178,11 @@ func DatamodelUpdateNotification() {
 			model.DatamodelToDatamodelInfoMutex.Unlock()
 			log.Info().Msgf("Updated openapi spec for %s: title=%s, security_schemes=%d",
 				name, schema.Info.Title, len(schema.Components.SecuritySchemes))
+
+			// Recreate all paths so parseURIParams re-runs isHeaderInSecuritySchemes,
+			// preventing headers covered by global security schemes from also
+			// appearing as duplicate per-endpoint parameters.
+			Recreate()
 		}
 	}
 }
