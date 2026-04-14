@@ -1330,30 +1330,9 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterEventHandler(addCB func(obj
 			logger.Debugf("[RegisterEventHandler DeleteFunc] Got Delete event for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
 
 			{{if .Parent.HasParent}}
-			var parent *{{.Parent.SimpleGroupTypeName}}{{.Parent.BaseNodeName}}
-			for i := 0; i < 600; i++ {
-				// Check if parent exists
-				p, err := nc.GetParent(context.TODO())
-				if errors.IsNotFound(err) {
-					logger.Debugf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
-					break
-				} else if err != nil || p == nil {
-					if (i % 2) == 0 {
-						logger.Debugf("[RegisterEventHandler DeleteFunc] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
-					}
-					time.Sleep(500 * time.Millisecond)
-					continue
-				}
-				parent = p
-				break
-			}
-
-			if parent == nil {
-				panic(fmt.Sprintf("[RegisterEventHandler DeleteFunc] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
-			}
-
-			if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
-				RemoveChild("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name)
+			parentHashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.{{$node.BaseNodeName}}.Labels, nc.{{$node.BaseNodeName}}.Labels["{{.Parent.CrdName}}"])
+			if IsChildExists("{{.Parent.CrdName}}", parentHashedName, "{{$node.CrdName}}", nc.Name) {
+				RemoveChild("{{.Parent.CrdName}}", parentHashedName, "{{$node.CrdName}}", nc.Name)
 			}
 			{{end}}
 			deleteCB(nc)
@@ -1504,29 +1483,9 @@ func (c *{{$node.GroupResourceType}}Chainer) RegisterDeleteCallback(cbfn func(ob
 				logger.Debugf("[RegisterDeleteCallback] Got Delete event for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
 
 				{{if .Parent.HasParent}}
-				var parent *{{.Parent.SimpleGroupTypeName}}{{.Parent.BaseNodeName}}
-				for i := 0; i < 600; i++ {
-					// Check if parent exists
-					p, err := nc.GetParent(context.TODO())
-					if errors.IsNotFound(err) {
-						logger.Debugf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s", nc.{{$node.BaseNodeName}}.Name)
-						break
-					} else if err != nil || p == nil {
-						if (i % 2) == 0 {
-							logger.Debugf("[RegisterDeleteCallback] Fetching parent for {{$node.CrdName}} name %s failed with error %v. Retry count %d...", nc.{{$node.BaseNodeName}}.Name, err, i)
-						}
-						time.Sleep(500 * time.Millisecond)
-						continue
-					}
-					parent = p
-					break
-				}
-
-				if parent == nil {
-					panic(fmt.Sprintf("[RegisterDeleteCallback] Parent not found for {{$node.CrdName}} name %s (event loop is stalled) ", nc.{{$node.BaseNodeName}}.Name))
-				}
-				if IsChildExists("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name) {
-					RemoveChild("{{.Parent.CrdName}}", parent.Name, "{{$node.CrdName}}", nc.Name)
+				parentHashedName := helper.GetHashedName("{{.Parent.CrdName}}", nc.{{$node.BaseNodeName}}.Labels, nc.{{$node.BaseNodeName}}.Labels["{{.Parent.CrdName}}"])
+				if IsChildExists("{{.Parent.CrdName}}", parentHashedName, "{{$node.CrdName}}", nc.Name) {
+					RemoveChild("{{.Parent.CrdName}}", parentHashedName, "{{$node.CrdName}}", nc.Name)
 				}
 				{{end}}
 
