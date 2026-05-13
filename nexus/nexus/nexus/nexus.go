@@ -56,6 +56,14 @@ type RestAPISpec struct {
 	Uris []RestURIs `json:"uris"`
 }
 
+// ExtensionRestAPI defines an extension REST API endpoint.
+// The backend service configuration is provided separately via ExtensionRestAPIEndpoint CR.
+type ExtensionRestAPI struct {
+	Uri             string       `json:"uri"`
+	Methods         []HTTPMethod `json:"methods,omitempty"` // HTTP methods to proxy (e.g., http.MethodGet). Empty = all methods.
+	OpenAPIPathSpec string       `json:"openAPIPathSpec,omitempty"`
+}
+
 // Default HTTP error code and description.
 const DefaultHTTPErrorCode ResponseCode = http.StatusNotImplemented
 

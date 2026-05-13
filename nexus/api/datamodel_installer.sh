@@ -62,6 +62,166 @@ spec:
     storage: true
 ' | kubectl apply -f -
 
+echo '
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: extensionrestapis.nexus.com
+spec:
+  group: nexus.com
+  scope: Cluster
+  names:
+    plural: extensionrestapis
+    singular: extensionrestapi
+    kind: ExtensionRestAPI
+    shortNames:
+      - erapi
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: URI
+          type: string
+          jsonPath: .spec.uri
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: ExtensionRestAPI stores one REST URI and its OpenAPI path fragment.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - uri
+              properties:
+                uri:
+                  type: string
+                  minLength: 1
+                  description: REST API URI path with optional path parameters
+                methods:
+                  type: array
+                  description: HTTP methods to proxy (e.g., ["GET", "POST"]). Empty = all methods.
+                  items:
+                    type: string
+                    enum: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+                openAPIPathSpec:
+                  type: string
+                  description: Raw OpenAPI Path Item fragment as YAML or JSON string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: ["Registered", "Rejected", "Pending"]
+                  description: Current registration phase
+                message:
+                  type: string
+                  description: Human-readable status message
+                registeredRoutes:
+                  type: array
+                  description: Successfully registered URI+Method combinations
+                  items:
+                    type: object
+                    properties:
+                      uri:
+                        type: string
+                      method:
+                        type: string
+                collisions:
+                  type: array
+                  description: Collision details if phase is Rejected
+                  items:
+                    type: object
+                    properties:
+                      uri:
+                        type: string
+                      method:
+                        type: string
+                      conflictingCR:
+                        type: string
+                      conflictingSource:
+                        type: string
+                        enum: ["nexus-crd", "extension-rest-api"]
+                lastUpdated:
+                  type: string
+                  format: date-time
+                  description: Timestamp of last status update
+      subresources:
+        status: {}
+' | kubectl apply -f -
+
+echo '
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: extensionrestapiendpoints.nexus.com
+spec:
+  group: nexus.com
+  scope: Cluster
+  names:
+    plural: extensionrestapiendpoints
+    singular: extensionrestapiendpoint
+    kind: ExtensionRestAPIEndpoint
+    shortNames:
+      - erapiendpoint
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: ExtensionRestAPI
+          type: string
+          jsonPath: .spec.extensionRestAPIRef
+        - name: Service
+          type: string
+          jsonPath: .spec.service
+        - name: Port
+          type: string
+          jsonPath: .spec.port
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: ExtensionRestAPIEndpoint provides backend service configuration for an ExtensionRestAPI.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - extensionRestAPIRef
+                - service
+                - port
+              properties:
+                extensionRestAPIRef:
+                  type: string
+                  minLength: 1
+                  description: Name of the ExtensionRestAPI CR this endpoint provides backend for
+                service:
+                  type: string
+                  minLength: 1
+                  description: Fully qualified service DNS name (e.g., metrics-api.hdai-system.svc.cluster.local)
+                port:
+                  type: string
+                  minLength: 1
+                  description: Service port number or name (e.g., 8080 or http)
+' | kubectl apply -f -
+
 ### This is to support older way of installing datamodel from local folder
 if [[ $SKIP_CRD_INSTALLATION == "false" ]]; then
     kubectl apply -f /crds --recursive
@@ -95,4 +255,10 @@ if [[ -n $NAME ]] && [[ -n $IMAGE ]]; then
       url: '"$IMAGE"'
       enableGraphql: '"$GRAPHQL_ENABLED"'' | kubectl apply -f -
   fi
+fi
+
+# Apply ExtensionRestAPI CRs if they exist
+if [[ -d /extensionrestapi ]]; then
+    echo "Applying ExtensionRestAPI CRs from /extensionrestapi"
+    kubectl apply -f /extensionrestapi --recursive || true
 fi

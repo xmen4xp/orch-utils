@@ -36,7 +36,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.NexusStatus":                                         schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_NexusStatus(ref),
 		"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.SomeStruct":                                          schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_SomeStruct(ref),
 		"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.StructWithEmbeddedField":                             schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_StructWithEmbeddedField(ref),
-		"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.SyncerStatus":                                        schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_SyncerStatus(ref),
 		"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.TestValMarkers":                                      schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_TestValMarkers(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.AdditionalDescription":                                  schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_AdditionalDescription(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.AdditionalStatus":                                       schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_AdditionalStatus(ref),
@@ -65,7 +64,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.RandomStatus":                                           schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_RandomStatus(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.ReplicationSource":                                      schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_ReplicationSource(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.ServiceSegmentRef":                                      schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_ServiceSegmentRef(ref),
-		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.SyncerStatus":                                           schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_SyncerStatus(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.gnsQueryFilters":                                        schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_gnsQueryFilters(ref),
 		"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.metricsFilers":                                          schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_metricsFilers(ref),
 		"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.Child":                              schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_Child(ref),
@@ -73,7 +71,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.NexusStatus":                        schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_NexusStatus(ref),
 		"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.OptionalParentPathParam":            schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_OptionalParentPathParam(ref),
 		"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.OptionalParentPathParamNexusStatus": schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_OptionalParentPathParamNexusStatus(ref),
-		"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.SyncerStatus":                       schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_SyncerStatus(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.ACPConfig":                                        schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ACPConfig(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.ACPConfigNexusStatus":                             schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ACPConfigNexusStatus(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.ACPConfigSpec":                                    schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ACPConfigSpec(ref),
@@ -92,7 +89,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.RandomStatus":                                     schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_RandomStatus(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.ResourceGroupID":                                  schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ResourceGroupID(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.ResourceGroupRef":                                 schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ResourceGroupRef(ref),
-		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.SyncerStatus":                                     schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_SyncerStatus(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.VMpolicy":                                         schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_VMpolicy(ref),
 		"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.VMpolicyNexusStatus":                              schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_VMpolicyNexusStatus(ref),
 		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.Child":                                                 schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_Child(ref),
@@ -102,7 +98,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.Root":                                                  schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_Root(ref),
 		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.RootNexusStatus":                                       schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_RootNexusStatus(ref),
 		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.RootSpec":                                              schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_RootSpec(ref),
-		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.SyncerStatus":                                          schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_SyncerStatus(ref),
 		"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.queryFilters":                                          schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_queryFilters(ref),
 		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.Child":                                         schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_Child(ref),
 		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.Link":                                          schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_Link(ref),
@@ -113,7 +108,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SvcGroupLinkInfoSpec":                          schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SvcGroupLinkInfoSpec(ref),
 		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SvcGroupNexusStatus":                           schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SvcGroupNexusStatus(ref),
 		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SvcGroupSpec":                                  schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SvcGroupSpec(ref),
-		"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SyncerStatus":                                  schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SyncerStatus(ref),
 	}
 }
 
@@ -822,14 +816,14 @@ func schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_NexusStatus(ref comm
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/config.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -869,30 +863,6 @@ func schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_StructWithEmbeddedFi
 	}
 }
 
-func schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_TestValMarkers(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -903,9 +873,9 @@ func schema_nexustempmodule_apis_configtsmtanzuvmwarecom_v1_TestValMarkers(ref c
 						SchemaProps: spec.SchemaProps{
 							Type:      []string{"string"},
 							Format:    "",
+							MaxLength: IntPtr(8),
 							MinLength: IntPtr(2),
 							Pattern:   "ab",
-							MaxLength: IntPtr(8),
 						},
 					},
 					"myInt": {
@@ -1408,8 +1378,8 @@ func schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_GnsSpec(ref common.Refe
 						SchemaProps: spec.SchemaProps{
 							Type:      []string{"string"},
 							Format:    "",
-							MaxLength: IntPtr(8),
 							MinLength: IntPtr(2),
+							MaxLength: IntPtr(8),
 							Pattern:   "abc",
 						},
 					},
@@ -1778,14 +1748,14 @@ func schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_NexusStatus(ref common.
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/gns.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -1890,30 +1860,6 @@ func schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_ServiceSegmentRef(ref c
 					},
 				},
 				Required: []string{"field1", "field2"},
-			},
-		},
-	}
-}
-
-func schema_nexustempmodule_apis_gnstsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
 			},
 		},
 	}
@@ -2093,14 +2039,14 @@ func schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_Nex
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -2159,30 +2105,6 @@ func schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_Opt
 		},
 		Dependencies: []string{
 			"nexustempmodule/apis/optionalparentpathparam.tsm.tanzu.vmware.com/v1.NexusStatus"},
-	}
-}
-
-func schema_nexustempmodule_apis_optionalparentpathparamtsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -2629,14 +2551,14 @@ func schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_NexusStatus(ref c
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/policypkg.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -2766,30 +2688,6 @@ func schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_ResourceGroupRef(
 					},
 				},
 				Required: []string{"name", "type"},
-			},
-		},
-	}
-}
-
-func schema_nexustempmodule_apis_policypkgtsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
 			},
 		},
 	}
@@ -2935,14 +2833,14 @@ func schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_NexusStatus(ref common
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -3044,30 +2942,6 @@ func schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_RootSpec(ref common.Re
 		},
 		Dependencies: []string{
 			"nexustempmodule/apis/root.tsm.tanzu.vmware.com/v1.Child"},
-	}
-}
-
-func schema_nexustempmodule_apis_roottsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -3196,14 +3070,14 @@ func schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_NexusStatus(re
 					},
 					"syncerStatus": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SyncerStatus"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Status"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"nexustempmodule/apis/servicegroup.tsm.tanzu.vmware.com/v1.SyncerStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Status"},
 	}
 }
 
@@ -3396,30 +3270,6 @@ func schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SvcGroupSpec(r
 					},
 				},
 				Required: []string{"displayName", "description", "color"},
-			},
-		},
-	}
-}
-
-func schema_nexustempmodule_apis_servicegrouptsmtanzuvmwarecom_v1_SyncerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcdVersion": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"cRGenerationId": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-				},
 			},
 		},
 	}

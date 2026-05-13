@@ -44,6 +44,7 @@ func (r *CustomResourceDefinitionReconciler) Reconcile(ctx context.Context, req 
 	eventType := model.Upsert
 	if err := r.Get(ctx, req.NamespacedName, &crd); err != nil {
 		if client.IgnoreNotFound(err) != nil {
+			log.Error().Msgf("Error getting CRD %s: %v", req.NamespacedName.Name, err)
 			return ctrl.Result{}, err
 		}
 		eventType = model.Delete

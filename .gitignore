@@ -82,5 +82,8 @@ nexus-api-gw/applications.development.nexus.api-gw
 nexus-api-gw/*.coverprofile
 nexus-api-gw/pkg/openapi/api/api.coverprofile
 nexus-api-gw/*venv
+nexus/api/IMAGE
+nexus/compiler/example/datamodel/build/
+.vscode/
 
 *.test

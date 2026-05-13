@@ -18,11 +18,17 @@ import (
 
 const constDefaultChanSize = 100
 
+// NexusCRDRestURIs bundles CRD type with its REST URIs for route registration.
+type NexusCRDRestURIs struct {
+	CRDType  string           // e.g., "datacenterses.datacenters.hd.cisco.com"
+	RestURIs []nexus.RestURIs // REST URI specs from the CRD annotation
+}
+
 var (
 	appName = "nexus-api-gw-model"
 	log     = logging.GetLogger(appName)
 
-	RestURIChan = make(chan []nexus.RestURIs, constDefaultChanSize)
+	RestURIChan = make(chan NexusCRDRestURIs, constDefaultChanSize)
 	CrdTypeChan = make(chan string, constDefaultChanSize)
 
 	CrdTypeToRestUris      = make(map[string][]nexus.RestURIs)
@@ -51,36 +57,41 @@ var (
 
 func ConstructDatamodel(eventType EventType, name string, unstructuredObj *unstructured.Unstructured) {
 	DatamodelToDatamodelInfoMutex.Lock()
-	defer DatamodelToDatamodelInfoMutex.Unlock()
-
 	if eventType == Delete {
 		delete(DatamodelToDatamodelInfo, name)
+		DatamodelToDatamodelInfoMutex.Unlock()
 		return
 	}
 	obj := unstructuredObj.Object
 
 	spec, ok := obj["spec"].(map[string]interface{})
 	if !ok {
+		DatamodelToDatamodelInfoMutex.Unlock()
 		fmt.Println("obj[spec] is not of type (map[string]interface{})")
 		return
 	}
 
 	log.Debug().Msgf("ConstructDatamodel: Spec: %#v", spec)
-	if title, ok := spec["title"]; ok {
-		titleInString, ok := title.(string)
-		if !ok {
-			fmt.Println("title is not of type string")
-			return
-		}
-		datamodelName := name
-		DatamodelToDatamodelInfo[datamodelName] = DatamodelInfo{
-			Title: titleInString,
-		}
-
-		log.Debug().Msgf("ConstructDatamodel: Datamodel info: %v", DatamodelToDatamodelInfo)
-
-		DatamodelsChan <- datamodelName
+	title, ok := spec["title"]
+	if !ok {
+		DatamodelToDatamodelInfoMutex.Unlock()
+		return
 	}
+	titleInString, ok := title.(string)
+	if !ok {
+		DatamodelToDatamodelInfoMutex.Unlock()
+		fmt.Println("title is not of type string")
+		return
+	}
+	datamodelName := name
+	DatamodelToDatamodelInfo[datamodelName] = DatamodelInfo{
+		Title: titleInString,
+	}
+	log.Debug().Msgf("ConstructDatamodel: Datamodel info: %v", DatamodelToDatamodelInfo)
+	DatamodelToDatamodelInfoMutex.Unlock()
+
+	// Push to chan - MUST be outside mutex to avoid deadlock
+	DatamodelsChan <- datamodelName
 }
 
 func ConstructMapURIToCRDType(eventType EventType, crdType string, apiURIs []nexus.RestURIs) {
@@ -104,8 +115,6 @@ func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parent
 	children, links map[string]NodeHelperChild, isSingleton bool, description string, deferredDelete bool,
 ) {
 	crdTypeToNodeInfoMutex.Lock()
-	defer crdTypeToNodeInfoMutex.Unlock()
-
 	if eventType == Delete {
 		delete(CrdTypeToNodeInfo, crdType)
 	}
@@ -119,8 +128,9 @@ func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parent
 		Description:     description,
 		DeferredDelete:  deferredDelete,
 	}
+	crdTypeToNodeInfoMutex.Unlock()
 
-	// Push new CRD Type to chan.
+	// Push new CRD Type to chan - MUST be outside mutex to avoid deadlock
 	CrdTypeChan <- crdType
 }
 
@@ -161,18 +171,21 @@ func GetRestUris(crdType string) ([]nexus.RestURIs, bool) {
 
 func ConstructMapCRDTypeToRestUris(eventType EventType, crdType string, restSpec nexus.RestAPISpec) {
 	crdTypeToRestUrisMutex.Lock()
-	defer crdTypeToRestUrisMutex.Unlock()
-
 	if eventType == Delete {
 		delete(CrdTypeToRestUris, crdType)
+		crdTypeToRestUrisMutex.Unlock()
 		return
 	}
 
 	log.Debug().Msgf("Constructing map CRD type to rest uris for %s %v", crdType, restSpec.Uris)
 	CrdTypeToRestUris[crdType] = restSpec.Uris
+	crdTypeToRestUrisMutex.Unlock()
 
-	// Push new uris to chan.
-	RestURIChan <- restSpec.Uris
+	// Push new uris to chan - MUST be outside mutex to avoid deadlock
+	RestURIChan <- NexusCRDRestURIs{
+		CRDType:  crdType,
+		RestURIs: restSpec.Uris,
+	}
 }
 
 func ConstructMapURIToURIInfo(eventType EventType, m map[string]RestURIInfo) {
@@ -194,4 +207,38 @@ func GetURIInfo(uriPath string) (RestURIInfo, bool) {
 	defer URIToURIInfoMutex.Unlock()
 	info, ok := URIToURIInfo[uriPath]
 	return info, ok
+}
+
+func GetURIToCRDType(uri string) (string, bool) {
+	uriToCRDTypeMutex.Lock()
+	defer uriToCRDTypeMutex.Unlock()
+	crdType, ok := URIToCRDType[uri]
+	return crdType, ok
+}
+
+func GetCrdTypeToSpec(crdType string) (apiextensionsv1.CustomResourceDefinitionSpec, bool) {
+	crdTypeToSpecMutex.Lock()
+	defer crdTypeToSpecMutex.Unlock()
+	spec, ok := CrdTypeToSpec[crdType]
+	return spec, ok
+}
+
+func GetAllCrdTypeToNodeInfo() map[string]NodeInfo {
+	crdTypeToNodeInfoMutex.Lock()
+	defer crdTypeToNodeInfoMutex.Unlock()
+	result := make(map[string]NodeInfo, len(CrdTypeToNodeInfo))
+	for k, v := range CrdTypeToNodeInfo {
+		result[k] = v
+	}
+	return result
+}
+
+func GetAllCrdTypeToRestUris() map[string][]nexus.RestURIs {
+	crdTypeToRestUrisMutex.Lock()
+	defer crdTypeToRestUrisMutex.Unlock()
+	result := make(map[string][]nexus.RestURIs, len(CrdTypeToRestUris))
+	for k, v := range CrdTypeToRestUris {
+		result[k] = v
+	}
+	return result
 }

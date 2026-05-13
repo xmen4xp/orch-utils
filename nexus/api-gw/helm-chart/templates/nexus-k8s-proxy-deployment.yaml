@@ -22,14 +22,14 @@ spec:
         app.kubernetes.io/component: nexus-k8s-proxy
     spec:
       serviceAccountName: {{ .Release.Name }}-nexus-k8s-proxy
+      {{- if .Values.global.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+      {{- end }}
       containers:
         - name: nexus-k8s-proxy
           image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.global.releaseTag | default .Values.nexusK8sProxy.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          {{- if .Values.global.imagePullSecret }}
-          imagePullSecrets:
-            - name: {{ .Values.global.imagePullSecret }}
-          {{- end }}
           command: ["/kubectl", "proxy", "--port=80", "--address=0.0.0.0", "--disable-filter=true", "--v=1"]
           ports:
             - name: http

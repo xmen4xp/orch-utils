@@ -1,5 +1,7 @@
 # Global values for the master chart
 global:
+  namespace:
+    name: default
   datamodelName: nexus-datamodel
   imagePullSecret: ""
   imagePullPolicy: "IfNotPresent"

@@ -6,8 +6,10 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/parser/rest"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/util"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/config"
@@ -57,9 +59,24 @@ func main() {
 	graph, nonNexusTypes, fileset := parser.ParseDSLNodes(*dslDir, conf.GroupName, pkgs, graphlqQueries)
 	methods, codes := rest.ParseResponses(pkgs)
 	graphqlFiles := parser.ParseGraphQLFiles(*dslDir)
+
+	// Create parentsMap for hierarchy lookups
+	parentsMap := parser.CreateParentsMap(graph)
+
+	// Parse ExtensionRestAPI variables (basic validation happens during parsing)
+	extensionRestAPIs := parser.ParseExtensionRestAPIs(pkgs)
+
+	// Associate ExtensionRestAPI specs with nodes and validate path params
+	extensionRestAPIs = associateExtensionRestAPIsWithNodes(pkgs, extensionRestAPIs, parentsMap, conf.GroupName)
+
 	if err = generator.RenderCRDTemplate(conf.GroupName, conf.CrdModulePath, pkgs, graph,
 		*crdDir, methods, codes, nonNexusTypes, fileset, graphqlFiles); err != nil {
 		log.Fatalf("Error rendering crd template: %v", err)
+	}
+
+	// Render ExtensionRestAPI CR instances
+	if err = generator.RenderExtensionRestAPIs(*crdDir, extensionRestAPIs, parentsMap); err != nil {
+		log.Fatalf("Error rendering ExtensionRestAPI CRs: %v", err)
 	}
 
 	// Generate mermaid graph visualization
@@ -69,4 +86,59 @@ func main() {
 	} else {
 		log.Debugf("Successfully generated mermaid graph visualization")
 	}
+}
+
+// associateExtensionRestAPIsWithNodes finds the node associated with each ExtensionRestAPI
+// via the // nexus-extension-rest-api:VarName annotation and validates path params.
+func associateExtensionRestAPIsWithNodes(pkgs parser.Packages, specs []parser.ExtensionRestAPISpec, parentsMap map[string]parser.NodeHelper, baseGroupName string) []parser.ExtensionRestAPISpec {
+	// Build a map of variable name -> spec index for quick lookup
+	specMap := make(map[string]int)
+	for i, spec := range specs {
+		key := spec.PkgName + "." + spec.Name
+		specMap[key] = i
+	}
+
+	// Scan all packages for nexus-extension-rest-api annotations on nodes
+	for _, pkg := range pkgs {
+		for _, node := range pkg.GetNexusNodes() {
+			typeName := parser.GetTypeName(node)
+			annotations, ok := parser.GetNexusExtensionRestAPIAnnotations(pkg, typeName)
+			if !ok {
+				continue
+			}
+
+			// Process each annotation (supports comma-separated list)
+			for _, annotation := range annotations {
+				// Find the corresponding ExtensionRestAPI spec
+				key := pkg.Name + "." + annotation
+				specIdx, found := specMap[key]
+				if !found {
+					log.Fatalf("ExtensionRestAPI annotation on node '%s.%s' references unknown variable '%s'",
+						pkg.Name, typeName, annotation)
+				}
+
+				// Set the associated node info
+				specs[specIdx].AssociatedNode = pkg.Name + "." + typeName
+
+				// Build the CRD name for this node
+				plural := strings.ToLower(util.ToPlural(typeName))
+				groupName := pkg.Name + "." + baseGroupName
+				specs[specIdx].NodeCRDName = plural + "." + groupName
+
+				log.Debugf("Associated ExtensionRestAPI '%s' with node '%s' (CRD: %s)",
+					annotation, specs[specIdx].AssociatedNode, specs[specIdx].NodeCRDName)
+			}
+		}
+	}
+
+	// Validate path params for all specs that have an associated node
+	for _, spec := range specs {
+		if spec.AssociatedNode != "" {
+			if err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap); err != nil {
+				log.Fatalf("ExtensionRestAPI '%s': %v", spec.Name, err)
+			}
+		}
+	}
+
+	return specs
 }

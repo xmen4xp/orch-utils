@@ -1,0 +1,89 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: extensionrestapis.nexus.com
+spec:
+  conversion:
+    strategy: None
+  group: nexus.com
+  names:
+    kind: ExtensionRestAPI
+    listKind: ExtensionRestAPIList
+    plural: extensionrestapis
+    shortNames:
+      - erapi
+    singular: extensionrestapi
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - uri
+              properties:
+                uri:
+                  type: string
+                  description: The URI path for this extension REST API
+                methods:
+                  type: array
+                  description: HTTP methods to proxy (e.g., ["GET", "PUT"]). Empty = all methods.
+                  items:
+                    type: string
+                    enum: ["GET", "PUT", "PATCH", "DELETE"]
+                openAPIPathSpec:
+                  type: string
+                  description: OpenAPI path specification YAML for this endpoint
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: ["Registered", "Rejected", "Pending"]
+                  description: Current registration phase
+                message:
+                  type: string
+                  description: Human-readable status message
+                registeredRoutes:
+                  type: array
+                  description: Successfully registered URI+Method combinations
+                  items:
+                    type: object
+                    properties:
+                      uri:
+                        type: string
+                      method:
+                        type: string
+                collisions:
+                  type: array
+                  description: Collision details if phase is Rejected
+                  items:
+                    type: object
+                    properties:
+                      uri:
+                        type: string
+                      method:
+                        type: string
+                      conflictingCR:
+                        type: string
+                      conflictingSource:
+                        type: string
+                        enum: ["nexus-crd", "extension-rest-api"]
+                lastUpdated:
+                  type: string
+                  format: date-time
+                  description: Timestamp of last status update
+      subresources:
+        status: {}
+      served: true
+      storage: true

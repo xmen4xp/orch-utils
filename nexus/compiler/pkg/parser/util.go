@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/mod/modfile"
@@ -80,7 +81,15 @@ func GetNexusSpecs(p Package, nexusType string) (specs []NexusSpec) {
 			}
 			name := valueSpec.Names[0].Name
 			value, ok := valueSpec.Values[0].(*ast.CompositeLit)
-			if !ok || types.ExprString(value.Type) != nexusType {
+			if !ok {
+				continue
+			}
+			typeStr := types.ExprString(value.Type)
+			if typeStr != nexusType {
+				// Debug: log what types we're seeing when looking for ExtensionRestAPI
+				if nexusType == "nexus.ExtensionRestAPI" && strings.Contains(typeStr, "ExtensionRestAPI") {
+					log.Infof("GetNexusSpecs: found type '%s' but looking for '%s'", typeStr, nexusType)
+				}
 				continue
 			}
 			specs = append(specs, NexusSpec{
