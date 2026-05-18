@@ -32,7 +32,11 @@ import (
 )
 
 const (
-	minPathLength = 2
+	minPathLength           = 2
+	rbacResourceHeader      = "x-rbac-resource"
+	rbacScopeHeader         = "x-rbac-scope"
+	rbacLastUpdatedByHeader = "x-rbac-last-updated-by"
+	lastUpdatedByAnnotation = "hdai/last-updated-by"
 )
 
 type DefaultResponse struct {
@@ -312,6 +316,24 @@ func extractSpec(obj *unstructured.Unstructured, crdInfo model.NodeInfo) (map[st
 	return spec, nil
 }
 
+// parseRBACScope parses the x-rbac-scope header value (JSON array of display names).
+// Returns (allowedNames, true) when filtering should be applied, or (nil, false) when the full list should be returned.
+func parseRBACScope(header string) (map[string]bool, bool) {
+	if header == "" || header == "*" {
+		return nil, false
+	}
+	var names []string
+	if err := json.Unmarshal([]byte(header), &names); err != nil {
+		log.Warn().Msgf("Failed to parse %s header as JSON array, skipping filtering: %s", rbacScopeHeader, err.Error())
+		return nil, false
+	}
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allowed[name] = true
+	}
+	return allowed, true
+}
+
 // ListHandler is used to process GET list requests.
 func (s *EchoServer) ListHandler(c echo.Context) error {
 	nc, ok := c.(*NexusContext)
@@ -323,12 +345,22 @@ func (s *EchoServer) ListHandler(c echo.Context) error {
 	gvr := constructGVR(crdName)
 	opts := constructListOptions(c, labels)
 
+	var allowedNames map[string]bool
+	rbacResource := GetHeaderValue(nc.Request(), rbacResourceHeader)
+	rbacScope := GetHeaderValue(nc.Request(), rbacScopeHeader)
+
+	if rbacResource != "" && rbacResource != crdInfo.Name {
+		log.Warn().Msgf("x-rbac-resource mismatch: got %q, expected %q — skipping RBAC filtering", rbacResource, crdInfo.Name)
+	} else {
+		allowedNames, _ = parseRBACScope(rbacScope)
+	}
+
 	objs, err := client.Client.Resource(gvr).List(context.TODO(), opts)
 	if err != nil {
 		log.Error().Msgf("Failed to list gvr object err: %s", err.Error())
 		return handleClientError(nc, err)
 	}
-	return nc.JSON(http.StatusOK, processListResponse(objs, crdInfo))
+	return nc.JSON(http.StatusOK, processListResponse(objs, crdInfo, allowedNames))
 }
 
 func getCRDInfoAndLabels(nc *NexusContext) (string, model.NodeInfo, k8sLabels.Set) {
@@ -372,12 +404,15 @@ func constructListOptions(c echo.Context, labels k8sLabels.Set) metav1.ListOptio
 	return opts
 }
 
-func processListResponse(objs *unstructured.UnstructuredList, crdInfo model.NodeInfo) []map[string]interface{} {
+func processListResponse(objs *unstructured.UnstructuredList, crdInfo model.NodeInfo, allowedNames map[string]bool) []map[string]interface{} {
 	resps := make([]map[string]interface{}, 0)
 	for _, item := range objs.Items {
 		itemName := item.GetName()
 		if val, ok := item.GetLabels()[utils.DisplayNameLabelConst]; ok {
 			itemName = val
+		}
+		if allowedNames != nil && !allowedNames[itemName] {
+			continue
 		}
 		status, err := extractStatus(&item)
 		if err != nil {
@@ -431,16 +466,18 @@ func (s *EchoServer) PutHandler(c echo.Context) error {
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
 	}
 
+	lastUpdatedBy := GetHeaderValue(nc.Request(), rbacLastUpdatedByHeader)
+
 	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
 	obj, err := client.Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return handleCreateObject(nc, gvr, crdInfo, hashedName, body, name)
+			return handleCreateObject(nc, gvr, crdInfo, hashedName, body, name, lastUpdatedBy)
 		}
 		return handleClientError(nc, err)
 	}
 
-	return updateResource(nc, gvr, obj, body, crdInfo)
+	return updateResource(nc, gvr, obj, body, crdInfo, lastUpdatedBy)
 }
 
 func parseRequestBody(nc *NexusContext) (map[string]interface{}, error) {
@@ -473,7 +510,7 @@ func isParentFound(nc *NexusContext, crdInfo model.NodeInfo, labels map[string]s
 }
 
 func handleCreateObject(nc *NexusContext, gvr schema.GroupVersionResource, crdInfo model.NodeInfo,
-	hashedName string, body map[string]interface{}, name string,
+	hashedName string, body map[string]interface{}, name, lastUpdatedBy string,
 ) error {
 	crdNameParts := strings.Split(crdInfo.Name, ".")
 	labels := parseLabels(nc, crdInfo.ParentHierarchy)
@@ -491,7 +528,12 @@ func handleCreateObject(nc *NexusContext, gvr schema.GroupVersionResource, crdIn
 		finalizers = append(finalizers, "nexus.com/nexus-deferred-delete")
 	}
 
-	err := client.CreateObject(gvr, crdNameParts[1], hashedName, labels, body, finalizers)
+	var annotations map[string]string
+	if lastUpdatedBy != "" {
+		annotations = map[string]string{lastUpdatedByAnnotation: lastUpdatedBy}
+	}
+
+	err := client.CreateObject(gvr, crdNameParts[1], hashedName, labels, annotations, body, finalizers)
 	if err != nil {
 		return handleClientError(nc, err)
 	}
@@ -526,22 +568,31 @@ func (s *EchoServer) PatchHandler(c echo.Context) error {
 		return handleClientError(nc, err)
 	}
 
+	lastUpdatedBy := GetHeaderValue(nc.Request(), rbacLastUpdatedByHeader)
+
 	uriInfo, ok := model.GetURIInfo(nc.NexusURI)
 	if ok && uriInfo.TypeOfURI == model.StatusURI {
 		log.Debug().Msgf("uriInfo.TypeOfURI(%v) == model.StatusURI(%v)", uriInfo.TypeOfURI, model.StatusURI)
-		return handleStatusPatch(nc, gvr, hashedName, body)
+		return handleStatusPatch(nc, gvr, hashedName, body, lastUpdatedBy)
 	}
 
-	return handleSpecPatch(nc, gvr, hashedName, body, crdInfo)
+	return handleSpecPatch(nc, gvr, hashedName, body, crdInfo, lastUpdatedBy)
 }
 
-func handleStatusPatch(nc *NexusContext, gvr schema.GroupVersionResource, hashedName string, body map[string]interface{}) error {
+func handleStatusPatch(nc *NexusContext, gvr schema.GroupVersionResource, hashedName string, body map[string]interface{}, lastUpdatedBy string) error {
 	delete(body, "nexus")
 
+	type metadataPayload struct {
+		Annotations map[string]string `json:"annotations,omitempty"`
+	}
 	statusPayload := struct {
-		Status map[string]interface{} `json:"status"`
+		Metadata *metadataPayload       `json:"metadata,omitempty"`
+		Status   map[string]interface{} `json:"status"`
 	}{
-		body,
+		Status: body,
+	}
+	if lastUpdatedBy != "" {
+		statusPayload.Metadata = &metadataPayload{Annotations: map[string]string{lastUpdatedByAnnotation: lastUpdatedBy}}
 	}
 	patchBytes, err := json.Marshal(statusPayload)
 	if err != nil {
@@ -562,7 +613,7 @@ func handleStatusPatch(nc *NexusContext, gvr schema.GroupVersionResource, hashed
 }
 
 func handleSpecPatch(nc *NexusContext, gvr schema.GroupVersionResource,
-	hashedName string, body map[string]interface{}, crdInfo model.NodeInfo,
+	hashedName string, body map[string]interface{}, crdInfo model.NodeInfo, lastUpdatedBy string,
 ) error {
 	for _, v := range crdInfo.Children {
 		delete(body, v.FieldNameGvk)
@@ -572,10 +623,17 @@ func handleSpecPatch(nc *NexusContext, gvr schema.GroupVersionResource,
 		delete(body, v.FieldNameGvk)
 	}
 
+	type metadataPayload struct {
+		Annotations map[string]string `json:"annotations,omitempty"`
+	}
 	payload := struct {
-		Spec map[string]interface{} `json:"spec"`
+		Metadata *metadataPayload       `json:"metadata,omitempty"`
+		Spec     map[string]interface{} `json:"spec"`
 	}{
-		body,
+		Spec: body,
+	}
+	if lastUpdatedBy != "" {
+		payload.Metadata = &metadataPayload{Annotations: map[string]string{lastUpdatedByAnnotation: lastUpdatedBy}}
 	}
 
 	patchBytes, err := json.Marshal(payload)
@@ -706,7 +764,7 @@ type PatchOp struct {
 }
 
 func updateResource(nc *NexusContext, gvr schema.GroupVersionResource,
-	obj *unstructured.Unstructured, body map[string]interface{}, crdInfo model.NodeInfo,
+	obj *unstructured.Unstructured, body map[string]interface{}, crdInfo model.NodeInfo, lastUpdatedBy string,
 ) error {
 	uriInfo, ok := model.GetURIInfo(nc.NexusURI)
 	if ok && uriInfo.TypeOfURI == model.StatusURI {
@@ -735,6 +793,15 @@ func updateResource(nc *NexusContext, gvr schema.GroupVersionResource,
 		}
 	}
 	obj.Object["spec"] = body
+
+	if lastUpdatedBy != "" {
+		annots := obj.GetAnnotations()
+		if annots == nil {
+			annots = make(map[string]string)
+		}
+		annots[lastUpdatedByAnnotation] = lastUpdatedBy
+		obj.SetAnnotations(annots)
+	}
 
 	_, err := client.Client.Resource(gvr).Update(context.TODO(), obj, metav1.UpdateOptions{})
 	if err != nil {

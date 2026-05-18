@@ -88,7 +88,7 @@ func NewNexusClient(config *rest.Config) error {
 }
 
 func CreateObject(gvr schema.GroupVersionResource, kind, hashedName string, labels map[string]string,
-	body map[string]interface{}, finalizers []string,
+	annotations map[string]string, body map[string]interface{}, finalizers []string,
 ) error {
 	labelsUnstructured := map[string]interface{}{}
 	for k, v := range labels {
@@ -99,16 +99,25 @@ func CreateObject(gvr schema.GroupVersionResource, kind, hashedName string, labe
 		finalizersUnstructured[i] = f
 	}
 
+	metadata := map[string]interface{}{
+		"name":       hashedName,
+		"labels":     labelsUnstructured,
+		"finalizers": finalizersUnstructured,
+	}
+	if len(annotations) > 0 {
+		annotationsUnstructured := map[string]interface{}{}
+		for k, v := range annotations {
+			annotationsUnstructured[k] = v
+		}
+		metadata["annotations"] = annotationsUnstructured
+	}
+
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.GroupVersion().String(),
 			"kind":       kind,
-			"metadata": map[string]interface{}{
-				"name":       hashedName,
-				"labels":     labelsUnstructured,
-				"finalizers": finalizersUnstructured,
-			},
-			"spec": body,
+			"metadata":   metadata,
+			"spec":       body,
 		},
 	}
 
