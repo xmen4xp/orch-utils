@@ -3,6 +3,7 @@ package parser_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/config"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/parser"
 	nexus "github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 )
@@ -114,12 +115,13 @@ get:
 
 		BeforeEach(func() {
 			// Set up a mock parentsMap with a hierarchy:
-			// root.Root -> config.Config -> gns.Gns
+			// root.Root (singleton) -> config.Config -> gns.Gns
 			parentsMap = map[string]parser.NodeHelper{
 				"roots.root.test.com": {
-					Name:     "Root",
-					RestName: "root.Root",
-					Parents:  []string{},
+					Name:        "Root",
+					RestName:    "root.Root",
+					Parents:     []string{},
+					IsSingleton: true,
 				},
 				"configs.config.test.com": {
 					Name:     "Config",
@@ -169,6 +171,50 @@ get:
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not associated with any node"))
 		})
+
+		It("should fail validation when required non-singleton parent is missing from URI", func() {
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "gns",
+				Uri:            "/v1/gns/{gns.Gns}/custom",
+				AssociatedNode: "gns.Gns",
+				NodeCRDName:    "gnses.gns.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("required parent path params missing from URI"))
+			Expect(err.Error()).To(ContainSubstring("config.Config"))
+		})
+
+		It("should pass validation when singleton parent is missing from URI", func() {
+			// root.Root is singleton, so it's allowed to be absent
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "config",
+				Uri:            "/v1/config/{config.Config}/custom",
+				AssociatedNode: "config.Config",
+				NodeCRDName:    "configs.config.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should pass validation when missing parent is in ignoredParentPathParams", func() {
+			// Temporarily add config.Config to ignored list
+			origIgnored := config.ConfigInstance.IgnoredParentPathParams
+			config.ConfigInstance.IgnoredParentPathParams = []string{"config.Config"}
+			defer func() { config.ConfigInstance.IgnoredParentPathParams = origIgnored }()
+
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "gns",
+				Uri:            "/v1/gns/{gns.Gns}/custom",
+				AssociatedNode: "gns.Gns",
+				NodeCRDName:    "gnses.gns.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Describe("ParseOpenAPIPathSpecToRestAPISpec", func() {
@@ -195,10 +241,10 @@ get:
   responses:
     "200":
       description: OK
-post:
+put:
   responses:
-    "201":
-      description: Created
+    "200":
+      description: Updated
 delete:
   responses:
     "204":
@@ -207,7 +253,7 @@ delete:
 			restAPISpec, err := parser.ParseOpenAPIPathSpecToRestAPISpec("/v1/resources", openAPISpec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(restAPISpec.Uris[0].Methods).To(HaveKey(nexus.HTTPMethod("GET")))
-			Expect(restAPISpec.Uris[0].Methods).To(HaveKey(nexus.HTTPMethod("POST")))
+			Expect(restAPISpec.Uris[0].Methods).To(HaveKey(nexus.HTTPMethod("PUT")))
 			Expect(restAPISpec.Uris[0].Methods).To(HaveKey(nexus.HTTPMethod("DELETE")))
 		})
 

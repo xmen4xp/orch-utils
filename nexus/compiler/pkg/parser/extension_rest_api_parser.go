@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/config"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	"gopkg.in/yaml.v2"
 )
@@ -209,7 +210,7 @@ func ValidateExtensionRestAPIPathParams(spec ExtensionRestAPISpec, parentsMap ma
 		}
 	}
 
-	// Validate each path param
+	// Validate each path param (forward check: params in URI are valid hierarchy nodes)
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
@@ -221,6 +222,20 @@ func ValidateExtensionRestAPIPathParams(spec ExtensionRestAPISpec, parentsMap ma
 			return fmt.Errorf("path param {%s} not found in hierarchy of node %s. Valid nodes: %v",
 				pathParam, spec.AssociatedNode, getValidNodesList(validNodes))
 		}
+	}
+
+	// Reverse check: all required (non-singleton, non-ignored) parents must be in URI
+	var ignoredParams []string
+	if config.ConfigInstance != nil {
+		ignoredParams = config.ConfigInstance.IgnoredParentPathParams
+	}
+	missing, ignored := ValidateRequiredParents(spec.Uri, spec.NodeCRDName, parentsMap, ignoredParams)
+	for _, name := range ignored {
+		log.Warnf("ExtensionRestAPI '%s': parent %s not in URI %s, ignoring (configured as ignored parent path param)",
+			spec.Name, name, spec.Uri)
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("required parent path params missing from URI: %v. URI: %s", missing, spec.Uri)
 	}
 
 	return nil
