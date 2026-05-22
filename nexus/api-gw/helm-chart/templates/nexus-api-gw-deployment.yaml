@@ -22,14 +22,14 @@ spec:
         app.kubernetes.io/component: nexus-api-gw
     spec:
       serviceAccountName: {{ .Release.Name }}-nexus-api-gw
+      {{- if .Values.global.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+      {{- end }}
       initContainers:
       - name: wait-for-datamodel-cr
         image: "{{ .Values.nexusK8sProxy.image.repository }}:{{ .Values.global.releaseTag | default .Values.nexusK8sProxy.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-        {{- if .Values.global.imagePullSecret }}
-        imagePullSecrets:
-          - name: {{ .Values.global.imagePullSecret }}
-        {{- end }}
         command: ["/bin/sh"]
         args:
           - "-c"
@@ -43,10 +43,6 @@ spec:
         - name: nexus-api-gw
           image: "{{ .Values.nexusApiGw.image.repository }}:{{ .Values.global.releaseTag | default .Values.nexusApiGw.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          {{- if .Values.global.imagePullSecret }}
-          imagePullSecrets:
-            - name: {{ .Values.global.imagePullSecret }}
-          {{- end }}
           env:
             - name: GATEWAY_MODE
               value: {{ .Values.nexusApiGw.gatewayMode | quote }}
@@ -56,7 +52,7 @@ spec:
               value: /kubeconfig/config
           ports:
             - name: http
-              containerPort: 80
+              containerPort: {{ .Values.config.server.httpPort | default 80 }}
               protocol: TCP
           volumeMounts:
             - name: config

@@ -70,6 +70,9 @@ var tsmGraphqlSchemaTemplateFile []byte
 //go:embed template/model.go.tmpl
 var modelTemplateFile []byte
 
+//go:embed template/extensionrestapi_cr.yaml.tmpl
+var extensionRestAPICRTemplateFile []byte
+
 func RenderCRDTemplate(baseGroupName, crdModulePath string,
 	pkgs parser.Packages, graph map[string]parser.Node,
 	outputDir string, httpMethods map[string]nexus.HTTPMethodsResponses,
@@ -815,6 +818,104 @@ func RenderNonNexusTypes(outputDir string, nonNexusTypes *parser.NonNexusTypes, 
 
 	if len(output) > 0 {
 		err = createFile(outputModelFolder, "model.go", out, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// extensionRestAPICRVars holds template variables for ExtensionRestAPI CR rendering.
+type extensionRestAPICRVars struct {
+	Name            string
+	Uri             string
+	Methods         []string // HTTP methods to proxy (e.g., ["GET", "PUT"]). Empty = all methods.
+	OpenAPIPathSpec string
+	NexusAnnotation string // JSON-encoded nexus annotation
+}
+
+// ExtensionRestAPIAnnotation holds the annotation structure for ExtensionRestAPI CRs.
+type ExtensionRestAPIAnnotation struct {
+	Name            string            `json:"name,omitempty"`
+	Hierarchy       []string          `json:"hierarchy,omitempty"`
+	NexusRestAPIGen nexus.RestAPISpec `json:"nexus-rest-api-gen,omitempty"`
+}
+
+// RenderExtensionRestAPIs renders ExtensionRestAPI CR instances to YAML files.
+func RenderExtensionRestAPIs(outputDir string, specs []parser.ExtensionRestAPISpec, parentsMap map[string]parser.NodeHelper) error {
+	if len(specs) == 0 {
+		return nil
+	}
+
+	extAPIFolder := outputDir + "/extensionrestapi"
+	err := createFolder(extAPIFolder)
+	if err != nil {
+		return err
+	}
+
+	// Create template with indent function for YAML formatting
+	tmpl := template.New("extensionrestapi").Funcs(template.FuncMap{
+		"indent": func(spaces int, s string) string {
+			pad := strings.Repeat(" ", spaces)
+			lines := strings.Split(s, "\n")
+			for i, line := range lines {
+				if line != "" {
+					lines[i] = pad + line
+				}
+			}
+			return strings.Join(lines, "\n")
+		},
+	})
+
+	tmpl, err = tmpl.Parse(string(extensionRestAPICRTemplateFile))
+	if err != nil {
+		return err
+	}
+
+	for _, spec := range specs {
+		// Build the nexus annotation
+		// Use NodeCRDName (full CRD type like "datacenterses.datacenters.hd.cisco.com")
+		// so GetDatamodelName() can correctly extract the datamodel suffix
+		annotation := ExtensionRestAPIAnnotation{
+			Name: spec.NodeCRDName,
+		}
+
+		// Get hierarchy from parentsMap
+		if nodeHelper, ok := parentsMap[spec.NodeCRDName]; ok {
+			annotation.Hierarchy = nodeHelper.Parents
+		}
+
+		// Parse OpenAPIPathSpec to RestAPISpec
+		restAPISpec, err := parser.ParseOpenAPIPathSpecToRestAPISpec(spec.Uri, spec.OpenAPIPathSpec)
+		if err != nil {
+			log.Warnf("ExtensionRestAPI '%s': failed to parse OpenAPIPathSpec: %v", spec.Name, err)
+		} else {
+			annotation.NexusRestAPIGen = restAPISpec
+		}
+
+		// Marshal annotation to JSON
+		annotationJSON, err := json.Marshal(annotation)
+		if err != nil {
+			return fmt.Errorf("failed to marshal annotation for ExtensionRestAPI '%s': %v", spec.Name, err)
+		}
+
+		vars := extensionRestAPICRVars{
+			Name:            strings.ToLower(spec.PkgName + "-" + spec.Name),
+			Uri:             spec.Uri,
+			Methods:         spec.Methods,
+			OpenAPIPathSpec: spec.OpenAPIPathSpec,
+			NexusAnnotation: string(annotationJSON),
+		}
+
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, vars); err != nil {
+			return fmt.Errorf("rendering ExtensionRestAPI '%s': %v", spec.Name, err)
+		}
+
+		fileName := fmt.Sprintf("%s_%s.yaml", spec.PkgName, strings.ToLower(spec.Name))
+		log.Debugf("Rendered ExtensionRestAPI CR: %s", fileName)
+		err = createFile(extAPIFolder, fileName, &buf, false)
 		if err != nil {
 			return err
 		}

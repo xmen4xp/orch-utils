@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"nexus-api-gw/pkg/client"
 	"nexus-api-gw/pkg/common"
 	"nexus-api-gw/pkg/config"
 	"nexus-api-gw/pkg/model"
@@ -28,7 +29,12 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 
 	nexusClient "nexus/admin/api/build/nexus-client"
 
@@ -71,6 +77,7 @@ type EchoServer struct {
 	k8sProxy    *httputil.ReverseProxy
 	mu          sync.Mutex
 	restartMu   sync.Mutex // Mutex to protect restart counter
+	recorder    record.EventRecorder
 }
 
 type KubernetesClient interface {
@@ -81,8 +88,15 @@ func InitEcho(stopCh chan struct{}, conf *config.Config, client KubernetesClient
 	log.Info().Msg("Init Echo")
 	e := NewEchoServer(conf, client, nc)
 
+	// Initialize EventRecorder
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	// For cluster-scoped objects like CRDs, we need an EventSource
+	e.recorder = eventBroadcaster.NewRecorder(clientgoscheme.Scheme, corev1.EventSource{Component: "nexus-api-gw"})
+
 	if conf.EnableNexusRuntime {
 		e.RegisterNexusRoutes()
+		e.ReplayExtensionRoutes()
 	}
 
 	if conf.BackendService != "" {
@@ -181,17 +195,62 @@ func (s *EchoServer) RegisterNexusRoutes() {
 	s.Echo.GET("/:datamodel/docs", SwaggerUI)
 }
 
+// ReplayExtensionRoutes re-registers all cached ExtensionRestAPI routes on the current echo server.
+// This is needed because echo server restarts (triggered by CRD reconcilers via StopCh) destroy all
+// registered routes.
+func (s *EchoServer) ReplayExtensionRoutes() {
+	specs := model.GetAllExtensionRestAPISpecs()
+	if len(specs) == 0 {
+		return
+	}
+	log.Info().Msgf("Replaying %d extension REST API routes after server restart", len(specs))
+	for _, spec := range specs {
+		s.RegisterExtensionRouter(spec)
+	}
+}
+
 func (s *EchoServer) RegisterDeclarativeRoutes() {
 	s.Echo.GET("/declarative/apis", declarative.ApisHandler)
 }
 
-func (s *EchoServer) RegisterRouter(restURI nexus.RestURIs) {
+func (s *EchoServer) RegisterRouter(restURI nexus.RestURIs, crdType string) ([]model.RegisteredRoute, []model.CollisionInfo) {
 	urlPattern := model.ConstructEchoPathParamURL(restURI.Uri)
+
+	var registeredRoutes []model.RegisteredRoute
+	var collisions []model.CollisionInfo
+
 	for method, codes := range restURI.Methods {
-		log.Info().Msgf("Registered Router Path %s Method %s\n", urlPattern, method)
+		methodStr := string(method)
+
+		// Check for collision before registering
+		owner := model.RouteOwner{
+			Source: model.RouteSourceNexusCRD,
+			CRName: crdType,
+		}
+		if err := model.GlobalRouteRegistry.Register(restURI.Uri, methodStr, owner); err != nil {
+			log.Warn().Msgf("Skipping route %s %s for Nexus CRD %s: %v", methodStr, urlPattern, crdType, err)
+			// Record collision
+			existingOwner, _ := model.GlobalRouteRegistry.GetOwner(restURI.Uri, methodStr)
+			collisions = append(collisions, model.CollisionInfo{
+				URI:               restURI.Uri,
+				Method:            methodStr,
+				ConflictingCR:     existingOwner.CRName,
+				ConflictingSource: existingOwner.Source,
+			})
+			continue
+		}
+
+		log.Info().Msgf("Registered Router Path %s Method %s\n", urlPattern, methodStr)
 		nexusContext := s.GetNexusContext(restURI, codes)
-		s.registerRoute(string(method), urlPattern, nexusContext)
+		s.registerRoute(methodStr, urlPattern, nexusContext)
+
+		registeredRoutes = append(registeredRoutes, model.RegisteredRoute{
+			URI:    restURI.Uri,
+			Method: methodStr,
+		})
 	}
+
+	return registeredRoutes, collisions
 }
 
 func (s *EchoServer) registerRoute(method, urlPattern string, nexusContext func(next echo.HandlerFunc) echo.HandlerFunc) {
@@ -282,6 +341,46 @@ func (s *EchoServer) RegisterCrdRouter(crdType string) {
 	s.Echo.DELETE(resourceNamePattern, KubeDeleteHandler, crdContext)
 }
 
+// RegisterExtensionRouter registers routes for an ExtensionRestAPI.
+// Extension API routes are handled by the unified Nexus handlers (GetHandler, PutHandler, etc.)
+// which detect extension APIs and proxy them to the backend after hierarchy resolution.
+// Note: Routes should already be registered in GlobalRouteRegistry by the controller.
+func (s *EchoServer) RegisterExtensionRouter(spec model.ExtensionRestAPISpec) {
+	urlPattern := model.ConstructEchoPathParamURL(spec.URI)
+
+	// Populate URIToCRDType so getCRDInfoAndName works in the unified handler
+	model.SetURIToCRDType(spec.URI, spec.AssociatedNode)
+
+	// Use Methods field if specified, otherwise default to all methods
+	methods := spec.Methods
+	if len(methods) == 0 {
+		// Default: register all common HTTP methods
+		methods = []string{http.MethodGet, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	}
+
+	nexusContext := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			nc := &NexusContext{
+				Context:  c,
+				NexusURI: spec.URI,
+			}
+			return next(nc)
+		}
+	}
+
+	for _, method := range methods {
+		// Verify this route is owned by this ExtensionRestAPI in the registry
+		owner, exists := model.GlobalRouteRegistry.GetOwner(spec.URI, method)
+		if !exists || owner.CRName != spec.Name || owner.Source != model.RouteSourceExtensionRestAPI {
+			log.Debug().Msgf("Skipping extension route %s %s - not owned by %s", method, urlPattern, spec.Name)
+			continue
+		}
+
+		log.Info().Msgf("Registered Extension Router Path %s Method %s", urlPattern, method)
+		s.registerRoute(method, urlPattern, nexusContext)
+	}
+}
+
 func (s *EchoServer) RegisterDeclarativeRouter() {
 	for uri, path := range declarative.Paths {
 		if path.Get != nil {
@@ -339,14 +438,23 @@ func (s *EchoServer) NodeUpdateNotifications(stopCh chan struct{}) error {
 		select {
 		case <-stopCh:
 			return fmt.Errorf("stop signal received")
-		case restURIs := <-model.RestURIChan:
-			log.Debug().Msg("Rest route notification received")
-			for _, v := range restURIs {
+		case nexusCRDURIs := <-model.RestURIChan:
+			log.Debug().Msgf("Rest route notification received for CRD: %s", nexusCRDURIs.CRDType)
+
+			var allRegisteredRoutes []model.RegisteredRoute
+			var allCollisions []model.CollisionInfo
+
+			for _, v := range nexusCRDURIs.RestURIs {
 				if httpCodesResponse, ok := v.Methods[http.MethodPut]; ok {
 					v.Methods[http.MethodPatch] = httpCodesResponse
 				}
-				s.RegisterRouter(v)
+				registered, collisions := s.RegisterRouter(v, nexusCRDURIs.CRDType)
+				allRegisteredRoutes = append(allRegisteredRoutes, registered...)
+				allCollisions = append(allCollisions, collisions...)
 			}
+
+			// Update Nexus CRD status
+			s.updateNexusCRDStatus(nexusCRDURIs.CRDType, allRegisteredRoutes, allCollisions)
 
 			// Construct openapi spec.
 			api.Recreate()
@@ -354,7 +462,116 @@ func (s *EchoServer) NodeUpdateNotifications(stopCh chan struct{}) error {
 		case crdType := <-model.CrdTypeChan:
 			log.Debug().Msg("CRD route notification received")
 			s.RegisterCrdRouter(crdType)
+
+		case extSpec := <-model.ExtensionURIChan:
+			log.Debug().Msgf("Extension REST API notification received: %s", extSpec.URI)
+			s.RegisterExtensionRouter(extSpec)
+
+			// Recreate openapi spec to include extension APIs.
+			api.Recreate()
+			api.RecreateExtension()
+
+		case extURI := <-model.ExtensionAPIDeleteChan:
+			log.Debug().Msgf("Extension REST API delete notification received: %s", extURI)
+			api.Recreate()
+			api.RecreateExtension()
+			// Trigger server restart to remove the stale Echo route handler.
+			// On restart, ReplayExtensionRoutes re-registers surviving routes from cache.
+			// Must send from a separate goroutine since stopCh is unbuffered and
+			// this goroutine is also the reader.
+			go func() { stopCh <- struct{}{} }()
 		}
+	}
+}
+
+// updateNexusCRDStatus updates the status of a Nexus CRD with route registration results.
+func (s *EchoServer) updateNexusCRDStatus(crdType string, registeredRoutes []model.RegisteredRoute, collisions []model.CollisionInfo) {
+	if client.Client == nil {
+		log.Warn().Msg("Dynamic client not available, skipping Nexus CRD status update")
+		return
+	}
+
+	// Parse CRD type to get GVR (e.g., "datacenterses.datacenters.hd.cisco.com")
+	parts := strings.Split(crdType, ".")
+	if len(parts) < 2 {
+		log.Warn().Msgf("Invalid CRD type format: %s", crdType)
+		return
+	}
+
+	// We need to find the CR instances of this CRD type and update their status
+	// For now, we'll update the CRD itself (not individual CRs) - this is informational
+	// The status will be stored in a way that indicates route registration status
+
+	var status model.RouteStatus
+	var eventMessage strings.Builder
+
+	if len(collisions) > 0 {
+		status = model.RouteStatus{
+			Phase:            model.RouteStatusPhaseRejected,
+			RegisteredRoutes: registeredRoutes,
+			Collisions:       collisions,
+			LastUpdated:      time.Now().UTC().Format(time.RFC3339),
+		}
+
+		eventMessage.WriteString(fmt.Sprintf("Routes rejected due to collisions (%d registered, %d collisions).\n", len(registeredRoutes), len(collisions)))
+		eventMessage.WriteString("Collisions:\n")
+		for _, c := range collisions {
+			eventMessage.WriteString(fmt.Sprintf("- %s %s (conflicts with %s %s)\n", c.Method, c.URI, c.ConflictingSource, c.ConflictingCR))
+		}
+		status.Message = eventMessage.String()
+	} else if len(registeredRoutes) > 0 {
+		status = model.NewRegisteredStatus(registeredRoutes)
+
+		eventMessage.WriteString(fmt.Sprintf("All %d routes successfully registered.\n", len(registeredRoutes)))
+		eventMessage.WriteString("Registered:\n")
+		for _, r := range registeredRoutes {
+			eventMessage.WriteString(fmt.Sprintf("- %s %s\n", r.Method, r.URI))
+		}
+		status.Message = eventMessage.String()
+	} else {
+		// No routes to register
+		return
+	}
+
+	// Update status on the CRD's status subresource
+	// Note: This updates the CRD definition's status, not individual CR instances
+	// For individual CR status updates, we'd need to iterate over all CRs of this type
+	log.Info().Msgf("Nexus CRD %s route registration: %s (%d routes, %d collisions)",
+		crdType, status.Phase, len(registeredRoutes), len(collisions))
+
+	if s.recorder != nil {
+		crdObj := &corev1.ObjectReference{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1",
+			Name:       crdType,
+			Namespace:  "", // Explicitly empty for cluster-scoped objects
+		}
+
+		// Try to fetch the CRD to get its UID for better event association
+		if client.Client != nil {
+			crdGVR := schema.GroupVersionResource{
+				Group:    "apiextensions.k8s.io",
+				Version:  "v1",
+				Resource: "customresourcedefinitions",
+			}
+			ctx := context.Background()
+			crdUnstructured, err := client.Client.Resource(crdGVR).Get(ctx, crdType, metav1.GetOptions{})
+			if err == nil && crdUnstructured != nil {
+				crdObj.UID = crdUnstructured.GetUID()
+			}
+		}
+
+		eventType := corev1.EventTypeNormal
+		reason := "RouteRegistrationSuccess"
+		if status.Phase == model.RouteStatusPhaseRejected {
+			eventType = corev1.EventTypeWarning
+			reason = "RouteCollisionRejected"
+		}
+
+		s.recorder.Event(crdObj, eventType, reason, status.Message)
+		log.Debug().Msgf("Successfully emitted %s event for CRD %s", reason, crdType)
+	} else {
+		log.Warn().Msg("EventRecorder not initialized, skipping event emission")
 	}
 }
 

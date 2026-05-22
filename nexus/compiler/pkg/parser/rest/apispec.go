@@ -119,11 +119,6 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	crdHelper := parentsMap[crdName]
 
-	ignoredParentPathParams := make(map[string]struct{})
-	for _, val := range config.ConfigInstance.IgnoredParentPathParams {
-		ignoredParentPathParams[val] = struct{}{}
-	}
-
 	for _, uri := range apiSpec.Uris {
 		uriRegex, _ := regexp.Compile("{.*?}")
 		redactedUri := uriRegex.ReplaceAllString(uri.Uri, "{param}")
@@ -184,14 +179,21 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 			if parentLocations > 1 {
 				log.Fatalf("RestApiSpec: Provided parent name (%s) cannot be applied to multiple locations (URI/Header/Query). Found in %d locations. URI: %s", parentName, parentLocations, uri.Uri)
 			}
+		}
 
-			if parentLocations == 0 {
-				if _, exists := ignoredParentPathParams[parentName]; exists {
-					log.Warnf("RestApiSpec: Provided parent name (%s) not found for uri: %s. Ignoring and proceeding, as it is configured as ignored parent path param", parentName, uri.Uri)
-				} else {
-					log.Fatalf("RestApiSpec: Provided parent name (%s) not found for uri: %s", parentName, uri.Uri)
-				}
+		// Check that all required parents are present in at least one location (URI, Header, or QueryParam)
+		missing, ignoredParents := parser.ValidateRequiredParents(uri.Uri, crdName, parentsMap, config.ConfigInstance.IgnoredParentPathParams)
+		for _, parentName := range ignoredParents {
+			if !headerExist(parentName, uri.Headers) && !queryParamExist(parentName, uri.QueryParams) {
+				log.Warnf("RestApiSpec: Provided parent name (%s) not found for uri: %s. Ignoring and proceeding, as it is configured as ignored parent path param", parentName, uri.Uri)
 			}
+		}
+		for _, parentName := range missing {
+			// Parent was not found in URI by the shared helper; check Headers/QueryParams as fallback
+			if headerExist(parentName, uri.Headers) || queryParamExist(parentName, uri.QueryParams) {
+				continue
+			}
+			log.Fatalf("RestApiSpec: Provided parent name (%s) not found for uri: %s", parentName, uri.Uri)
 		}
 
 		uris[redactedUri] = uri.Uri

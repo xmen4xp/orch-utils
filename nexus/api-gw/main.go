@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -74,16 +75,20 @@ func main() {
 	loadConfigurations()
 
 	stopCh := make(chan struct{})
-	initializeEchoServer(stopCh, k8sClientSet, nexusClientSet)
+	echoSrv := initializeEchoServer(stopCh, k8sClientSet, nexusClientSet)
+
+	// Setup signal handler for graceful shutdown of the entire process
+	ctx := ctrl.SetupSignalHandler()
 
 	if config.Cfg.EnableNexusRuntime {
 		overrideAddresses(&metricsAddr, &probeAddr)
 		log.Info().Msgf("Starting manager with metricsAddr: %s, probeAddr: %s", metricsAddr, probeAddr)
-		InitManager(metricsAddr, probeAddr, enableLeaderElection, stopCh)
+		InitManager(ctx, metricsAddr, probeAddr, enableLeaderElection, stopCh)
 	}
 
-	// Block indefinitely to keep the main function running
-	select {}
+	<-ctx.Done()
+	log.Info().Msg("Shutdown signal received, initiating graceful exit...")
+	echoSrv.StopServer()
 }
 
 func parseFlags(metricsAddr, probeAddr *string, enableLeaderElection *bool) {
@@ -136,9 +141,9 @@ func loadConfigurations() {
 	log.Info().Msgf("Gateway Mode: %s", common.Mode)
 }
 
-func initializeEchoServer(stopCh chan struct{}, k8sClientSet *kubernetes.Clientset, nexusClientSet *nexusClient.Clientset) {
+func initializeEchoServer(stopCh chan struct{}, k8sClientSet *kubernetes.Clientset, nexusClientSet *nexusClient.Clientset) *echoserver.EchoServer {
 	log.Info().Msg("Init Echo Server")
-	echoserver.InitEcho(stopCh, config.Cfg, k8sClientSet, nexusClientSet)
+	return echoserver.InitEcho(stopCh, config.Cfg, k8sClientSet, nexusClientSet)
 }
 
 func overrideAddresses(metricsAddr, probeAddr *string) {
@@ -151,7 +156,7 @@ func overrideAddresses(metricsAddr, probeAddr *string) {
 	}
 }
 
-func InitManager(metricsAddr, probeAddr string, enableLeaderElection bool, stopCh chan struct{}) {
+func InitManager(ctx context.Context, metricsAddr, probeAddr string, enableLeaderElection bool, stopCh chan struct{}) {
 	if err := setupClients(); err != nil {
 		log.Fatal().Msgf("unable to set up clients : %v", err)
 		// os.Exit(1)
@@ -179,7 +184,13 @@ func InitManager(metricsAddr, probeAddr string, enableLeaderElection bool, stopC
 	go api.DatamodelUpdateNotification()
 	// setupOpenAPI()
 
-	startManager(mgr)
+	// Run manager in goroutine so it doesn't block the main thread
+	go func() {
+		log.Info().Msg("Starting controller manager")
+		if err := mgr.Start(ctx); err != nil {
+			log.Error().Msgf("Controller manager exited with error: %v", err)
+		}
+	}()
 }
 
 func createManager(metricsAddr, probeAddr string, enableLeaderElection bool) (ctrl.Manager, error) {
@@ -214,6 +225,24 @@ func setupControllers(mgr ctrl.Manager, stopCh chan struct{}) error {
 	if err := (&controllers.DatamodelReconciler{
 		Client:  mgr.GetClient(),
 		Scheme:  mgr.GetScheme(),
+		Dynamic: client.Client,
+	}).SetupWithManager(mgr); err != nil {
+		return err
+	}
+
+	if err := (&controllers.ExtensionRestAPIReconciler{
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		StopCh:  stopCh,
+		Dynamic: client.Client,
+	}).SetupWithManager(mgr); err != nil {
+		return err
+	}
+
+	if err := (&controllers.ExtensionRestAPIEndpointReconciler{
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		StopCh:  stopCh,
 		Dynamic: client.Client,
 	}).SetupWithManager(mgr); err != nil {
 		return err

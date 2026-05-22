@@ -17,7 +17,7 @@ rules:
     resources: ["customresourcedefinitions"]
     verbs: ["create", "get", "list", "update", "patch", "delete"]
   - apiGroups: ["nexus.com"]
-    resources: ["datamodels"]
+    resources: ["datamodels", "extensionrestapis", "extensionrestapiendpoints"]
     verbs: ["create", "get", "list", "update", "patch", "delete"]
 {{- end }}
 ---

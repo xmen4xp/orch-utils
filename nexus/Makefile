@@ -144,7 +144,7 @@ compiler.test:
 
 .PHONY: openapi.generator.docker
 openapi.generator.docker:
-	docker build --load -t ${OPENAPI_GENERATOR_DOCKER_TAG} -f openapi-generator/Dockerfile .
+	docker buildx build --platform linux/$(ARCH) --provenance=false --load -t ${OPENAPI_GENERATOR_DOCKER_TAG} -f openapi-generator/Dockerfile .
 
 .PHONY: ginkgo
 ## Note: should fix/enable these tests

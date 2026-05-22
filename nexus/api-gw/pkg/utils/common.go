@@ -58,6 +58,18 @@ func GetDatamodelName(crdType string) string {
 	return strings.Join(strings.Split(crdType, ".")[2:], ".")
 }
 
+// GetDatamodelNameFromCRName extracts the datamodel name from an ExtensionRestAPI CR name.
+// CR names are in format "package-varname" (e.g., "config-metricsapi").
+// Returns a default datamodel name based on the package prefix.
+func GetDatamodelNameFromCRName(crName string) string {
+	parts := strings.SplitN(crName, "-", 2)
+	if len(parts) > 0 {
+		// Use the package name as a base for the datamodel
+		return parts[0] + ".extension.nexus.com"
+	}
+	return "extension.nexus.com"
+}
+
 func GetCrdType(kind, groupName string) string {
 	return GetGroupResourceName(kind) + "." + groupName // eg roots.root.helloworld.com
 }

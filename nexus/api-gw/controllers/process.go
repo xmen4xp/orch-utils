@@ -70,11 +70,13 @@ func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
 	model.ConstructMapCRDTypeToRestUris(eventType, crdType, n.NexusRestAPIGen)
 
 	// Restart echo server
-	log.Debug().Msg("Restarting echo server...")
 	r.StopCh <- struct{}{}
 
 	for cType, uris := range model.CrdTypeToRestUris {
-		model.RestURIChan <- uris
+		model.RestURIChan <- model.NexusCRDRestURIs{
+			CRDType:  cType,
+			RestURIs: uris,
+		}
 		model.CrdTypeChan <- cType
 	}
 	return nil

@@ -266,8 +266,9 @@ generate_code:
 	@echo "Nexus Compiler: Generating CRD yamls"
 	go run cmd/generate-openapischema/generate-openapischema.go -yamls-path _generated/crds -existing-CRDs-Path ${GENERATED_OUTPUT_DIRECTORY}/crds -force ${FORCE}
 	# git checkout -- pkg/openapi_generator/openapi/openapi_generated.go
-	rm -rf ${GENERATED_OUTPUT_DIRECTORY}/{client,apis,crds,common,nexus-client,helper,nexus-gql,tsm-nexus-gql,model,datamodel-graph-mermaid.md}
+	rm -rf ${GENERATED_OUTPUT_DIRECTORY}/{client,apis,crds,common,nexus-client,helper,nexus-gql,tsm-nexus-gql,model,extensionrestapi,datamodel-graph-mermaid.md}
 	cp -r _generated/{client,apis,crds,common,clusterroles,nexus-client,helper,nexus-gql,tsm-nexus-gql,model,datamodel-graph-mermaid.md} ${GENERATED_OUTPUT_DIRECTORY}
+	-cp -r _generated/extensionrestapi ${GENERATED_OUTPUT_DIRECTORY}/ 2>/dev/null || true
 	@echo "Sorting imports"
 	if [ -a _generated/model/model.go ]; then \
 		cd _generated && mv model/model.go model/model.tmp && goimports -w . && mv model/model.tmp model/model.go; \
@@ -293,6 +294,7 @@ generate_code:
 	mkdir -p ${GENERATED_OUTPUT_DIRECTORY}/install-validator
 	# cp -r ${GOPATH}/src/github.com/vmware-tanzu/graph-framework-for-microservices/install-validator/install.so ${GENERATED_OUTPUT_DIRECTORY}/install-validator/install.so || echo "Could not find install.so file, skipping"
 	cp -r _generated/{client,apis,crds,common,clusterroles,nexus-client,helper,nexus-gql,tsm-nexus-gql,model,datamodel-graph-mermaid.md} ${GENERATED_OUTPUT_DIRECTORY}
+	-cp -r _generated/extensionrestapi ${GENERATED_OUTPUT_DIRECTORY}/ 2>/dev/null || true
 	@echo "Nexus Compiler: Compiler code generation completed"
 
 .PHONY: test_generate_code_in_container

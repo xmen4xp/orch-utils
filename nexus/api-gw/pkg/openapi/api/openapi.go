@@ -7,16 +7,19 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	"nexus-api-gw/pkg/model"
 	"nexus-api-gw/pkg/utils"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/ghodss/yaml"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	"golang.org/x/crypto/sha3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -25,9 +28,10 @@ import (
 )
 
 var (
-	Schemas = make(map[string]openapi3.T)
-	appName = "nexus-api-gw-openapi"
-	log     = logging.GetLogger(appName)
+	Schemas      = make(map[string]openapi3.T)
+	schemasMutex = &sync.RWMutex{}
+	appName      = "nexus-api-gw-openapi"
+	log          = logging.GetLogger(appName)
 )
 
 func New(datamodel string) {
@@ -83,30 +87,37 @@ func New(datamodel string) {
 		},
 	}
 	log.Info().Msgf("Created schema for %s", datamodel)
+	schemasMutex.Lock()
 	Schemas[datamodel] = schema
+	schemasMutex.Unlock()
 }
 
 func DatamodelUpdateNotification() {
 	log.Debug().Msg("Started datamodel update notification")
 	for name := range model.DatamodelsChan {
 		log.Debug().Msgf("Received datamodel update notification for %s", name)
-		if _, ok := Schemas[name]; !ok {
+		schemasMutex.RLock()
+		_, exists := Schemas[name]
+		schemasMutex.RUnlock()
+		if !exists {
 			New(name)
 		}
 
+		schemasMutex.Lock()
 		if schema, ok := Schemas[name]; ok {
 			model.DatamodelToDatamodelInfoMutex.Lock()
 			schema.Info.Title = model.DatamodelToDatamodelInfo[name].Title
 			model.DatamodelToDatamodelInfoMutex.Unlock()
 			log.Info().Msgf("Updated title: %s for %s openapi spec", schema.Info.Title, name)
 		}
+		schemasMutex.Unlock()
 	}
 }
 
 // AddPath creates and adds paths for all the methods of a URI.
 func AddPath(uri nexus.RestURIs, datamodel string) {
-	crdType := model.URIToCRDType[uri.Uri]
-	crdInfo := model.CrdTypeToNodeInfo[crdType]
+	crdType, _ := model.GetURIToCRDType(uri.Uri)
+	crdInfo, _ := model.GetCRDTypeToNodeInfo(crdType)
 	parseSpec(crdType, datamodel)
 
 	h := sha3.New256()
@@ -118,7 +129,37 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	}
 
 	log.Info().Msgf("adding %s path to %s", uri.Uri, datamodel)
-	Schemas[datamodel].Paths.Set(uri.Uri, pathItem)
+	schemasMutex.Lock()
+	existingPathItem := Schemas[datamodel].Paths.Value(uri.Uri)
+	if existingPathItem == nil {
+		Schemas[datamodel].Paths.Set(uri.Uri, pathItem)
+	} else {
+		if pathItem.Get != nil {
+			existingPathItem.Get = pathItem.Get
+		}
+		if pathItem.Put != nil {
+			existingPathItem.Put = pathItem.Put
+		}
+		if pathItem.Post != nil {
+			existingPathItem.Post = pathItem.Post
+		}
+		if pathItem.Delete != nil {
+			existingPathItem.Delete = pathItem.Delete
+		}
+		if pathItem.Options != nil {
+			existingPathItem.Options = pathItem.Options
+		}
+		if pathItem.Head != nil {
+			existingPathItem.Head = pathItem.Head
+		}
+		if pathItem.Patch != nil {
+			existingPathItem.Patch = pathItem.Patch
+		}
+		if pathItem.Trace != nil {
+			existingPathItem.Trace = pathItem.Trace
+		}
+	}
+	schemasMutex.Unlock()
 }
 
 func addOperationToPathItem(pathItem *openapi3.PathItem, method string, uri nexus.RestURIs,
@@ -275,8 +316,8 @@ func addDeleteOperation(pathItem *openapi3.PathItem, opID string, nameParts []st
 
 // parseSpec parses openapi schema spec and status subresource.
 func parseSpec(crdType, datamodel string) {
-	crdInfo := model.CrdTypeToNodeInfo[crdType]
-	crdSpec := model.CrdTypeToSpec[crdType]
+	crdInfo, _ := model.GetCRDTypeToNodeInfo(crdType)
+	crdSpec, _ := model.GetCrdTypeToSpec(crdType)
 
 	log.Debug().Msgf("Received datamodel update notification for %s", datamodel)
 	log.Debug().Msgf("CRD info %#v", crdInfo)
@@ -298,6 +339,9 @@ func parseSpec(crdType, datamodel string) {
 	delete(statusProps, "nexus")
 	jsonStatusSchema := openapi3.NewObjectSchema()
 	parseFields(jsonStatusSchema, statusProps)
+
+	schemasMutex.Lock()
+	defer schemasMutex.Unlock()
 
 	Schemas[datamodel].Components.Schemas[statusKey] = openapi3.NewSchemaRef("", jsonStatusSchema)
 
@@ -439,10 +483,13 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
+	// Get a snapshot of node info to avoid concurrent map access
+	allNodeInfo := model.GetAllCrdTypeToNodeInfo()
+
 	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy)+len(restURI.Headers))
 	for _, param := range params {
 		description := "Name of the " + param[1] + " node"
-		for _, nodeInfo := range model.CrdTypeToNodeInfo {
+		for _, nodeInfo := range allNodeInfo {
 			if nodeInfo.Name == param[1] {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
@@ -461,7 +508,7 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	// Add header parameters
 	for _, headerName := range restURI.Headers {
 		description := "Header for " + headerName
-		for _, nodeInfo := range model.CrdTypeToNodeInfo {
+		for _, nodeInfo := range allNodeInfo {
 			if nodeInfo.Name == headerName {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
@@ -478,8 +525,8 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	}
 
 	for _, parent := range hierarchy {
-		crdInfo := model.CrdTypeToNodeInfo[parent]
-		if crdInfo.IsSingleton {
+		crdInfo, ok := model.GetCRDTypeToNodeInfo(parent)
+		if !ok || crdInfo.IsSingleton {
 			continue
 		}
 		var description string
@@ -531,18 +578,224 @@ func headerParamExist(param string, headers []string) bool {
 
 func Recreate() {
 	log.Debug().Msg("Recreating openapi spec")
-	for crdType := range model.CrdTypeToRestUris {
-		log.Debug().Msgf("Recreating openapi spec for %s Datamodel name %s", crdType, utils.GetDatamodelName(crdType))
-		New(utils.GetDatamodelName(crdType))
-	}
 
-	for crdType, uris := range model.CrdTypeToRestUris {
+	// Get a snapshot of the map to avoid concurrent access
+	allCrdTypeToRestUris := model.GetAllCrdTypeToRestUris()
+
+	for crdType, uris := range allCrdTypeToRestUris {
 		datamodel := utils.GetDatamodelName(crdType)
+
+		// Only create schema if it doesn't exist - don't clear existing paths
+		schemasMutex.RLock()
+		_, exists := Schemas[datamodel]
+		schemasMutex.RUnlock()
+		if !exists {
+			log.Debug().Msgf("Creating new openapi schema for %s", datamodel)
+			New(datamodel)
+		}
+
 		for _, uri := range uris {
 			log.Debug().Msgf("Adding path %s for %s Datamodel name %s", uri.Uri, crdType, datamodel)
 			AddPath(uri, datamodel)
 		}
 	}
+}
+
+// RecreateExtension adds ExtensionRestAPI paths to the OpenAPI spec.
+func RecreateExtension() {
+	log.Debug().Msg("Recreating extension openapi spec")
+	specs := model.GetAllExtensionRestAPISpecs()
+
+	for _, spec := range specs {
+		datamodel := spec.Datamodel
+		if datamodel == "" {
+			datamodel = "extension.nexus.com"
+		}
+
+		// Ensure schema exists for this datamodel
+		schemasMutex.RLock()
+		_, exists := Schemas[datamodel]
+		schemasMutex.RUnlock()
+		if !exists {
+			New(datamodel)
+		}
+
+		log.Debug().Msgf("Adding extension path %s for datamodel %s", spec.URI, datamodel)
+		AddExtensionPath(spec, datamodel)
+	}
+}
+
+// AddExtensionPath adds an ExtensionRestAPI path to the OpenAPI schema.
+func AddExtensionPath(spec model.ExtensionRestAPISpec, datamodel string) {
+	schemasMutex.RLock()
+	_, exists := Schemas[datamodel]
+	schemasMutex.RUnlock()
+	if !exists {
+		New(datamodel)
+	}
+
+	// Parse the OpenAPIPathSpec YAML to extract path operations
+	pathItem := parseOpenAPIPathSpec(spec.OpenAPIPathSpec)
+	if pathItem == nil {
+		log.Warn().Msgf("Failed to parse OpenAPIPathSpec for %s", spec.URI)
+		return
+	}
+
+	log.Info().Msgf("Adding extension path %s to %s", spec.URI, datamodel)
+	schemasMutex.Lock()
+	existingPathItem := Schemas[datamodel].Paths.Value(spec.URI)
+	if existingPathItem == nil {
+		Schemas[datamodel].Paths.Set(spec.URI, pathItem)
+	} else {
+		if pathItem.Get != nil {
+			existingPathItem.Get = pathItem.Get
+		}
+		if pathItem.Put != nil {
+			existingPathItem.Put = pathItem.Put
+		}
+		if pathItem.Post != nil {
+			existingPathItem.Post = pathItem.Post
+		}
+		if pathItem.Delete != nil {
+			existingPathItem.Delete = pathItem.Delete
+		}
+		if pathItem.Options != nil {
+			existingPathItem.Options = pathItem.Options
+		}
+		if pathItem.Head != nil {
+			existingPathItem.Head = pathItem.Head
+		}
+		if pathItem.Patch != nil {
+			existingPathItem.Patch = pathItem.Patch
+		}
+		if pathItem.Trace != nil {
+			existingPathItem.Trace = pathItem.Trace
+		}
+	}
+	schemasMutex.Unlock()
+}
+
+// parseOpenAPIPathSpec parses an OpenAPI path spec YAML string into a PathItem.
+func parseOpenAPIPathSpec(openAPIPathSpec string) *openapi3.PathItem {
+	if openAPIPathSpec == "" {
+		return nil
+	}
+
+	pathItem := &openapi3.PathItem{}
+
+	// Simple YAML parsing for common operations
+	spec := strings.ToLower(openAPIPathSpec)
+
+	if strings.Contains(spec, "get:") {
+		pathItem.Get = parseOperation(openAPIPathSpec, "get")
+	}
+	if strings.Contains(spec, "post:") {
+		pathItem.Post = parseOperation(openAPIPathSpec, "post")
+	}
+	if strings.Contains(spec, "put:") {
+		pathItem.Put = parseOperation(openAPIPathSpec, "put")
+	}
+	if strings.Contains(spec, "patch:") {
+		pathItem.Patch = parseOperation(openAPIPathSpec, "patch")
+	}
+	if strings.Contains(spec, "delete:") {
+		pathItem.Delete = parseOperation(openAPIPathSpec, "delete")
+	}
+
+	return pathItem
+}
+
+// parseOperation extracts an operation from the OpenAPI path spec using proper YAML parsing.
+func parseOperation(openAPIPathSpec, method string) *openapi3.Operation {
+	// Use kin-openapi to parse the full OpenAPI path spec
+	pathItem := &openapi3.PathItem{}
+	if err := pathItem.UnmarshalJSON([]byte(convertYAMLToJSON(openAPIPathSpec))); err != nil {
+		// Fallback to simple parsing if full parsing fails
+		log.Debug().Msgf("Full OpenAPI parsing failed, using simple parsing: %v", err)
+		return parseOperationSimple(openAPIPathSpec, method)
+	}
+
+	// Get the operation for the specified method
+	var parsedOp *openapi3.Operation
+	switch strings.ToLower(method) {
+	case "get":
+		parsedOp = pathItem.Get
+	case "post":
+		parsedOp = pathItem.Post
+	case "put":
+		parsedOp = pathItem.Put
+	case "patch":
+		parsedOp = pathItem.Patch
+	case "delete":
+		parsedOp = pathItem.Delete
+	}
+
+	if parsedOp != nil {
+		return parsedOp
+	}
+
+	// Fallback to simple parsing
+	return parseOperationSimple(openAPIPathSpec, method)
+}
+
+// convertYAMLToJSON converts YAML to JSON for OpenAPI parsing.
+func convertYAMLToJSON(yamlStr string) string {
+	var data interface{}
+	if err := yaml.Unmarshal([]byte(yamlStr), &data); err != nil {
+		return "{}"
+	}
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return "{}"
+	}
+	return string(jsonBytes)
+}
+
+// parseOperationSimple is the fallback simple parser for basic fields.
+func parseOperationSimple(openAPIPathSpec, method string) *openapi3.Operation {
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(),
+	}
+
+	// Extract tags if present
+	if idx := strings.Index(strings.ToLower(openAPIPathSpec), "tags:"); idx != -1 {
+		tagStart := idx + 5
+		remaining := openAPIPathSpec[tagStart:]
+		if dashIdx := strings.Index(remaining, "- "); dashIdx != -1 {
+			tagLine := remaining[dashIdx+2:]
+			if newlineIdx := strings.Index(tagLine, "\n"); newlineIdx != -1 {
+				tag := strings.TrimSpace(tagLine[:newlineIdx])
+				op.Tags = []string{tag}
+			}
+		}
+	}
+
+	// Extract operationId if present
+	if idx := strings.Index(strings.ToLower(openAPIPathSpec), "operationid:"); idx != -1 {
+		opIdStart := idx + 12
+		remaining := openAPIPathSpec[opIdStart:]
+		if newlineIdx := strings.Index(remaining, "\n"); newlineIdx != -1 {
+			opId := strings.TrimSpace(remaining[:newlineIdx])
+			op.OperationID = opId
+		}
+	}
+
+	// Extract summary if present
+	if idx := strings.Index(strings.ToLower(openAPIPathSpec), "summary:"); idx != -1 {
+		summaryStart := idx + 8
+		remaining := openAPIPathSpec[summaryStart:]
+		if newlineIdx := strings.Index(remaining, "\n"); newlineIdx != -1 {
+			summary := strings.TrimSpace(remaining[:newlineIdx])
+			op.Summary = summary
+		}
+	}
+
+	// Add default 200 response
+	op.Responses.Set("200", &openapi3.ResponseRef{
+		Value: openapi3.NewResponse().WithDescription("Success"),
+	})
+
+	return op
 }
 
 func LoadCombinedSpec() {

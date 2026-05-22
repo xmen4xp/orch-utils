@@ -1,35 +1,13 @@
 # SPDX-FileCopyrightText: 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-VERSION            				?= $(shell cat VERSION)
-GIT_HASH_SHORT     				:= $(shell git rev-parse --abbrev-ref HEAD)
-VERSION_DEV_SUFFIX 				:= ${GIT_HASH_SHORT}
-
-
-# Add an identifying suffix for `-dev` builds only.
-# Release build versions are verified as unique by the CI build process.
-ifneq ($(GIT_HASH_SHORT), main)
-	ifeq ($(findstring -dev,$(VERSION)), -dev)
-		VERSION := $(VERSION)-$(VERSION_DEV_SUFFIX)
-	endif
-endif
-
-
 BUILD_DIR 					?= build
 CRD_MODULE_PATH 				?= $(shell go list -m)/${BUILD_DIR}/
 CONTAINER_ID 					?= ""
 DATAMODEL_LOCAL_PATH 				?= $(realpath .)
-BUCKET 						?= nexus-template-downloads
 COMPILER_TAG 					?= latest
 DATAMODEL_DOCKER_REGISTRY 			?= $(shell cat nexus.yaml | grep dockerRepo | awk '{print $$2}' | tr -d '"')
 DATAMODEL_GROUP_NAME 				?= $(shell cat nexus.yaml | grep groupName | awk '{print $$2}' | tr -d '"')
-NAMESPACE 					?= "default"
-HOST_KUBECONFIG 				?= ${HOME}/.kube/config
-MOUNTED_KUBECONFIG 				?= /etc/config/kubeconfig
-NEXUS_API_GW_K8S_NAMESPACE 			?= default
-DATAMODEL_BASE_DOCKER_IMAGE			=gcr.io/nsx-sm/photon-kubectl:latest
-DOCKER_NETWORK 					?= nexus
-MOUNTED_KUBECONFIG 				?= /etc/config/kubeconfig
 TAG 						?= latest
 
 # values for nexus datamodel upgrade
@@ -65,17 +43,10 @@ else
 DATAMODEL_DOCKER_TAG=${DATAMODEL_DOCKER_REGISTRY}/tenancy-datamodel/${DATAMODEL_GROUP_NAME}:${TAG}
 endif
 
-COMPILER_DOCKER_REGISTRY ?= registry-rs.edgeorchestration.intel.com
-COMPILER_DOCKER_REPO ?= edge-orch/common
 IMAGE_NAME ?= nexus/compiler
 GOARCH ?= $(shell go env GOARCH)
 COMPILER_NAME ?= ${IMAGE_NAME}/${GOARCH}
-ifeq (${COMPILER_DOCKER_REGISTRY}, )
 COMPILER_DOCKER_TAG = ${COMPILER_NAME}:${COMPILER_TAG}
-else
-COMPILER_DOCKER_TAG = ${COMPILER_DOCKER_REGISTRY}/${COMPILER_DOCKER_REPO}/${COMPILER_NAME}:${COMPILER_TAG}
-endif
-
 
 .PHONY: datamodel_build
 datamodel_build:

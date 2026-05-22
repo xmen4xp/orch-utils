@@ -18,4 +18,4 @@ container-build:
 .PHONY: kind-load-images
 kind-load-images:
 	$(info Loading k8s proxy images into kind cluster...)
-	kind load docker-image --name ${CLUSTER_NAME} ${DOCKER_TAG}
+	docker save ${DOCKER_TAG} | docker exec -i ${CLUSTER_NAME}-control-plane ctr --namespace k8s.io images import -

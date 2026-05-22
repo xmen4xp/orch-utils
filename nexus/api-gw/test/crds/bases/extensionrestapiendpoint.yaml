@@ -1,0 +1,68 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: extensionrestapiendpoints.nexus.com
+spec:
+  conversion:
+    strategy: None
+  group: nexus.com
+  names:
+    kind: ExtensionRestAPIEndpoint
+    listKind: ExtensionRestAPIEndpointList
+    plural: extensionrestapiendpoints
+    shortNames:
+      - erapiendpoint
+    singular: extensionrestapiendpoint
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: ExtensionRestAPIEndpoint provides backend service configuration for an ExtensionRestAPI.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - extensionRestAPIRef
+                - service
+                - port
+              properties:
+                extensionRestAPIRef:
+                  type: string
+                  minLength: 1
+                  description: Name of the ExtensionRestAPI CR this endpoint provides backend for
+                service:
+                  type: string
+                  minLength: 1
+                  description: Fully qualified service DNS name (e.g., metrics-api.hdai-system.svc.cluster.local)
+                port:
+                  type: string
+                  minLength: 1
+                  description: Service port number or name (e.g., 8080 or http)
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: ExtensionRestAPI
+          type: string
+          description: ""
+          jsonPath: .spec.extensionRestAPIRef
+        - name: Service
+          type: string
+          description: ""
+          jsonPath: .spec.service
+        - name: Port
+          type: string
+          description: ""
+          jsonPath: .spec.port
+        - name: Age
+          type: date
+          description: ""
+          jsonPath: .metadata.creationTimestamp

@@ -1,12 +1,9 @@
-{{- if not (lookup "v1" "ServiceAccount" (default .Release.Namespace .Values.namespace) "nexus-datamodel-install") }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nexus-datamodel-install
-  namespace: {{ default .Release.Namespace .Values.namespace }}
-{{- end }}
+  namespace: {{ tpl (.Values.global.namespace.name | default .Release.Namespace) . }}
 ---
-{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRole" "" "crd-admin") }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -16,11 +13,9 @@ rules:
     resources: ["customresourcedefinitions"]
     verbs: ["create", "get", "list", "update", "patch", "delete"]
   - apiGroups: ["nexus.com"]
-    resources: ["datamodels"]
+    resources: ["datamodels", "extensionrestapis", "extensionrestapiendpoints"]
     verbs: ["create", "get", "list", "update", "patch", "delete"]
-{{- end }}
 ---
-{{- if not (lookup "rbac.authorization.k8s.io/v1" "ClusterRoleBinding" "" "crd-admin-binding") }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -28,18 +23,17 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: nexus-datamodel-install
-    namespace: {{ default .Release.Namespace .Values.namespace }}
+    namespace: {{ tpl (.Values.global.namespace.name | default .Release.Namespace) . }}
 roleRef:
   kind: ClusterRole
   name: nexus-crd-admin
   apiGroup: rbac.authorization.k8s.io
-{{- end }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Values.global.datamodelName }}-dmi
-  namespace: {{ default  .Release.Namespace .Values.global.namespace }}
+  namespace: {{ tpl (.Values.global.namespace.name | default .Release.Namespace) . }}
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 6
@@ -49,16 +43,16 @@ spec:
         "sidecar.istio.io/inject": "false"
     spec:
       serviceAccountName: nexus-datamodel-install
+      {{- if .Values.global.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+      {{- end }}
       containers:
       - image: "{{ .Values.image.repository }}:{{ .Values.global.releaseTag | default .Values.image.tag }}"
         env:
           - name: NAME
             value: {{ .Values.global.datamodelName }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-        {{- if .Values.global.imagePullSecret }}
-        imagePullSecrets:
-          - name: {{ .Values.global.imagePullSecret }}
-        {{- end }}
         name: datamodel-installer-job
       restartPolicy: Never
 

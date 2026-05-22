@@ -43,6 +43,20 @@ type DefaultResponse struct {
 	Message string `json:"message"`
 }
 
+// checkAndProxyExtensionAPI checks if the request is for an Extension REST API
+// and proxies it to the backend if so. Returns (true, error) if handled as extension,
+// (false, nil) if not an extension API.
+func (s *EchoServer) checkAndProxyExtensionAPI(nc *NexusContext, crdName string, crdInfo model.NodeInfo, name string) (bool, error) {
+	spec, ok := model.GetExtensionRestAPISpec(nc.NexusURI, nc.Request().Method)
+	if !ok {
+		return false, nil
+	}
+
+	labels := parseLabels(nc, crdInfo.ParentHierarchy)
+	labels[crdName] = name
+	return true, s.proxyExtensionRequest(nc, spec, labels)
+}
+
 // GetHandler is used to process GET requests.
 func (s *EchoServer) GetHandler(c echo.Context) error {
 	nc, ok := c.(*NexusContext)
@@ -55,6 +69,12 @@ func (s *EchoServer) GetHandler(c echo.Context) error {
 		log.Error().Msgf("Failed to fetch CRD Info and Name failed with error: %s", err.Error())
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
 	}
+
+	// Check if this is an Extension REST API and proxy if so
+	if handled, err := s.checkAndProxyExtensionAPI(nc, crdName, crdInfo, name); handled {
+		return err
+	}
+
 	log.Debug().Msg("CRD Info And Name fetched successfully")
 	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
 	obj, err := client.Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
@@ -461,6 +481,11 @@ func (s *EchoServer) PutHandler(c echo.Context) error {
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
 	}
 
+	// Check if this is an Extension REST API and proxy if so
+	if handled, err := s.checkAndProxyExtensionAPI(nc, crdName, crdInfo, name); handled {
+		return err
+	}
+
 	body, err := parseRequestBody(nc)
 	if err != nil {
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
@@ -554,6 +579,11 @@ func (s *EchoServer) PatchHandler(c echo.Context) error {
 	if err != nil {
 		log.Error().Msgf("Failed to fetch getCRDInfoAndName, err: %s", err.Error())
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
+	}
+
+	// Check if this is an Extension REST API and proxy if so
+	if handled, err := s.checkAndProxyExtensionAPI(nc, crdName, crdInfo, name); handled {
+		return err
 	}
 
 	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
@@ -665,6 +695,11 @@ func (s *EchoServer) deleteHandler(c echo.Context) error {
 	crdName, crdInfo, name, err := getCRDInfoAndName(nc)
 	if err != nil {
 		return nc.JSON(http.StatusBadRequest, DefaultResponse{Message: err.Error()})
+	}
+
+	// Check if this is an Extension REST API and proxy if so
+	if handled, err := s.checkAndProxyExtensionAPI(nc, crdName, crdInfo, name); handled {
+		return err
 	}
 
 	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
