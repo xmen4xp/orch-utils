@@ -44,7 +44,7 @@ var (
 
 	// CRD Type to NodeInfo (gns.vmware.org => NodeInfo{}).
 	CrdTypeToNodeInfo      = make(map[string]NodeInfo)
-	crdTypeToNodeInfoMutex = &sync.Mutex{}
+	crdTypeToNodeInfoMutex = &sync.RWMutex{}
 
 	// CRD Type to k8s spec (gns.vmware.org => CustomResourceDefinitionSpec).
 	CrdTypeToSpec      = make(map[string]apiextensionsv1.CustomResourceDefinitionSpec)
@@ -135,8 +135,8 @@ func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parent
 }
 
 func GetCRDTypeToNodeInfo(crdType string) (NodeInfo, bool) {
-	crdTypeToNodeInfoMutex.Lock()
-	defer crdTypeToNodeInfoMutex.Unlock()
+	crdTypeToNodeInfoMutex.RLock()
+	defer crdTypeToNodeInfoMutex.RUnlock()
 
 	info, ok := CrdTypeToNodeInfo[crdType]
 	return info, ok
@@ -209,6 +209,12 @@ func GetURIInfo(uriPath string) (RestURIInfo, bool) {
 	return info, ok
 }
 
+func SetURIToCRDType(uri, crdType string) {
+	uriToCRDTypeMutex.Lock()
+	defer uriToCRDTypeMutex.Unlock()
+	URIToCRDType[uri] = crdType
+}
+
 func GetURIToCRDType(uri string) (string, bool) {
 	uriToCRDTypeMutex.Lock()
 	defer uriToCRDTypeMutex.Unlock()
@@ -224,8 +230,8 @@ func GetCrdTypeToSpec(crdType string) (apiextensionsv1.CustomResourceDefinitionS
 }
 
 func GetAllCrdTypeToNodeInfo() map[string]NodeInfo {
-	crdTypeToNodeInfoMutex.Lock()
-	defer crdTypeToNodeInfoMutex.Unlock()
+	crdTypeToNodeInfoMutex.RLock()
+	defer crdTypeToNodeInfoMutex.RUnlock()
 	result := make(map[string]NodeInfo, len(CrdTypeToNodeInfo))
 	for k, v := range CrdTypeToNodeInfo {
 		result[k] = v

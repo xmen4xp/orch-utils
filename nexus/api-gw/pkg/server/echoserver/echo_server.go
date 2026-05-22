@@ -349,7 +349,7 @@ func (s *EchoServer) RegisterExtensionRouter(spec model.ExtensionRestAPISpec) {
 	urlPattern := model.ConstructEchoPathParamURL(spec.URI)
 
 	// Populate URIToCRDType so getCRDInfoAndName works in the unified handler
-	model.URIToCRDType[spec.URI] = spec.AssociatedNode
+	model.SetURIToCRDType(spec.URI, spec.AssociatedNode)
 
 	// Use Methods field if specified, otherwise default to all methods
 	methods := spec.Methods
@@ -473,9 +473,13 @@ func (s *EchoServer) NodeUpdateNotifications(stopCh chan struct{}) error {
 
 		case extURI := <-model.ExtensionAPIDeleteChan:
 			log.Debug().Msgf("Extension REST API delete notification received: %s", extURI)
-			// Route removal is handled by server restart
 			api.Recreate()
 			api.RecreateExtension()
+			// Trigger server restart to remove the stale Echo route handler.
+			// On restart, ReplayExtensionRoutes re-registers surviving routes from cache.
+			// Must send from a separate goroutine since stopCh is unbuffered and
+			// this goroutine is also the reader.
+			go func() { stopCh <- struct{}{} }()
 		}
 	}
 }

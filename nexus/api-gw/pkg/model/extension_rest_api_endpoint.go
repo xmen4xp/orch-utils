@@ -16,39 +16,24 @@ var (
 	// ExtensionEndpointByAPIRef maps ExtensionRestAPI CR name to its endpoint spec.
 	ExtensionEndpointByAPIRef      = make(map[string]ExtensionRestAPIEndpointSpec)
 	extensionEndpointByAPIRefMutex = &sync.RWMutex{}
-
-	// ExtensionEndpointChan is used to notify of new/updated endpoint configurations.
-	ExtensionEndpointChan = make(chan ExtensionRestAPIEndpointSpec, constDefaultChanSize)
-
-	// ExtensionEndpointDeleteChan is used to notify deletion of endpoint configurations.
-	ExtensionEndpointDeleteChan = make(chan string, constDefaultChanSize)
 )
 
 // ConstructExtensionRestAPIEndpoint adds or updates an ExtensionRestAPIEndpoint in the cache.
 func ConstructExtensionRestAPIEndpoint(eventType EventType, spec ExtensionRestAPIEndpointSpec) {
 	extensionEndpointByAPIRefMutex.Lock()
 	if eventType == Delete {
-		// Find and delete by endpoint name
-		var deletedAPIRef string
 		for apiRef, endpoint := range ExtensionEndpointByAPIRef {
 			if endpoint.Name == spec.Name {
 				delete(ExtensionEndpointByAPIRef, apiRef)
-				deletedAPIRef = apiRef
 				break
 			}
 		}
 		extensionEndpointByAPIRefMutex.Unlock()
-		// Push to chan - MUST be outside mutex to avoid deadlock
-		if deletedAPIRef != "" {
-			ExtensionEndpointDeleteChan <- deletedAPIRef
-		}
 		return
 	}
 
 	ExtensionEndpointByAPIRef[spec.ExtensionRestAPIRef] = spec
 	extensionEndpointByAPIRefMutex.Unlock()
-	// Push to chan - MUST be outside mutex to avoid deadlock
-	ExtensionEndpointChan <- spec
 }
 
 // GetExtensionRestAPIEndpoint retrieves an ExtensionRestAPIEndpointSpec by ExtensionRestAPI CR name.

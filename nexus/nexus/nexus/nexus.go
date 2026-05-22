@@ -60,8 +60,8 @@ type RestAPISpec struct {
 // The backend service configuration is provided separately via ExtensionRestAPIEndpoint CR.
 type ExtensionRestAPI struct {
 	Uri             string       `json:"uri"`
-	Methods         []HTTPMethod `json:"methods,omitempty"` // HTTP methods to proxy (e.g., http.MethodGet). Empty = all methods.
-	OpenAPIPathSpec string       `json:"openAPIPathSpec,omitempty"`
+	Methods         []HTTPMethod `json:"methods,omitempty"`         // HTTP methods to proxy (e.g., http.MethodGet). Empty = all methods.
+	OpenAPIPathSpec string       `json:"openAPIPathSpec,omitempty"` // Must be a raw string literal (backtick); dynamic composition is not supported.
 }
 
 // Default HTTP error code and description.

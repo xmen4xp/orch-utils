@@ -73,8 +73,13 @@ func (r *ExtensionRestAPIReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		methods = []string{"GET", "PUT", "PATCH", "DELETE"}
 	}
 
-	// Check for collisions before registration
-	collisions := model.GlobalRouteRegistry.CheckCollision(spec.URI, methods, req.Name, model.RouteSourceExtensionRestAPI)
+	// Atomically check for collisions and register routes
+	owner := model.RouteOwner{
+		Source: model.RouteSourceExtensionRestAPI,
+		CRName: req.Name,
+		GVR:    ExtensionRestAPIGVR,
+	}
+	registeredRoutes, collisions := model.GlobalRouteRegistry.CheckAndRegister(spec.URI, methods, owner)
 	if len(collisions) > 0 {
 		log.Warn().Msgf("ExtensionRestAPI %s rejected due to route collisions: %+v", req.Name, collisions)
 
@@ -86,24 +91,6 @@ func (r *ExtensionRestAPIReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 		// Do NOT register routes or trigger restart
 		return ctrl.Result{}, nil
-	}
-
-	// Register routes in the registry
-	var registeredRoutes []model.RegisteredRoute
-	for _, method := range methods {
-		owner := model.RouteOwner{
-			Source: model.RouteSourceExtensionRestAPI,
-			CRName: req.Name,
-			GVR:    ExtensionRestAPIGVR,
-		}
-		if err := model.GlobalRouteRegistry.Register(spec.URI, method, owner); err != nil {
-			log.Error().Msgf("Failed to register route %s %s: %v", method, spec.URI, err)
-			continue
-		}
-		registeredRoutes = append(registeredRoutes, model.RegisteredRoute{
-			URI:    spec.URI,
-			Method: method,
-		})
 	}
 
 	// Update CR status with success

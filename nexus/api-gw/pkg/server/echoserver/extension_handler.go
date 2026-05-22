@@ -158,7 +158,7 @@ func substitutePathParams(uriTemplate string, c echo.Context) string {
 func buildHierarchyHeaderFromLabels(labels map[string]string) (string, error) {
 	hierarchy := make(map[string]string)
 	for crdType, value := range labels {
-		if nodeInfo, ok := model.CrdTypeToNodeInfo[crdType]; ok {
+		if nodeInfo, ok := model.GetCRDTypeToNodeInfo(crdType); ok {
 			hierarchy[nodeInfo.Name] = value
 		}
 	}

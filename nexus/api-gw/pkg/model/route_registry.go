@@ -141,6 +141,11 @@ func (r *RouteRegistry) CheckCollision(uri string, methods []string, excludeCR s
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
+	return r.checkCollisionLocked(uri, methods, excludeCR, excludeSource)
+}
+
+// checkCollisionLocked performs collision detection while the caller already holds the lock.
+func (r *RouteRegistry) checkCollisionLocked(uri string, methods []string, excludeCR string, excludeSource RouteSource) []CollisionInfo {
 	normalizedURI := normalizeURI(uri)
 	var collisions []CollisionInfo
 
@@ -166,6 +171,31 @@ func (r *RouteRegistry) CheckCollision(uri string, methods []string, excludeCR s
 	}
 
 	return collisions
+}
+
+// CheckAndRegister atomically checks for collisions and registers routes if none found.
+// Returns (registeredRoutes, collisions). If collisions is non-empty, no routes are registered.
+func (r *RouteRegistry) CheckAndRegister(uri string, methods []string, owner RouteOwner) ([]RegisteredRoute, []CollisionInfo) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	collisions := r.checkCollisionLocked(uri, methods, owner.CRName, owner.Source)
+	if len(collisions) > 0 {
+		return nil, collisions
+	}
+
+	normalizedURI := normalizeURI(uri)
+	var registered []RegisteredRoute
+	for _, method := range methods {
+		upperMethod := strings.ToUpper(method)
+		if r.routes[normalizedURI] == nil {
+			r.routes[normalizedURI] = make(map[string]RouteOwner)
+		}
+		r.routes[normalizedURI][upperMethod] = owner
+		registered = append(registered, RegisteredRoute{URI: uri, Method: upperMethod})
+	}
+
+	return registered, nil
 }
 
 // GetOwner returns the owner of a specific route, if registered.
