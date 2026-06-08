@@ -96,6 +96,7 @@ func InitEcho(stopCh chan struct{}, conf *config.Config, client KubernetesClient
 
 	if conf.EnableNexusRuntime {
 		e.RegisterNexusRoutes()
+		e.ReplayNexusCRDRoutes()
 		e.ReplayExtensionRoutes()
 	}
 
@@ -193,6 +194,34 @@ func (s *EchoServer) RegisterNexusRoutes() {
 
 	// Swagger-UI, datamodel is edge-orchestrator.intel.com
 	s.Echo.GET("/:datamodel/docs", SwaggerUI)
+}
+
+// ReplayNexusCRDRoutes re-registers all known Nexus CRD-derived routes on the current echo server.
+// Echo server restarts (triggered by CRD reconcilers via StopCh) destroy all registered routes,
+// and waiting for the controller to re-push them via RestURIChan is racy: another restart can
+// arrive before the controller drains the channel. Replaying from the cached CrdTypeToRestUris map
+// at InitEcho time guarantees every datamodel route is present on the new server.
+//
+// The route registry is reset before replay so that "already-registered" errors from the previous
+// server's bookkeeping do not skip routes on the new server.
+func (s *EchoServer) ReplayNexusCRDRoutes() {
+	count := 0
+	for crdType, uris := range model.CrdTypeToRestUris {
+		// Drop the previous server's bookkeeping for this CRD so that the new
+		// server's Register() calls don't see "already registered" collisions.
+		model.GlobalRouteRegistry.UnregisterByCR(crdType, model.RouteSourceNexusCRD)
+		for _, u := range uris {
+			if httpCodesResponse, ok := u.Methods[http.MethodPut]; ok {
+				u.Methods[http.MethodPatch] = httpCodesResponse
+			}
+			registered, _ := s.RegisterRouter(u, crdType)
+			count += len(registered)
+		}
+		s.RegisterCrdRouter(crdType)
+	}
+	if count > 0 {
+		log.Info().Msgf("Replaying %d Nexus CRD routes after server restart", count)
+	}
 }
 
 // ReplayExtensionRoutes re-registers all cached ExtensionRestAPI routes on the current echo server.
