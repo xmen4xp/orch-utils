@@ -19,8 +19,6 @@ import (
 
 var Schemas = make(map[string]openapi3.T)
 
-var pathParamRegex, _ = regexp.Compile("{.*}")
-
 func New(datamodel string) {
 	// Check if datamodel info is present
 	title := "Nexus API GW APIs"
@@ -76,26 +74,86 @@ func New(datamodel string) {
 	Schemas[datamodel] = schema
 }
 
-// Construct description for a method + uri combo.
+// getOperationID returns an OpenAPI operationId of the form
+// "<httpVerb><Kind>" (singular) or "<httpVerb><Plural>" (LIST) for
+// datamodel-derived routes. Sub-URIs get suffixes:
+//   - StatusURI:       <verb><Kind>Status
+//   - SingleLink/Named: get<ParentKind><FieldName> (last URI segment is the Go field name)
 //
-// Description field in the openapi spec is constructed by using the method and the uri as the input.
-// The goal is to construct a description that is unique in an openapi spec.
-// Some code generators use this description field as the method name in their generated code.
-// So the description field should be constructed without special characters.
-func getDescription(method, uri string) string {
-	uriParts := strings.Split(uri, "/")
-	description := method
-	for _, path := range uriParts {
-		if pathParamRegex.MatchString(path) {
-			// Strip away the braces from path params, so we can use them.
-			p := strings.Replace(path, "{", "", -1)
-			p = strings.Replace(p, "}", "", -1)
-			description = description + "_" + strings.Replace(p, ".", "_", -1)
-		} else {
-			description = description + "_" + path
-		}
+// Verb map: LIST->get, GET->get, PUT->put, PATCH->patch, DELETE->delete.
+// Plural is derived from the LIST URI's last static segment so that
+// developer-chosen plurals (e.g. Org -> "organizations") are preserved while
+// the singular Kind casing (e.g. "AISlice") is retained where it overlaps.
+func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
+	nameParts := strings.Split(crdInfo.Name, ".")
+	kind := ""
+	if len(nameParts) > 1 {
+		kind = nameParts[1]
 	}
-	return description
+	uriInfo, _ := model.GetUriInfo(uri)
+
+	switch method {
+	case "LIST":
+		return "get" + derivePlural(kind, uri)
+	case http.MethodGet:
+		switch uriInfo.TypeOfURI {
+		case model.StatusURI:
+			return "get" + kind + "Status"
+		case model.SingleLinkURI, model.NamedLinkURI:
+			return "get" + kind + lastStaticSegment(uri)
+		}
+		return "get" + kind
+	case http.MethodPut:
+		if uriInfo.TypeOfURI == model.StatusURI {
+			return "put" + kind + "Status"
+		}
+		return "put" + kind
+	case http.MethodPatch:
+		if uriInfo.TypeOfURI == model.StatusURI {
+			return "patch" + kind + "Status"
+		}
+		return "patch" + kind
+	case http.MethodDelete:
+		return "delete" + kind
+	}
+	// Fallback: should not happen for datamodel-derived routes.
+	return strings.ToLower(method) + kind
+}
+
+// derivePlural produces a PascalCase plural noun for a Kind by combining the
+// Kind's original casing with the URI's plural segment. Rules:
+//  1. If the URI plural equals lowercase(kind), use kind verbatim (already plural).
+//  2. If the URI plural starts with lowercase(kind), splice kind onto the tail.
+//  3. Otherwise, Title-case the URI plural segment.
+//
+// Falls back to kind+"s" when the URI has no usable plural segment.
+func derivePlural(kind, uri string) string {
+	plural := lastStaticSegment(uri)
+	if plural == "" {
+		return kind + "s"
+	}
+	lowerKind := strings.ToLower(kind)
+	if plural == lowerKind {
+		return kind
+	}
+	if strings.HasPrefix(plural, lowerKind) {
+		return kind + plural[len(lowerKind):]
+	}
+	return strings.ToUpper(plural[:1]) + plural[1:]
+}
+
+// lastStaticSegment returns the trailing non-parameter segment of a URI,
+// or "" if the URI ends in a path parameter "{...}".
+func lastStaticSegment(uri string) string {
+	parts := strings.Split(strings.TrimRight(uri, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	last := parts[len(parts)-1]
+	if strings.HasPrefix(last, "{") {
+		return ""
+	}
+	return last
 }
 
 // AddPath creates and adds paths for all the methods of a URI
@@ -107,7 +165,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	params := parseUriParams(uri, crdInfo.ParentHierarchy)
 	pathItem := &openapi3.PathItem{}
 	for method := range uri.Methods {
-		opId := getDescription(string(method), uri.Uri)
+		opId := getOperationID(string(method), uri.Uri, crdInfo)
 		nameParts := strings.Split(crdInfo.Name, ".")
 		switch method {
 		case "LIST":

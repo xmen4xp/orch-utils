@@ -6,10 +6,8 @@
 package api
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"net/http"
 	"regexp"
 	"strings"
@@ -22,7 +20,6 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/ghodss/yaml"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
-	"golang.org/x/crypto/sha3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	"github.com/open-edge-platform/infra-core/inventory/v2/pkg/logging"
@@ -121,12 +118,11 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	crdInfo, _ := model.GetCRDTypeToNodeInfo(crdType)
 	parseSpec(crdType, datamodel)
 
-	h := sha3.New256()
 	params := parseURIParams(uri, crdInfo.ParentHierarchy)
 	pathItem := &openapi3.PathItem{}
 
 	for method := range uri.Methods {
-		addOperationToPathItem(pathItem, string(method), uri, crdInfo, params, h)
+		addOperationToPathItem(pathItem, string(method), uri, crdInfo, params)
 	}
 
 	log.Info().Msgf("adding %s path to %s", uri.Uri, datamodel)
@@ -181,12 +177,9 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 }
 
 func addOperationToPathItem(pathItem *openapi3.PathItem, method string, uri nexus.RestURIs,
-	crdInfo model.NodeInfo, params []*openapi3.ParameterRef, h hash.Hash,
+	crdInfo model.NodeInfo, params []*openapi3.ParameterRef,
 ) {
-	formedStr := fmt.Sprintf("%s%s", method, uri.Uri)
-	h.Write([]byte(formedStr))
-	fmt.Fprintf(h, "%s%s", method, uri.Uri)
-	opID := hex.EncodeToString(h.Sum(nil))
+	opID := getOperationID(method, uri.Uri, crdInfo)
 	nameParts := strings.Split(crdInfo.Name, ".")
 
 	switch method {
