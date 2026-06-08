@@ -566,7 +566,7 @@ func (g openAPITypeWriter) generateExample(comments []string) error {
 		return err
 	}
 	if ex != nil {
-		g.Do("Example: $.$,\n", fmt.Sprintf("%#v", ex))
+		g.Do("SwaggerSchemaProps: spec.SwaggerSchemaProps{\nExample: $.$,\n},\n", fmt.Sprintf("%#v", ex))
 	}
 	return nil
 }
@@ -683,15 +683,15 @@ func (g openAPITypeWriter) generateProperty(m *types.Member, parent *types.Type)
 	if err := g.generateMemberExtensions(m, parent); err != nil {
 		return err
 	}
+	if err := g.generateExample(m.CommentLines); err != nil {
+		return fmt.Errorf("failed to generate example in %v: %v: %v", parent, m.Name, err)
+	}
 	g.Do("SchemaProps: spec.SchemaProps{\n", nil)
 	var extraComments []string
 	if enumType, isEnum := g.enumContext.EnumType(m.Type); isEnum {
 		extraComments = enumType.DescriptionLines()
 	}
 	g.generateDescription(append(m.CommentLines, extraComments...))
-	if err := g.generateExample(m.CommentLines); err != nil {
-		return fmt.Errorf("failed to generate example in %v: %v: %v", parent, m.Name, err)
-	}
 	jsonTags := getJsonTags(m)
 	if len(jsonTags) > 1 && jsonTags[1] == "string" {
 		g.generateSimpleProperty("string", "")
