@@ -4,6 +4,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
@@ -233,8 +234,29 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 		}
 	}
 
+	if crdInfo.Description != "" {
+		tagName := strings.Split(crdInfo.Name, ".")[1]
+		if !hasTag(Schemas[datamodel].Tags, tagName) {
+			s := Schemas[datamodel]
+			s.Tags = append(s.Tags, &openapi3.Tag{
+				Name:        tagName,
+				Description: crdInfo.Description,
+			})
+			Schemas[datamodel] = s
+		}
+	}
 	log.Infof("adding %s path to %s", uri.Uri, datamodel)
 	Schemas[datamodel].Paths.Set(uri.Uri, pathItem)
+}
+
+// hasTag returns true if the tag with the given name already exists in the slice.
+func hasTag(tags openapi3.Tags, name string) bool {
+	for _, t := range tags {
+		if t.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // parseSpec parses openapi schema spec and status subresource
@@ -344,9 +366,19 @@ func parseFields(jsonSchema *openapi3.Schema, specProps map[string]v1.JSONSchema
 			continue
 		}
 		schema := buildPropSchema(prop)
-		if schema != nil {
-			jsonSchema.WithProperty(name, schema)
+		if schema == nil {
+			continue
 		}
+		if prop.Description != "" {
+			schema.Description = prop.Description
+		}
+		if prop.Example != nil {
+			var ex interface{}
+			if err := json.Unmarshal(prop.Example.Raw, &ex); err == nil {
+				schema.Example = ex
+			}
+		}
+		jsonSchema.WithProperty(name, schema)
 	}
 }
 

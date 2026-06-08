@@ -542,6 +542,35 @@ func (g openAPITypeWriter) validatePatchTags(m *types.Member, parent *types.Type
 	return nil
 }
 
+// exampleFromComments parses a `nexus-example: <json-value>` annotation from
+// a field's comment lines. The value must be valid JSON.
+func exampleFromComments(comments []string) (interface{}, error) {
+	const prefix = "nexus-example:"
+	for _, line := range comments {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, prefix) {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+			var i interface{}
+			if err := json.Unmarshal([]byte(val), &i); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal nexus-example: %v", err)
+			}
+			return i, nil
+		}
+	}
+	return nil, nil
+}
+
+func (g openAPITypeWriter) generateExample(comments []string) error {
+	ex, err := exampleFromComments(comments)
+	if err != nil {
+		return err
+	}
+	if ex != nil {
+		g.Do("Example: $.$,\n", fmt.Sprintf("%#v", ex))
+	}
+	return nil
+}
+
 func defaultFromComments(comments []string) (interface{}, error) {
 	tag, err := getSingleTagsValue(comments, tagDefault)
 	if tag == "" {
@@ -617,6 +646,7 @@ func (g openAPITypeWriter) generateDescription(CommentLines []string) {
 			buffer.WriteString("\n\n")
 		case strings.HasPrefix(leading, "TODO"): // Ignore one line TODOs
 		case strings.HasPrefix(leading, "nexus-validation"): // Ignore nexus-annotations
+		case strings.HasPrefix(leading, "nexus-example:"): // Ignore nexus-example annotations
 		case strings.HasPrefix(leading, "+"): // Ignore instructions to go2idl
 		default:
 			if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
@@ -659,6 +689,9 @@ func (g openAPITypeWriter) generateProperty(m *types.Member, parent *types.Type)
 		extraComments = enumType.DescriptionLines()
 	}
 	g.generateDescription(append(m.CommentLines, extraComments...))
+	if err := g.generateExample(m.CommentLines); err != nil {
+		return fmt.Errorf("failed to generate example in %v: %v: %v", parent, m.Name, err)
+	}
 	jsonTags := getJsonTags(m)
 	if len(jsonTags) > 1 && jsonTags[1] == "string" {
 		g.generateSimpleProperty("string", "")
