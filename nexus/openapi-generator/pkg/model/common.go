@@ -22,10 +22,18 @@ const (
 )
 
 type DatamodelConfig struct {
-	IgnoredParentPathParams []string `yaml:"ignoredParentPathParams"`
+	IgnoredParentPathParams []string          `yaml:"ignoredParentPathParams"`
+	NodeToHeaderMapping     map[string]string `yaml:"nodeToHeaderMapping"`
 }
 
 var OpenApiIgnoredParentPathParams map[string]struct{} = make(map[string]struct{})
+
+// OpenApiNodeToHeaderMapping maps a parent node type (e.g. "orgs.Org") to the
+// HTTP header name (e.g. "x-org-id") that should represent it in the generated
+// OpenAPI spec. Used in conjunction with OpenApiIgnoredParentPathParams: when a
+// parent is ignored AND has an entry here, it is emitted as a required header
+// parameter instead of being dropped.
+var OpenApiNodeToHeaderMapping map[string]string = make(map[string]string)
 
 type NexusAnnotation struct {
 	Name                 string                     `json:"name,omitempty"`
@@ -91,5 +99,13 @@ func InitOpenApiIgnoredParentPathParams(configFile string) {
 	for _, param := range config.IgnoredParentPathParams {
 		OpenApiIgnoredParentPathParams[param] = struct{}{}
 		fmt.Println("adding ignored param :", param)
+	}
+
+	for nodeType, headerName := range config.NodeToHeaderMapping {
+		OpenApiNodeToHeaderMapping[nodeType] = headerName
+		fmt.Printf("adding node->header mapping : %s -> %s\n", nodeType, headerName)
+		if _, ignored := OpenApiIgnoredParentPathParams[nodeType]; !ignored {
+			fmt.Printf("WARNING: nodeToHeaderMapping entry %q is not present in ignoredParentPathParams; mapping will have no effect\n", nodeType)
+		}
 	}
 }

@@ -337,49 +337,61 @@ func parseSpec(crdType string, datamodel string) {
 	}
 }
 
-// ParseFields parses openapi schema fields
+// parseFields parses openapi schema fields
 func parseFields(jsonSchema *openapi3.Schema, specProps map[string]v1.JSONSchemaProps) {
 	for name, prop := range specProps {
 		if strings.Contains(name, "Gvk") {
 			continue
 		}
-		// TODO: Support additional properties
-		format := prop.Format
-		switch prop.Type {
-		case "string":
-			switch format {
-			case "byte":
-				jsonSchema.WithProperty(name, openapi3.NewBytesSchema())
-			case "date-time":
-				jsonSchema.WithProperty(name, openapi3.NewDateTimeSchema())
-			default:
-				jsonSchema.WithProperty(name, openapi3.NewStringSchema())
-			}
-		case "boolean":
-			jsonSchema.WithProperty(name, openapi3.NewBoolSchema())
-		case "object":
-			schema := openapi3.NewSchema()
-			parseFields(schema, prop.Properties)
+		schema := buildPropSchema(prop)
+		if schema != nil {
 			jsonSchema.WithProperty(name, schema)
-		case "integer":
-			switch format {
-			case "int32":
-				jsonSchema.WithProperty(name, openapi3.NewInt32Schema())
-			case "int64":
-				jsonSchema.WithProperty(name, openapi3.NewInt64Schema())
-			default:
-				jsonSchema.WithProperty(name, openapi3.NewIntegerSchema())
-			}
-		case "number":
-			jsonSchema.WithProperty(name, openapi3.NewFloat64Schema())
-		case "array":
-			schema := openapi3.NewSchema()
-			parseFields(schema, prop.Items.Schema.Properties)
-			arraySchema := openapi3.NewArraySchema().WithItems(schema)
-			jsonSchema.WithProperty(name, arraySchema)
-		default:
-			log.Infof("Unknown type %s", prop.Type)
 		}
+	}
+}
+
+// buildPropSchema constructs an openapi3.Schema from a single v1.JSONSchemaProps.
+// It handles primitives, objects (including maps via additionalProperties), and arrays.
+func buildPropSchema(prop v1.JSONSchemaProps) *openapi3.Schema {
+	switch prop.Type {
+	case "string":
+		switch prop.Format {
+		case "byte":
+			return openapi3.NewBytesSchema()
+		case "date-time":
+			return openapi3.NewDateTimeSchema()
+		default:
+			return openapi3.NewStringSchema()
+		}
+	case "boolean":
+		return openapi3.NewBoolSchema()
+	case "integer":
+		switch prop.Format {
+		case "int32":
+			return openapi3.NewInt32Schema()
+		case "int64":
+			return openapi3.NewInt64Schema()
+		default:
+			return openapi3.NewIntegerSchema()
+		}
+	case "number":
+		return openapi3.NewFloat64Schema()
+	case "object":
+		schema := openapi3.NewObjectSchema()
+		if prop.AdditionalProperties != nil && prop.AdditionalProperties.Schema != nil {
+			schema.WithAdditionalProperties(buildPropSchema(*prop.AdditionalProperties.Schema))
+		} else {
+			parseFields(schema, prop.Properties)
+		}
+		return schema
+	case "array":
+		if prop.Items != nil && prop.Items.Schema != nil {
+			return openapi3.NewArraySchema().WithItems(buildPropSchema(*prop.Items.Schema))
+		}
+		return openapi3.NewArraySchema()
+	default:
+		log.Infof("Unknown type %s", prop.Type)
+		return nil
 	}
 }
 
@@ -431,15 +443,33 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 			continue
 		}
 
-		if _, ok := model.OpenApiIgnoredParentPathParams[crdInfo.Name]; ok {
-			continue
-		}
-
 		var description string
 		if crdInfo.Description != "" {
 			description = crdInfo.Description
 		} else {
 			description = "Name of the " + crdInfo.Name + " node"
+		}
+
+		if _, ok := model.OpenApiIgnoredParentPathParams[crdInfo.Name]; ok {
+			// Ignored parents are normally dropped from the spec entirely. If a
+			// nodeToHeaderMapping entry exists for this parent, surface it as a
+			// required header parameter instead (e.g. orgs.Org -> x-org-id).
+			headerName, hasHeader := model.OpenApiNodeToHeaderMapping[crdInfo.Name]
+			if !hasHeader {
+				continue
+			}
+			// If the parent is already declared in the URI as a path parameter,
+			// or already present as a header on the spec, do not emit a duplicate.
+			if paramExist(crdInfo.Name, params) || headerParamExist(crdInfo.Name, restURI.Headers) || rawHeaderNameExist(headerName, restURI.Headers) {
+				continue
+			}
+			parameters = append(parameters, &openapi3.ParameterRef{
+				Value: openapi3.NewHeaderParameter(headerName).
+					WithRequired(true).
+					WithSchema(openapi3.NewStringSchema()).
+					WithDescription(description),
+			})
+			continue
 		}
 
 		// Skip if parent is already in URI path or headers
@@ -476,6 +506,18 @@ func paramExist(param string, params [][]string) bool {
 func headerParamExist(param string, headers []string) bool {
 	for _, h := range headers {
 		if h == param {
+			return true
+		}
+	}
+	return false
+}
+
+// rawHeaderNameExist reports whether any entry in headers (case-insensitively)
+// matches the given raw HTTP header name. Used to avoid emitting a duplicate
+// header parameter when the spec already declares the alias name explicitly.
+func rawHeaderNameExist(headerName string, headers []string) bool {
+	for _, h := range headers {
+		if strings.EqualFold(h, headerName) {
 			return true
 		}
 	}
