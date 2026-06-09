@@ -120,7 +120,7 @@ openapispec.generate:
                --mount type=bind,source=$(realpath .),target=/datamodel \
                --entrypoint /bin/openapi-generator \
                ${OPENAPI_GENERATOR_DOCKER_TAG} \
-               --yamls-path /datamodel/build/crds --datamodel-path /datamodel/nexus.yaml --datamodel-name ${DATAMODEL_GROUP_NAME} --output-file-path /datamodel/build/openapi/infra-host.com.json
+               --yamls-path /datamodel/build/crds --extensions-path /datamodel/build/extensionrestapi --datamodel-path /datamodel/nexus.yaml --datamodel-name ${DATAMODEL_GROUP_NAME} --output-file-path /datamodel/build/openapi/infra-host.com.json
 
 #
 # Usage: DATAMODEL_DOCKER_REGISTRY=<registry> TAG=<tag-value> make docker.build

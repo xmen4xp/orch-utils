@@ -10,16 +10,17 @@ import (
 	"nexus-api-gw/pkg/model"
 )
 
-// getOperationID returns an OpenAPI operationId of the form
-// "<httpVerb><Kind>" (singular) or "<httpVerb><Plural>" (LIST) for
-// datamodel-derived routes. Sub-URIs get suffixes:
-//   - StatusURI:       <verb><Kind>Status
-//   - SingleLink/Named: get<ParentKind><FieldName> (last URI segment is the Go field name)
+// getOperationID returns an OpenAPI operationId for a datamodel-derived route.
 //
-// Verb map: LIST->get, GET->get, PUT->put, PATCH->patch, DELETE->delete.
-// Plural is derived from the LIST URI's last static segment so that
-// developer-chosen plurals (e.g. Org -> "organizations") are preserved while
-// the singular Kind casing (e.g. "AISlice") is retained where it overlaps.
+// Scheme:
+//   - LIST                      -> list<KindPlural>      (Kind-derived plural; if Kind already ends in "s", use Kind verbatim)
+//   - GET item                  -> get<Kind>
+//   - PUT/PATCH/DELETE item     -> <verb><Kind>
+//   - StatusURI (any verb)      -> <verb><Kind>Status
+//   - SingleLink / NamedLink    -> get<ParentKind><FieldName>  (FieldName = last URI segment)
+//
+// No parent prefix is used for CRUD/LIST — only link traversal carries it because
+// link traversal is semantically a navigation from the parent.
 func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	nameParts := strings.Split(crdInfo.Name, ".")
 	kind := ""
@@ -30,7 +31,7 @@ func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 
 	switch method {
 	case "LIST":
-		return "get" + derivePlural(kind, uri)
+		return "list" + kindPlural(kind)
 	case http.MethodGet:
 		switch uriInfo.TypeOfURI {
 		case model.StatusURI:
@@ -55,30 +56,21 @@ func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	return strings.ToLower(method) + kind
 }
 
-// derivePlural produces a PascalCase plural noun for a Kind by combining the
-// Kind's original casing with the URI's plural segment. Rules:
-//  1. If the URI plural equals lowercase(kind), use kind verbatim (already plural).
-//  2. If the URI plural starts with lowercase(kind), splice kind onto the tail.
-//  3. Otherwise, Title-case the URI plural segment.
-//
-// Falls back to kind+"s" when the URI has no usable plural segment.
-func derivePlural(kind, uri string) string {
-	plural := lastStaticSegment(uri)
-	if plural == "" {
-		return kind + "s"
-	}
-	lowerKind := strings.ToLower(kind)
-	if plural == lowerKind {
+// kindPlural returns the plural form of a Kind name, derived solely from the
+// Kind itself (no URI-segment heuristics). If the Kind already ends in "s"
+// (e.g. "Clusters", "DataCenters", "Nodes"), it is returned unchanged.
+// Otherwise an "s" is appended (e.g. "Org" -> "Orgs", "AISlice" -> "AISlices").
+func kindPlural(kind string) string {
+	if strings.HasSuffix(kind, "s") {
 		return kind
 	}
-	if strings.HasPrefix(plural, lowerKind) {
-		return kind + plural[len(lowerKind):]
-	}
-	return strings.ToUpper(plural[:1]) + plural[1:]
+	return kind + "s"
 }
 
 // lastStaticSegment returns the trailing non-parameter segment of a URI,
-// or "" if the URI ends in a path parameter "{...}".
+// or "" if the URI ends in a path parameter "{...}". Used only for link
+// traversal URIs where the trailing segment is the Go field name being
+// navigated to.
 func lastStaticSegment(uri string) string {
 	parts := strings.Split(strings.TrimRight(uri, "/"), "/")
 	if len(parts) == 0 {

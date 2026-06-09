@@ -39,7 +39,7 @@ func New(datamodel string) {
 		title = info.Title
 	}
 	schema := openapi3.T{
-		OpenAPI: "3.0.0",
+		OpenAPI: "3.1.1",
 		Info: &openapi3.Info{
 			Title:          title,
 			Description:    "",

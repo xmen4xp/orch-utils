@@ -23,11 +23,13 @@ import (
 func main() {
 	var (
 		yamlsPath           string
+		extensionsPath      string
 		datamodelConfigPath string
 		datamodelName       string
 		outputFilePath      string
 	)
 	flag.StringVar(&yamlsPath, "yamls-path", "", "directory containing CRD YAML definitions")
+	flag.StringVar(&extensionsPath, "extensions-path", "", "directory containing ExtensionRestAPI YAML definitions (optional; defaults to <yamls-path>/../extensionrestapi)")
 	flag.StringVar(&datamodelConfigPath, "datamodel-path", "", "datamodel config file")
 	flag.StringVar(&datamodelName, "datamodel-name", "", "name of the datamodel")
 	flag.StringVar(&outputFilePath, "output-file-path", "", "output file")
@@ -47,12 +49,17 @@ func main() {
 		model.InitOpenApiIgnoredParentPathParams(datamodelConfigPath)
 	}
 
+	// Default the extensions path to a sibling directory of the CRDs path.
+	if extensionsPath == "" {
+		extensionsPath = filepath.Join(filepath.Dir(yamlsPath), "extensionrestapi")
+	}
+
 	// Run openapi spec generation.
-	run(yamlsPath, datamodelName, outputFilePath)
+	run(yamlsPath, extensionsPath, datamodelName, outputFilePath)
 }
 
 // Generate openapi spec from nexus generated CRD yaml spec.
-func run(dir, datamodelName, outputFilePath string) {
+func run(dir, extensionsDir, datamodelName, outputFilePath string) {
 
 	// Read all files from the input directory.
 	files, err := os.ReadDir(dir)
@@ -134,6 +141,30 @@ func run(dir, datamodelName, outputFilePath string) {
 	for _, uri := range nexusUris {
 		api.AddPath(uri, datamodelName)
 	}
+
+	// Merge ExtensionRestAPI manifests (custom endpoints like /metrics,
+	// /recommendations, /cani) so that the generated spec matches what
+	// api-gw serves at runtime. Missing directory is non-fatal — older
+	// datamodels without extensions continue to work.
+	if extensionsDir != "" {
+		extFiles, err := os.ReadDir(extensionsDir)
+		if err == nil {
+			for _, ef := range extFiles {
+				if filepath.Ext(ef.Name()) != ".yaml" {
+					continue
+				}
+				body, err := os.ReadFile(filepath.Join(extensionsDir, ef.Name()))
+				if err != nil {
+					log.Printf("extension: unable to read %s: %v", ef.Name(), err)
+					continue
+				}
+				api.AddExtensionPath(body, datamodelName)
+			}
+		} else if !os.IsNotExist(err) {
+			log.Printf("extension: unable to read directory %s: %v", extensionsDir, err)
+		}
+	}
+
 	spec, err := json.MarshalIndent(api.Schemas[datamodelName], "", "  ")
 	if err != nil {
 		log.Fatalf("failed to construct api schema for datamodel %s with error %v", datamodelName, err)

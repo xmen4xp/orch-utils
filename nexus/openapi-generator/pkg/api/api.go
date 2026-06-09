@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	yamlv1 "github.com/ghodss/yaml"
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -26,7 +27,7 @@ func New(datamodel string) {
 		title = info.Title
 	}
 	schema := openapi3.T{
-		OpenAPI: "3.0.0",
+		OpenAPI: "3.1.1",
 		Info: &openapi3.Info{
 			Title:          title,
 			Description:    "",
@@ -74,16 +75,17 @@ func New(datamodel string) {
 	Schemas[datamodel] = schema
 }
 
-// getOperationID returns an OpenAPI operationId of the form
-// "<httpVerb><Kind>" (singular) or "<httpVerb><Plural>" (LIST) for
-// datamodel-derived routes. Sub-URIs get suffixes:
-//   - StatusURI:       <verb><Kind>Status
-//   - SingleLink/Named: get<ParentKind><FieldName> (last URI segment is the Go field name)
+// getOperationID returns an OpenAPI operationId for a datamodel-derived route.
 //
-// Verb map: LIST->get, GET->get, PUT->put, PATCH->patch, DELETE->delete.
-// Plural is derived from the LIST URI's last static segment so that
-// developer-chosen plurals (e.g. Org -> "organizations") are preserved while
-// the singular Kind casing (e.g. "AISlice") is retained where it overlaps.
+// Scheme:
+//   - LIST                      -> list<KindPlural>      (Kind-derived plural; if Kind already ends in "s", use Kind verbatim)
+//   - GET item                  -> get<Kind>
+//   - PUT/PATCH/DELETE item     -> <verb><Kind>
+//   - StatusURI (any verb)      -> <verb><Kind>Status
+//   - SingleLink / NamedLink    -> get<ParentKind><FieldName>  (FieldName = last URI segment)
+//
+// No parent prefix is used for CRUD/LIST — only link traversal carries it because
+// link traversal is semantically a navigation from the parent.
 func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	nameParts := strings.Split(crdInfo.Name, ".")
 	kind := ""
@@ -94,7 +96,7 @@ func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 
 	switch method {
 	case "LIST":
-		return "get" + derivePlural(kind, uri)
+		return "list" + kindPlural(kind)
 	case http.MethodGet:
 		switch uriInfo.TypeOfURI {
 		case model.StatusURI:
@@ -120,26 +122,15 @@ func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	return strings.ToLower(method) + kind
 }
 
-// derivePlural produces a PascalCase plural noun for a Kind by combining the
-// Kind's original casing with the URI's plural segment. Rules:
-//  1. If the URI plural equals lowercase(kind), use kind verbatim (already plural).
-//  2. If the URI plural starts with lowercase(kind), splice kind onto the tail.
-//  3. Otherwise, Title-case the URI plural segment.
-//
-// Falls back to kind+"s" when the URI has no usable plural segment.
-func derivePlural(kind, uri string) string {
-	plural := lastStaticSegment(uri)
-	if plural == "" {
-		return kind + "s"
-	}
-	lowerKind := strings.ToLower(kind)
-	if plural == lowerKind {
+// kindPlural returns the plural form of a Kind name, derived solely from the
+// Kind itself (no URI-segment heuristics). If the Kind already ends in "s"
+// (e.g. "Clusters", "DataCenters", "Nodes"), it is returned unchanged.
+// Otherwise an "s" is appended (e.g. "Org" -> "Orgs", "AISlice" -> "AISlices").
+func kindPlural(kind string) string {
+	if strings.HasSuffix(kind, "s") {
 		return kind
 	}
-	if strings.HasPrefix(plural, lowerKind) {
-		return kind + plural[len(lowerKind):]
-	}
-	return strings.ToUpper(plural[:1]) + plural[1:]
+	return kind + "s"
 }
 
 // lastStaticSegment returns the trailing non-parameter segment of a URI,
@@ -154,6 +145,68 @@ func lastStaticSegment(uri string) string {
 		return ""
 	}
 	return last
+}
+
+// AddExtensionPath merges a single ExtensionRestAPI YAML manifest into the
+// OpenAPI spec for the given datamodel. The manifest is expected to be a
+// nexus ExtensionRestAPI CR with a `spec.uri` and a `spec.openAPIPathSpec`
+// holding the inline OpenAPI PathItem definition (verbatim YAML).
+//
+// This is the build-time counterpart to api-gw's parseOpenAPIPathSpec — it
+// guarantees that infra-host.com.json contains the same custom routes
+// (metrics, recommendations, etc.) that api-gw serves at runtime.
+//
+// Files that are not ExtensionRestAPI manifests are silently skipped so the
+// caller can pass a mixed directory.
+func AddExtensionPath(fileBytes []byte, datamodel string) {
+	// Decode the CR envelope to read spec.uri and spec.openAPIPathSpec.
+	var env struct {
+		Kind string `json:"kind"`
+		Spec struct {
+			URI             string `json:"uri"`
+			OpenAPIPathSpec string `json:"openAPIPathSpec"`
+		} `json:"spec"`
+	}
+	crJSON, err := yamlv1.YAMLToJSON(fileBytes)
+	if err != nil {
+		log.Warnf("extension: unable to parse YAML: %v", err)
+		return
+	}
+	if err := json.Unmarshal(crJSON, &env); err != nil {
+		log.Warnf("extension: unable to unmarshal CR envelope: %v", err)
+		return
+	}
+	if env.Kind != "ExtensionRestAPI" {
+		return
+	}
+	if env.Spec.URI == "" || env.Spec.OpenAPIPathSpec == "" {
+		log.Warnf("extension: skipping %q — missing spec.uri or spec.openAPIPathSpec", env.Spec.URI)
+		return
+	}
+
+	// Convert the inline OpenAPI PathItem YAML to a PathItem object.
+	pathJSON, err := yamlv1.YAMLToJSON([]byte(env.Spec.OpenAPIPathSpec))
+	if err != nil {
+		log.Warnf("extension: %q: openAPIPathSpec is not valid YAML: %v", env.Spec.URI, err)
+		return
+	}
+	pathItem := &openapi3.PathItem{}
+	if err := pathItem.UnmarshalJSON(pathJSON); err != nil {
+		log.Warnf("extension: %q: openAPIPathSpec is not a valid PathItem: %v", env.Spec.URI, err)
+		return
+	}
+
+	schema, ok := Schemas[datamodel]
+	if !ok {
+		log.Warnf("extension: %q: datamodel %q not initialized; call New() first", env.Spec.URI, datamodel)
+		return
+	}
+	if schema.Paths == nil {
+		schema.Paths = &openapi3.Paths{}
+	}
+	schema.Paths.Set(env.Spec.URI, pathItem)
+	Schemas[datamodel] = schema
+	log.Infof("adding extension %s path to %s", env.Spec.URI, datamodel)
 }
 
 // AddPath creates and adds paths for all the methods of a URI
