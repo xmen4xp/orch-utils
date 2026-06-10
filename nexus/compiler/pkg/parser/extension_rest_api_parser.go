@@ -199,14 +199,23 @@ func ValidateExtensionRestAPIPathParams(spec ExtensionRestAPISpec, parentsMap ma
 	r := regexp.MustCompile(`\{([^{}]+)\}`)
 	matches := r.FindAllStringSubmatch(spec.Uri, -1)
 
-	// Build set of valid node names (the node itself + all parents)
+	// Build set of valid node names (the node itself + all parents). Each
+	// canonical "package.Kind" RestName is registered together with its
+	// lowercase-Kind alias so that aliased URI tokens (e.g. "{org}" for
+	// "orgs.Org") validate successfully. ExtensionRestAPI URIs do not carry
+	// an explicit PathParams map, so we apply the same convention used by
+	// the datamodel migrator and the openapi-generator.
 	validNodes := make(map[string]bool)
-	validNodes[spec.AssociatedNode] = true
+	addValid := func(canonical string) {
+		validNodes[canonical] = true
+		validNodes[PathParamAliasFor(canonical)] = true
+	}
+	addValid(spec.AssociatedNode)
 
 	// Add all parent nodes to valid set
 	for _, parentCRD := range nodeHelper.Parents {
 		if parentHelper, ok := parentsMap[parentCRD]; ok {
-			validNodes[parentHelper.RestName] = true
+			addValid(parentHelper.RestName)
 		}
 	}
 
@@ -217,11 +226,20 @@ func ValidateExtensionRestAPIPathParams(spec ExtensionRestAPISpec, parentsMap ma
 		}
 		pathParam := match[1]
 
-		// Check if path param is a valid node reference
-		if !validNodes[pathParam] {
-			return fmt.Errorf("path param {%s} not found in hierarchy of node %s. Valid nodes: %v",
-				pathParam, spec.AssociatedNode, getValidNodesList(validNodes))
+		// Direct match — either canonical "package.Kind" or formula-derived
+		// alias (already pre-registered into validNodes above).
+		if validNodes[pathParam] {
+			continue
 		}
+		// User-declared alias registered via some RestURIs.PathParams (e.g.
+		// {datacenter} -> datacenters.DataCenters). ExtensionRestAPI URIs do
+		// not carry their own PathParams map, so they rely on aliases
+		// declared by the associated node's RestURIs.
+		if canonical := ResolvePathParamAlias(pathParam); canonical != "" && validNodes[canonical] {
+			continue
+		}
+		return fmt.Errorf("path param {%s} not found in hierarchy of node %s. Valid nodes: %v",
+			pathParam, spec.AssociatedNode, getValidNodesList(validNodes))
 	}
 
 	// Reverse check: all required (non-singleton, non-ignored) parents must be in URI

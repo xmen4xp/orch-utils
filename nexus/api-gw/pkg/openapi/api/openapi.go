@@ -519,14 +519,20 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
+	// Resolve aliases to canonical groupKinds for downstream paramExist checks
+	// and Node description lookup. The alias remains the OpenAPI parameter name.
+	resolvedParams := resolveUriParams(params, restURI.PathParams)
+
 	// Get a snapshot of node info to avoid concurrent map access
 	allNodeInfo := model.GetAllCrdTypeToNodeInfo()
 
 	parameters := make([]*openapi3.ParameterRef, 0, len(params)+len(hierarchy)+len(restURI.Headers))
-	for _, param := range params {
-		description := "Name of the " + param[1] + " node"
+	for i, param := range params {
+		alias := param[1]
+		canonical := resolvedParams[i][1]
+		description := "Name of the " + alias + " node"
 		for _, nodeInfo := range allNodeInfo {
-			if nodeInfo.Name == param[1] {
+			if nodeInfo.Name == canonical {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
 					break
@@ -534,7 +540,7 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 			}
 		}
 		parameters = append(parameters, &openapi3.ParameterRef{
-			Value: openapi3.NewPathParameter(param[1]).
+			Value: openapi3.NewPathParameter(alias).
 				WithRequired(true).
 				WithSchema(openapi3.NewStringSchema()).
 				WithDescription(description),
@@ -573,7 +579,7 @@ func parseURIParams(restURI nexus.RestURIs, hierarchy []string) []*openapi3.Para
 		}
 
 		// Skip if parent is already in URI path or headers
-		if paramExist(crdInfo.Name, params) || headerParamExist(crdInfo.Name, restURI.Headers) {
+		if paramExist(crdInfo.Name, resolvedParams) || headerParamExist(crdInfo.Name, restURI.Headers) {
 			continue
 		}
 
@@ -613,6 +619,32 @@ func headerAliasFor(nodeType string) string {
 		return ""
 	}
 	return config.Cfg.HeaderAliases[nodeType]
+}
+
+// resolveUriParams rewrites each URI token to its canonical groupKind via the
+// per-URI PathParams map. Output shape matches r.FindAllStringSubmatch output
+// (so [][1] is the resolved name). Tokens not present in PathParams are left
+// as-is.
+func resolveUriParams(rawParams [][]string, pathParams map[string]string) [][]string {
+	if len(pathParams) == 0 {
+		return rawParams
+	}
+	out := make([][]string, len(rawParams))
+	for i, p := range rawParams {
+		if len(p) < 2 {
+			out[i] = p
+			continue
+		}
+		if canonical, ok := pathParams[p[1]]; ok {
+			resolved := make([]string, len(p))
+			copy(resolved, p)
+			resolved[1] = canonical
+			out[i] = resolved
+			continue
+		}
+		out[i] = p
+	}
+	return out
 }
 
 // rawHeaderNameExist returns true if any entry in headers matches the

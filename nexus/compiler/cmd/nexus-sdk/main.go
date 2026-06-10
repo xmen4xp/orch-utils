@@ -63,6 +63,16 @@ func main() {
 	// Create parentsMap for hierarchy lookups
 	parentsMap := parser.CreateParentsMap(graph)
 
+	// Pre-pass: parse all RestAPISpec values across all packages so their
+	// PathParams aliases are published to the parser-wide alias registry
+	// before ExtensionRestAPI path-param validation runs. ExtensionRestAPI
+	// URIs have no PathParams map of their own and rely on aliases declared
+	// by RestURIs to resolve non-formula tokens (e.g. {datacenter} ->
+	// datacenters.DataCenters).
+	for _, pkg := range pkgs {
+		_ = rest.GetRestApiSpecs(pkg, methods, codes, parentsMap)
+	}
+
 	// Parse ExtensionRestAPI variables (basic validation happens during parsing)
 	extensionRestAPIs := parser.ParseExtensionRestAPIs(pkgs)
 

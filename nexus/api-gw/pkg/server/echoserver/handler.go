@@ -100,7 +100,17 @@ func getCRDInfoAndName(nc *NexusContext) (string, model.NodeInfo, string, error)
 
 func getNameFromRequest(nc *NexusContext, crdInfo model.NodeInfo) string {
 	name := nexus.DEFAULT_KEY
-	// Priority 1: URI params
+	// Priority 1a: URI params via PathParams alias (e.g. crdInfo.Name="orgs.Org"
+	// is exposed in the URL as "{org}"). The compiler/openapi-generator have
+	// already emitted aliases into the registered Echo route.
+	if alias := model.GetPathAliasForCanonical(nc.NexusURI, crdInfo.Name); alias != "" {
+		if val := nc.Param(alias); val != "" {
+			return val
+		}
+	}
+
+	// Priority 1b: URI params matched directly by canonical name (URIs that
+	// don't have a PathParams entry yet — backward compatibility).
 	for _, param := range nc.ParamNames() {
 		if param == crdInfo.Name {
 			name = nc.Param(param)
@@ -758,7 +768,14 @@ func parseLabels(c echo.Context, parents []string) map[string]string {
 	labels := make(map[string]string)
 	for _, parent := range parents {
 		if c, ok := model.CrdTypeToNodeInfo[parent]; ok {
-			// Priority 1: URI params
+			// Priority 1a: URI params via PathParams alias
+			if alias := model.GetPathAliasForCanonical(nc.NexusURI, c.Name); alias != "" {
+				if v := nc.Param(alias); v != "" {
+					labels[parent] = v
+					continue
+				}
+			}
+			// Priority 1b: URI params matched directly by canonical name (backward compat)
 			if v := nc.Param(c.Name); v != "" {
 				labels[parent] = v
 				// Priority 2: Headers (check alias first, then primary name)

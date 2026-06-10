@@ -543,10 +543,18 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	params := r.FindAllStringSubmatch(restURI.Uri, -1)
 
-	for _, param := range params {
-		description := "Name of the " + param[1] + " node"
+	// Resolve each URI token to its canonical groupKind via PathParams. The
+	// alias is what appears in the URL (and becomes the OpenAPI parameter
+	// name); the canonical is used to look up Node descriptions and to satisfy
+	// downstream paramExist checks that key off CRD names.
+	resolvedParams := resolveUriParams(params, restURI.PathParams)
+
+	for i, param := range params {
+		alias := param[1]
+		canonical := resolvedParams[i][1]
+		description := "Name of the " + alias + " node"
 		for _, nodeInfo := range model.CrdTypeToNodeInfo {
-			if nodeInfo.Name == param[1] {
+			if nodeInfo.Name == canonical {
 				if nodeInfo.Description != "" {
 					description = nodeInfo.Description
 					break
@@ -554,7 +562,7 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 			}
 		}
 		parameters = append(parameters, &openapi3.ParameterRef{
-			Value: openapi3.NewPathParameter(param[1]).
+			Value: openapi3.NewPathParameter(alias).
 				WithRequired(true).
 				WithSchema(openapi3.NewStringSchema()).
 				WithDescription(description),
@@ -603,7 +611,7 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 			}
 			// If the parent is already declared in the URI as a path parameter,
 			// or already present as a header on the spec, do not emit a duplicate.
-			if paramExist(crdInfo.Name, params) || headerParamExist(crdInfo.Name, restURI.Headers) || rawHeaderNameExist(headerName, restURI.Headers) {
+			if paramExist(crdInfo.Name, resolvedParams) || headerParamExist(crdInfo.Name, restURI.Headers) || rawHeaderNameExist(headerName, restURI.Headers) {
 				continue
 			}
 			parameters = append(parameters, &openapi3.ParameterRef{
@@ -616,7 +624,7 @@ func parseUriParams(restURI nexus.RestURIs, hierarchy []string) (parameters []*o
 		}
 
 		// Skip if parent is already in URI path or headers
-		if !paramExist(crdInfo.Name, params) && !headerParamExist(crdInfo.Name, restURI.Headers) {
+		if !paramExist(crdInfo.Name, resolvedParams) && !headerParamExist(crdInfo.Name, restURI.Headers) {
 			parameters = append(parameters, &openapi3.ParameterRef{
 				Value: openapi3.NewQueryParameter(crdInfo.Name).
 					WithRequired(true).
@@ -635,6 +643,33 @@ func constructUpdateParam() *openapi3.ParameterRef {
 			WithSchema(openapi3.NewBoolSchema()).
 			WithDescription("If set to false, disables update of preexisting object. Default value is true"),
 	}
+}
+
+// resolveUriParams rewrites each URI token to its canonical groupKind via the
+// per-URI PathParams map. Output shape matches r.FindAllStringSubmatch output
+// (so [][1] is the resolved name). Tokens not present in PathParams are left
+// as-is, preserving backward compatibility with URIs that use canonical form
+// directly.
+func resolveUriParams(rawParams [][]string, pathParams map[string]string) [][]string {
+	if len(pathParams) == 0 {
+		return rawParams
+	}
+	out := make([][]string, len(rawParams))
+	for i, p := range rawParams {
+		if len(p) < 2 {
+			out[i] = p
+			continue
+		}
+		if canonical, ok := pathParams[p[1]]; ok {
+			resolved := make([]string, len(p))
+			copy(resolved, p)
+			resolved[1] = canonical
+			out[i] = resolved
+			continue
+		}
+		out[i] = p
+	}
+	return out
 }
 
 func paramExist(param string, params [][]string) bool {

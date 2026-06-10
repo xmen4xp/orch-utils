@@ -248,3 +248,33 @@ func GetAllCrdTypeToRestUris() map[string][]nexus.RestURIs {
 	}
 	return result
 }
+
+// GetPathAliasForCanonical looks up the URI path-param alias for a canonical
+// groupKind on a specific URI template. Returns "" if the URI is not found,
+// or if no alias is configured (caller should fall back to the canonical
+// name).
+//
+// Example: for URI "/v1/organizations/{org}/projects/{project}" with
+// PathParams {"org": "orgs.Org", "project": "projects.Project"}, calling
+// GetPathAliasForCanonical(uri, "orgs.Org") returns "org".
+func GetPathAliasForCanonical(uri, canonical string) string {
+	crdType, ok := GetURIToCRDType(uri)
+	if !ok {
+		return ""
+	}
+	uris, ok := GetRestUris(crdType)
+	if !ok {
+		return ""
+	}
+	for _, r := range uris {
+		if r.Uri != uri {
+			continue
+		}
+		for alias, c := range r.PathParams {
+			if c == canonical {
+				return alias
+			}
+		}
+	}
+	return ""
+}
