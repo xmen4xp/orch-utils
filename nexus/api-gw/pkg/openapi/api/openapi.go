@@ -133,7 +133,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	if crdInfo.Description != "" {
 		parts := strings.Split(crdInfo.Name, ".")
 		if len(parts) > 1 {
-			tagName := parts[1]
+			tagName := qualifiedKind(parts)
 			s := Schemas[datamodel]
 			if !hasTag(s.Tags, tagName) {
 				s.Tags = append(s.Tags, &openapi3.Tag{
@@ -201,7 +201,7 @@ func addListOperation(pathItem *openapi3.PathItem, opID string, nameParts []stri
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
-		Tags:        []string{nameParts[1]},
+		Tags:        []string{qualifiedKind(nameParts)},
 		Parameters:  params,
 		Responses:   openapi3.NewResponses(),
 	}
@@ -216,7 +216,7 @@ func addGetOperation(pathItem *openapi3.PathItem, opID string, nameParts []strin
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
-		Tags:        []string{nameParts[1]},
+		Tags:        []string{qualifiedKind(nameParts)},
 		Parameters:  params,
 	}
 	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok {
@@ -256,7 +256,7 @@ func addPutOperation(pathItem *openapi3.PathItem, opID string, nameParts []strin
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
-		Tags:        []string{nameParts[1]},
+		Tags:        []string{qualifiedKind(nameParts)},
 	}
 	if uriInfo, ok := model.GetURIInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
 		operation.RequestBody = &openapi3.RequestBodyRef{
@@ -290,7 +290,7 @@ func addPatchOperation(pathItem *openapi3.PathItem, opID string, nameParts []str
 ) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
-		Tags:        []string{nameParts[1]},
+		Tags:        []string{qualifiedKind(nameParts)},
 		Parameters:  params,
 	}
 	operation.Responses = openapi3.NewResponses()
@@ -315,7 +315,7 @@ func addPatchOperation(pathItem *openapi3.PathItem, opID string, nameParts []str
 func addDeleteOperation(pathItem *openapi3.PathItem, opID string, nameParts []string, params []*openapi3.ParameterRef) {
 	operation := &openapi3.Operation{
 		OperationID: opID,
-		Tags:        []string{nameParts[1]},
+		Tags:        []string{qualifiedKind(nameParts)},
 		Responses:   openapi3.NewResponses(),
 		Parameters:  params,
 	}

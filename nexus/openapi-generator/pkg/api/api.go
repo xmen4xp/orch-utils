@@ -88,10 +88,7 @@ func New(datamodel string) {
 // link traversal is semantically a navigation from the parent.
 func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	nameParts := strings.Split(crdInfo.Name, ".")
-	kind := ""
-	if len(nameParts) > 1 {
-		kind = nameParts[1]
-	}
+	kind := qualifiedKind(nameParts)
 	uriInfo, _ := model.GetUriInfo(uri)
 
 	switch method {
@@ -228,7 +225,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 			})
 			operation := &openapi3.Operation{
 				OperationID: opId,
-				Tags:        []string{nameParts[1]},
+				Tags:        []string{qualifiedKind(nameParts)},
 				Parameters:  params,
 				Responses:   resp,
 			}
@@ -236,7 +233,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 		case http.MethodGet:
 			operation := &openapi3.Operation{
 				OperationID: opId,
-				Tags:        []string{nameParts[1]},
+				Tags:        []string{qualifiedKind(nameParts)},
 				Parameters:  params,
 			}
 			if uriInfo, ok := model.GetUriInfo(uri.Uri); ok {
@@ -277,7 +274,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 		case http.MethodPut:
 			operation := &openapi3.Operation{
 				OperationID: opId,
-				Tags:        []string{nameParts[1]},
+				Tags:        []string{qualifiedKind(nameParts)},
 			}
 			if uriInfo, ok := model.GetUriInfo(uri.Uri); ok && uriInfo.TypeOfURI == model.StatusURI {
 				operation.RequestBody = &openapi3.RequestBodyRef{
@@ -309,7 +306,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 		case http.MethodPatch:
 			operation := &openapi3.Operation{
 				OperationID: opId,
-				Tags:        []string{nameParts[1]},
+				Tags:        []string{qualifiedKind(nameParts)},
 				Parameters:  params,
 			}
 			resp := &openapi3.Responses{}
@@ -337,7 +334,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 			})
 			operation := &openapi3.Operation{
 				OperationID: opId,
-				Tags:        []string{nameParts[1]},
+				Tags:        []string{qualifiedKind(nameParts)},
 				Responses:   resp,
 				Parameters:  params,
 			}
@@ -346,7 +343,7 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	}
 
 	if crdInfo.Description != "" {
-		tagName := strings.Split(crdInfo.Name, ".")[1]
+		tagName := qualifiedKind(strings.Split(crdInfo.Name, "."))
 		if !hasTag(Schemas[datamodel].Tags, tagName) {
 			s := Schemas[datamodel]
 			s.Tags = append(s.Tags, &openapi3.Tag{

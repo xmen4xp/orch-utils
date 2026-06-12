@@ -23,10 +23,7 @@ import (
 // link traversal is semantically a navigation from the parent.
 func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 	nameParts := strings.Split(crdInfo.Name, ".")
-	kind := ""
-	if len(nameParts) > 1 {
-		kind = nameParts[1]
-	}
+	kind := qualifiedKind(nameParts)
 	uriInfo, _ := model.GetURIInfo(uri)
 
 	switch method {
@@ -54,6 +51,36 @@ func getOperationID(method, uri string, crdInfo model.NodeInfo) string {
 		return "delete" + kind
 	}
 	return strings.ToLower(method) + kind
+}
+
+// qualifiedKind returns the Kind portion of a CRD's NodeInfo.Name
+// (the part after the first dot), prefixed with a Title-cased package
+// segment iff more than one CRD shares the same Kind. Returns "" when
+// nameParts has no Kind portion.
+//
+// Examples:
+//
+//	["orgs", "Org"]                       (no collision) -> "Org"
+//	["aislice", "AISlice"]                (collision)    -> "AisliceAISlice"
+//	["discoveredaislice", "AISlice"]      (collision)    -> "DiscoveredaisliceAISlice"
+func qualifiedKind(nameParts []string) string {
+	if len(nameParts) < 2 {
+		return ""
+	}
+	kind := nameParts[1]
+	if model.IsCollidingKind(kind) {
+		return titleFirst(nameParts[0]) + kind
+	}
+	return kind
+}
+
+// titleFirst upper-cases the first rune of s. Used instead of the
+// deprecated strings.Title for our simple ASCII package-name inputs.
+func titleFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // kindPlural returns the plural form of a Kind name, derived solely from the
