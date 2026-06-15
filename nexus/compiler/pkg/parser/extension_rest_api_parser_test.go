@@ -199,6 +199,76 @@ get:
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should pass validation when URI uses path-param aliases for hierarchy nodes", func() {
+			// Aliased URI: {config} for config.Config, {gns} for gns.Gns.
+			// ExtensionRestAPI URIs do not carry a PathParams map, so the
+			// alias-form tokens must validate against the canonical
+			// RestNames in the hierarchy via the lowercase-Kind rule.
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "gns",
+				Uri:            "/v1/config/{config}/gns/{gns}/custom",
+				AssociatedNode: "gns.Gns",
+				NodeCRDName:    "gnses.gns.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should pass validation when URI uses a non-formula alias registered via RestURIs.PathParams", func() {
+			// Simulate the singular alias declared by a node's RestURIs:
+			//   PathParams: {"datacenter": "datacenters.DataCenters"}
+			// which differs from the lowercase-Kind formula ("datacenters").
+			// Use a unique-to-test parentsMap so the test is self-contained.
+			localParents := map[string]parser.NodeHelper{
+				"roots.root.test.com": {
+					RestName:    "root.Root",
+					IsSingleton: true,
+				},
+				"datacenters.dc.test.com": {
+					RestName: "datacenters.DataCenters",
+					Parents:  []string{"roots.root.test.com"},
+				},
+			}
+			parser.RegisterPathParamAlias("datacenter", "datacenters.DataCenters")
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "datacenterMetrics",
+				PkgName:        "datacenters",
+				Uri:            "/v1/inventory/datacenters/{datacenter}/metrics",
+				AssociatedNode: "datacenters.DataCenters",
+				NodeCRDName:    "datacenters.dc.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, localParents)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should pass validation with mixed alias and canonical path params", func() {
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "gns",
+				Uri:            "/v1/config/{config.Config}/gns/{gns}/custom",
+				AssociatedNode: "gns.Gns",
+				NodeCRDName:    "gnses.gns.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail validation when an aliased path param resolves to a node outside the hierarchy", func() {
+			// {foo} would alias to a "foo.Foo"-shaped canonical, which is
+			// not in the hierarchy.
+			spec := parser.ExtensionRestAPISpec{
+				Name:           "myApi",
+				PkgName:        "gns",
+				Uri:            "/v1/foo/{foo}/gns/{gns}",
+				AssociatedNode: "gns.Gns",
+				NodeCRDName:    "gnses.gns.test.com",
+			}
+			err := parser.ValidateExtensionRestAPIPathParams(spec, parentsMap)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("path param {foo} not found in hierarchy"))
+		})
+
 		It("should pass validation when missing parent is in ignoredParentPathParams", func() {
 			// Temporarily add config.Config to ignored list
 			origIgnored := config.ConfigInstance.IgnoredParentPathParams

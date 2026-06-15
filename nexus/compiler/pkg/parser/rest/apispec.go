@@ -50,6 +50,8 @@ func extractApiSpecRestURI(uri *ast.CompositeLit, httpMethods map[string]nexus.H
 				log.Errorf("Error %v", err)
 			}
 			restUri.Uri = key
+		case "PathParams":
+			restUri.PathParams = extractApiSpecPathParams(kv)
 		case "QueryParams":
 			restUri.QueryParams = extractApiSpecQueryParams(kv)
 		case "Headers":
@@ -60,6 +62,43 @@ func extractApiSpecRestURI(uri *ast.CompositeLit, httpMethods map[string]nexus.H
 	}
 
 	return restUri
+}
+
+// extractApiSpecPathParams parses a map[string]string literal where the key is
+// the URI path alias (e.g., "org") and the value is the canonical groupKind
+// (e.g., "orgs.Org").
+func extractApiSpecPathParams(kv *ast.KeyValueExpr) map[string]string {
+	params := make(map[string]string)
+	val, ok := kv.Value.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+	for _, elt := range val.Elts {
+		entry, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		alias, err := strconv.Unquote(types.ExprString(entry.Key))
+		if err != nil {
+			log.Errorf("Error parsing PathParams alias: %v", err)
+			continue
+		}
+		canonical, err := strconv.Unquote(types.ExprString(entry.Value))
+		if err != nil {
+			log.Errorf("Error parsing PathParams canonical for alias %q: %v", alias, err)
+			continue
+		}
+		params[alias] = canonical
+		// Publish to the parser-wide registry at parse time so downstream
+		// validators (notably ExtensionRestAPIPathParams, which runs before
+		// ValidateRestApiSpec) can resolve aliases that don't follow the
+		// lowercase-Kind formula.
+		parser.RegisterPathParamAlias(alias, canonical)
+	}
+	if len(params) == 0 {
+		return nil
+	}
+	return params
 }
 
 func extractApiSpecMethods(methods *ast.KeyValueExpr, httpMethods map[string]nexus.HTTPMethodsResponses, httpCodes map[string]nexus.HTTPCodesResponse) nexus.HTTPMethodsResponses {
@@ -115,6 +154,11 @@ func extractApiSpecHeaders(kv *ast.KeyValueExpr) []string {
 	return params
 }
 
+// aliasRegistry tracks the canonical type each alias maps to across all URIs
+// (across all RestAPISpec validations), so the same alias cannot mean different
+// things in different URIs.
+var aliasRegistry = map[string]string{}
+
 func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser.NodeHelper, crdName string) {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	crdHelper := parentsMap[crdName]
@@ -127,7 +171,33 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 			log.Fatalf("RestApiSpec: Duplicate found: %s and %s", u, uri.Uri)
 		}
 
-		uriParams := r.FindAllStringSubmatch(uri.Uri, -1)
+		// Cross-URI consistency: every alias must map to the same canonical type wherever it appears.
+		for alias, canonical := range uri.PathParams {
+			if existing, ok := aliasRegistry[alias]; ok && existing != canonical {
+				log.Fatalf("RestApiSpec: PathParams alias %q is inconsistent — maps to %q in URI %s but already mapped to %q in a previous URI", alias, canonical, uri.Uri, existing)
+			}
+			aliasRegistry[alias] = canonical
+			// Publish to the parser-wide registry so downstream validators
+			// (notably ExtensionRestAPIPathParams) can resolve aliases that
+			// don't follow the lowercase-Kind formula.
+			parser.RegisterPathParamAlias(alias, canonical)
+		}
+
+		// Build a [][]string of "resolved" URI params where each entry is the
+		// canonical type for that token (PathParams[token] if aliased, else the
+		// token itself). All downstream node/parent existence checks operate on
+		// resolved names so they work the same whether the URI uses alias or
+		// canonical form.
+		rawUriParams := r.FindAllStringSubmatch(uri.Uri, -1)
+		uriParams := resolveUriParams(rawUriParams, uri.PathParams)
+
+		// Every {token} in the URI must either be in PathParams or match a
+		// known canonical type (some other parent in parentsMap). This is a soft
+		// check — failures here only matter when the token doesn't correspond
+		// to any known node; existing parent-presence checks below catch the
+		// resulting missing-parent error.
+		validateUriTokensAgainstPathParams(uri.Uri, rawUriParams, uri.PathParams, parentsMap)
+
 		if _, ok := uri.Methods["LIST"]; ok {
 			if nodeExist(crdHelper.RestName, uriParams) || headerExist(crdHelper.RestName, uri.Headers) || queryParamExist(crdHelper.RestName, uri.QueryParams) {
 				log.Fatalf("RestApiSpec: Provided node name (%s) cannot be applied as a param because endpoint is a list. URI: %s", crdHelper.RestName, uri.Uri)
@@ -182,7 +252,9 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 		}
 
 		// Check that all required parents are present in at least one location (URI, Header, or QueryParam)
-		missing, ignoredParents := parser.ValidateRequiredParents(uri.Uri, crdName, parentsMap, config.ConfigInstance.IgnoredParentPathParams)
+		// Resolve aliases in the URI first so ValidateRequiredParents sees canonical names.
+		resolvedUri := resolveUriString(uri.Uri, uri.PathParams)
+		missing, ignoredParents := parser.ValidateRequiredParents(resolvedUri, crdName, parentsMap, config.ConfigInstance.IgnoredParentPathParams)
 		for _, parentName := range ignoredParents {
 			if !headerExist(parentName, uri.Headers) && !queryParamExist(parentName, uri.QueryParams) {
 				log.Warnf("RestApiSpec: Provided parent name (%s) not found for uri: %s. Ignoring and proceeding, as it is configured as ignored parent path param", parentName, uri.Uri)
@@ -197,6 +269,72 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 		}
 
 		uris[redactedUri] = uri.Uri
+	}
+}
+
+// resolveUriParams maps each raw URI token to its canonical type via PathParams.
+// Input shape matches r.FindAllStringSubmatch output ([][]string where [_][1] is the token name).
+// Output preserves the same shape; only [_][1] is rewritten when aliased.
+func resolveUriParams(rawParams [][]string, pathParams map[string]string) [][]string {
+	if len(pathParams) == 0 {
+		return rawParams
+	}
+	out := make([][]string, len(rawParams))
+	for i, p := range rawParams {
+		if len(p) < 2 {
+			out[i] = p
+			continue
+		}
+		token := p[1]
+		if canonical, ok := pathParams[token]; ok {
+			resolved := make([]string, len(p))
+			copy(resolved, p)
+			resolved[1] = canonical
+			out[i] = resolved
+		} else {
+			out[i] = p
+		}
+	}
+	return out
+}
+
+// resolveUriString returns the URI with every aliased {token} replaced by its
+// canonical {package.Kind} form. Used to feed shared helpers that operate on
+// canonical-form URIs.
+func resolveUriString(uri string, pathParams map[string]string) string {
+	if len(pathParams) == 0 {
+		return uri
+	}
+	r := regexp.MustCompile(`{([^{}]+)}`)
+	return r.ReplaceAllStringFunc(uri, func(match string) string {
+		token := match[1 : len(match)-1]
+		if canonical, ok := pathParams[token]; ok {
+			return "{" + canonical + "}"
+		}
+		return match
+	})
+}
+
+// validateUriTokensAgainstPathParams ensures every {token} in the URI either
+// appears as a key in PathParams or matches a known canonical type in parentsMap.
+// This is a soft check that warns about typos / unmapped aliases.
+func validateUriTokensAgainstPathParams(uri string, rawParams [][]string, pathParams map[string]string, parentsMap map[string]parser.NodeHelper) {
+	knownCanonical := map[string]struct{}{}
+	for _, helper := range parentsMap {
+		knownCanonical[helper.RestName] = struct{}{}
+	}
+	for _, p := range rawParams {
+		if len(p) < 2 {
+			continue
+		}
+		token := p[1]
+		if _, aliased := pathParams[token]; aliased {
+			continue
+		}
+		if _, known := knownCanonical[token]; known {
+			continue
+		}
+		log.Warnf("RestApiSpec: URI token %q in %s is neither a PathParams alias nor a known canonical type — RBAC and routing may not resolve it", token, uri)
 	}
 }
 

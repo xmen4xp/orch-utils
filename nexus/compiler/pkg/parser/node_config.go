@@ -86,7 +86,10 @@ func getNexusAnnotation(pkg Package, name string, annotationName string) (string
 	}
 
 	if annotationValue != "" {
-		val := strings.Split(annotationValue, ":")
+		// Split on the FIRST colon only — annotation values (notably
+		// nexus-description) may legitimately contain additional colons in
+		// their prose, e.g. "AlertRule defines an alert evaluation: severity, ...".
+		val := strings.SplitN(annotationValue, ":", 2)
 		if len(val) == 2 {
 			return strings.TrimSpace(val[1]), true
 		}
