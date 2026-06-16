@@ -13,7 +13,6 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
 	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -53,7 +52,10 @@ func New(datamodel string) {
 // AddPath registers a single URI under `datamodel` and refreshes
 // `Schemas[datamodel]` to reflect the addition. Tests and main.go
 // call this once per URI from a deterministic ordered list, so the
-// resulting spec is reproducible.
+// resulting spec is reproducible. The builder accumulates URIs per
+// CRD across calls (merge-by-URI semantics in `AddCRDNode`), so
+// repeated calls for the same crdType extend the URI list rather
+// than replace it.
 func AddPath(uri nexus.RestURIs, datamodel string) {
 	crdType, ok := model.UriToCRDType[uri.Uri]
 	if !ok {
@@ -67,15 +69,8 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	defer schemasMutex.Unlock()
 	specBuilder.SetOptions(currentOptions())
 
-	// Aggregate every URI that has been registered against this CRD
-	// type so far so the builder sees the complete URI list per node.
-	// Without this, calling AddCRDNode for one URI would replace the
-	// builder's prior URI list for the same CRD.
-	uris := uriSetFor(crdType)
-	uris = appendURIIfMissing(uris, uri)
-
 	specBuilder.AddCRDNode(datamodel, crdType,
-		toBuilderNodeInfo(crdInfo, crdSpec), toBuilderURIs(uris))
+		toBuilderNodeInfo(crdInfo, crdSpec), toBuilderURIs([]nexus.RestURIs{uri}))
 	Schemas[datamodel] = *specBuilder.Build(datamodel)
 }
 
@@ -125,55 +120,6 @@ func currentOptions() builder.Options {
 		}
 	}
 	return opts
-}
-
-// uriSetFor returns every nexus.RestURIs whose URI maps to `crdType`
-// in `model.UriToCRDType`. Used so AddPath can pass the full URI
-// list to the builder when the caller has not pre-populated a CRD
-// type→URIs map.
-func uriSetFor(crdType string) []nexus.RestURIs {
-	var out []nexus.RestURIs
-	for uriPath, ct := range model.UriToCRDType {
-		if ct != crdType {
-			continue
-		}
-		typeOfURI := model.DefaultURI
-		if info, ok := model.UriToUriInfo[uriPath]; ok {
-			typeOfURI = info.TypeOfURI
-		}
-		out = append(out, restURIWithMethods(uriPath, typeOfURI))
-	}
-	return out
-}
-
-// restURIWithMethods returns a nexus.RestURIs synthesised from a URI
-// path + URI type. Methods default to GET unless the URI is a /status
-// path (in which case GET + PUT, mirroring addStatusUri's emission).
-func restURIWithMethods(uriPath string, typeOfURI model.URIType) nexus.RestURIs {
-	out := nexus.RestURIs{Uri: uriPath, Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{}}
-	if typeOfURI == model.StatusURI {
-		out.Methods[http.MethodGet] = nexus.DefaultHTTPGETResponses
-		// PUT/PATCH on /status are intentionally NOT auto-added at
-		// build-time to preserve the existing compiler spec shape.
-		// The runtime api-gw adds them via separate logic.
-	} else {
-		out.Methods[http.MethodGet] = nexus.DefaultHTTPGETResponses
-	}
-	return out
-}
-
-// appendURIIfMissing appends `uri` to `uris` unless an entry with the
-// same URI string is already present. Methods/responses from the
-// caller take precedence so the test-passed URI's methods land
-// in the builder verbatim.
-func appendURIIfMissing(uris []nexus.RestURIs, uri nexus.RestURIs) []nexus.RestURIs {
-	for i, existing := range uris {
-		if existing.Uri == uri.Uri {
-			uris[i] = uri
-			return uris
-		}
-	}
-	return append(uris, uri)
 }
 
 // parseExtensionEnvelope decodes an ExtensionRestAPI CR YAML payload

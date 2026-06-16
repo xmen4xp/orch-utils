@@ -108,14 +108,55 @@ func (b *SpecBuilder) SetOptions(opts Options) {
 	b.opts = opts
 }
 
-// AddCRDNode registers (or replaces) a CRD node's metadata and URI
-// list under the given domain. Idempotent: calling with the same
-// (domain, crdType) overwrites the prior entry.
+// AddCRDNode registers a CRD node's metadata and URI list under the
+// given domain. The URI list is **merged by URI string** with any
+// previously registered URIs for the same (domain, crdType): a URI
+// already present is replaced (last-write-wins), a URI not present
+// is appended. The latest call's `info` always overwrites the prior
+// info.
+//
+// This shape supports two consumption patterns with no caller-side
+// state:
+//   - Snapshot adapters (api-gw) call once per CRD with the full URI
+//     list after a Reset/ResetDomain — no duplicates, so merge is a
+//     plain assignment.
+//   - Incremental adapters (openapi-generator) call once per URI as
+//     they walk the input. The builder accumulates URIs across calls
+//     and preserves each URI's original methods (GET / LIST / PUT /
+//     PATCH / DELETE) verbatim — never re-synthesised by the caller.
 func (b *SpecBuilder) AddCRDNode(domain, crdType string, info NodeInfo, uris []RestURIs) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	d := b.getOrCreateDomainLocked(domain)
-	d.nodes[crdType] = nodeRecord{info: info, uris: append([]RestURIs(nil), uris...)}
+	// mergeURIsByURI handles both first-call (prev.uris is nil) and
+	// subsequent-call cases identically — a nil base just means the
+	// result is a copy of `uris`.
+	d.nodes[crdType] = nodeRecord{
+		info: info,
+		uris: mergeURIsByURI(d.nodes[crdType].uris, uris),
+	}
+}
+
+// mergeURIsByURI returns base with each entry of incoming applied:
+// an entry whose URI matches an existing one replaces that entry in
+// place (preserving order); a new URI is appended at the end. The
+// returned slice is a fresh allocation — callers may mutate freely.
+func mergeURIsByURI(base, incoming []RestURIs) []RestURIs {
+	out := append([]RestURIs(nil), base...)
+	for _, u := range incoming {
+		replaced := false
+		for i, e := range out {
+			if e.URI == u.URI {
+				out[i] = u
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // RemoveCRDNode removes a CRD node from the given domain. No-op if

@@ -306,6 +306,45 @@ func TestBuild_Extension(t *testing.T) {
 	}
 }
 
+// TestBuild_AddCRDNodeMergesByURI verifies that calling AddCRDNode
+// twice for the same (domain, crdType) merges the URI lists by URI
+// string rather than replacing. This is the contract that lets
+// incremental adapters (openapi-generator) walk one URI at a time
+// without maintaining a caller-side aggregator. Each URI's original
+// methods (GET / LIST / PUT) are preserved verbatim across calls.
+func TestBuild_AddCRDNodeMergesByURI(t *testing.T) {
+	b := New()
+	info := NodeInfo{Name: "orgs.Org", Description: "Org", Schema: makeSchema()}
+
+	// First call — collection URI with LIST.
+	b.AddCRDNode("hd.cisco.com", "orgs.crd", info, []RestURIs{
+		{URI: "/v1/organizations", Methods: map[string]struct{}{"LIST": {}}},
+	})
+	// Second call — single-item URI with GET / PUT / DELETE. Must
+	// NOT erase the prior /v1/organizations entry.
+	b.AddCRDNode("hd.cisco.com", "orgs.crd", info, []RestURIs{
+		{URI: "/v1/organizations/{org}", Methods: map[string]struct{}{
+			"GET": {}, "PUT": {}, "DELETE": {},
+		}},
+	})
+
+	spec := b.Build("hd.cisco.com")
+	listOp := spec.Paths.Value("/v1/organizations")
+	if listOp == nil || listOp.Get == nil {
+		t.Fatal("/v1/organizations operation missing after second AddCRDNode")
+	}
+	if got := listOp.Get.OperationID; got != "listOrgs" {
+		t.Errorf("expected listOrgs (LIST preserved), got %q", got)
+	}
+	itemOp := spec.Paths.Value("/v1/organizations/{org}")
+	if itemOp == nil || itemOp.Get == nil || itemOp.Put == nil {
+		t.Fatal("/v1/organizations/{org} operations missing")
+	}
+	if got := itemOp.Get.OperationID; got != "getOrg" {
+		t.Errorf("expected getOrg, got %q", got)
+	}
+}
+
 // TestBuild_OrphanTagPruning verifies that a CRD declared with a
 // Description but no registered URIs does not produce a root-level
 // tag entry (which would have no operation referencing it). Regression

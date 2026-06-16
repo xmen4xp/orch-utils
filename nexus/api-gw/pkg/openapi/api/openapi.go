@@ -51,6 +51,10 @@ var (
 // New initializes (or resets) the `Schemas` entry for `datamodel` with
 // an empty spec. Kept for backward compatibility with the existing
 // ginkgo tests; production code should call Recreate.
+//
+// `ResetDomain` ensures consecutive `New(domain) -> AddPath(...)`
+// sequences in tests start from a clean URI set. Without this the
+// builder's merge-by-URI semantics would let URIs leak across tests.
 func New(datamodel string) {
 	title := "Nexus API GW APIs"
 	if info, ok := model.DatamodelToDatamodelInfo[datamodel]; ok {
@@ -58,6 +62,7 @@ func New(datamodel string) {
 	}
 	schemasMutex.Lock()
 	defer schemasMutex.Unlock()
+	specBuilder.ResetDomain(datamodel)
 	specBuilder.SetDatamodelTitle(datamodel, builder.DatamodelTitle{Title: title})
 	Schemas[datamodel] = *specBuilder.Build(datamodel)
 }
@@ -66,10 +71,10 @@ func New(datamodel string) {
 // `Schemas[datamodel]` accordingly. Kept for backward compatibility
 // with the existing tests; production code goes through Recreate.
 //
-// The full URI set for the CRD is taken from
-// `model.GetAllCrdTypeToRestUris` when present; tests that don't
-// populate that map fall back to the URI passed in directly so the
-// adapter remains usable in narrow unit-test contexts.
+// The builder accumulates URIs per CRD across calls (merge-by-URI
+// semantics in `AddCRDNode`), so callers pass only the URI being
+// added — the builder retains every URI that was previously
+// registered for the same crdType under this domain.
 func AddPath(uri nexus.RestURIs, datamodel string) {
 	crdType, _ := model.GetURIToCRDType(uri.Uri)
 	crdInfo, _ := model.GetCRDTypeToNodeInfo(crdType)
@@ -79,14 +84,9 @@ func AddPath(uri nexus.RestURIs, datamodel string) {
 	defer schemasMutex.Unlock()
 
 	specBuilder.SetOptions(currentOptions())
-
-	uris := model.GetAllCrdTypeToRestUris()[crdType]
-	if len(uris) == 0 {
-		uris = []nexus.RestURIs{uri}
-	}
 	specBuilder.AddCRDNode(datamodel, crdType,
 		toBuilderNodeInfo(crdInfo, &crdSpec),
-		toBuilderURIs(uris))
+		toBuilderURIs([]nexus.RestURIs{uri}))
 
 	Schemas[datamodel] = *specBuilder.Build(datamodel)
 }
