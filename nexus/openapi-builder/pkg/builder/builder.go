@@ -255,17 +255,24 @@ func (b *SpecBuilder) Build(domain string) *openapi3.T {
 		title = "Nexus API GW APIs"
 	}
 
+	// keyedNodeRecord pairs a snapshot nodeRecord with its CRD-type
+	// map key so emission can index by CRD type without re-locking.
+	type keyedNodeRecord struct {
+		crdType string
+		rec     nodeRecord
+	}
+
 	var (
-		nodes      []nodeRecord
+		nodes      []keyedNodeRecord
 		extensions []ExtensionSpec
 	)
 	if d, ok := b.domains[domain]; ok {
 		if d.title != "" {
 			title = d.title
 		}
-		nodes = make([]nodeRecord, 0, len(d.nodes))
-		for _, n := range d.nodes {
-			nodes = append(nodes, n)
+		nodes = make([]keyedNodeRecord, 0, len(d.nodes))
+		for crdType, n := range d.nodes {
+			nodes = append(nodes, keyedNodeRecord{crdType: crdType, rec: n})
 		}
 		extensions = make([]ExtensionSpec, 0, len(d.extensions))
 		for _, e := range d.extensions {
@@ -276,28 +283,20 @@ func (b *SpecBuilder) Build(domain string) *openapi3.T {
 
 	// Deterministic order — emission depends only on the input set,
 	// not the map iteration order.
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].info.Name < nodes[j].info.Name })
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].rec.info.Name < nodes[j].rec.info.Name })
 	sort.Slice(extensions, func(i, j int) bool { return extensions[i].URI < extensions[j].URI })
 
-	// Snapshot indices used during emission.
+	// Snapshot indices used during emission. All three are derived
+	// from the same single-window snapshot above — they cannot drift
+	// out of sync with the collision histogram.
 	nodesByCRDType := make(map[string]NodeInfo, len(nodes))
 	nodesByName := make(map[string]NodeInfo, len(nodes))
 	infosForCounts := make([]NodeInfo, 0, len(nodes))
 	for _, n := range nodes {
-		// nodesByCRDType keys off the CRD type which is the parent-hierarchy
-		// element; we don't have the CRD type in the snapshot record. We
-		// rebuild it inside the loop below from a parallel structure.
-		nodesByName[n.info.Name] = n.info
-		infosForCounts = append(infosForCounts, n.info)
+		nodesByCRDType[n.crdType] = n.rec.info
+		nodesByName[n.rec.info.Name] = n.rec.info
+		infosForCounts = append(infosForCounts, n.rec.info)
 	}
-	// Build nodesByCRDType by re-scanning the locked map under RLock.
-	b.mu.RLock()
-	if d, ok := b.domains[domain]; ok {
-		for crdType, n := range d.nodes {
-			nodesByCRDType[crdType] = n.info
-		}
-	}
-	b.mu.RUnlock()
 
 	counts := kindCountsFromNodes(infosForCounts)
 
@@ -305,20 +304,31 @@ func (b *SpecBuilder) Build(domain string) *openapi3.T {
 
 	// Emit components and paths per node.
 	for _, n := range nodes {
-		buildComponentsForNode(spec.Components, n.info)
-		nameParts := strings.Split(n.info.Name, ".")
+		// Skip nodes with no registered URIs. At runtime the api-gw
+		// informer registers every CRD in the cluster (including
+		// internal-only ones like rt*.hd.cisco.com whose nexus
+		// annotation declares zero REST URIs); emitting their schemas
+		// would leak internal types into the served spec. The
+		// invariant is "a node without URIs cannot produce any
+		// operation", and an unreferenced schema bag carries no
+		// information for API consumers.
+		if len(n.rec.uris) == 0 {
+			continue
+		}
+		buildComponentsForNode(spec.Components, n.rec.info)
+		nameParts := strings.Split(n.rec.info.Name, ".")
 		tagName := qualifiedKind(nameParts, counts)
-		if n.info.Description != "" && tagName != "" && !hasTag(spec.Tags, tagName) {
+		if n.rec.info.Description != "" && tagName != "" && !hasTag(spec.Tags, tagName) {
 			spec.Tags = append(spec.Tags, &openapi3.Tag{
 				Name:        tagName,
-				Description: n.info.Description,
+				Description: n.rec.info.Description,
 			})
 		}
 
-		for _, uri := range n.uris {
-			params := buildURIParams(uri, uri.Headers, n.info.ParentHierarchy,
+		for _, uri := range n.rec.uris {
+			params := buildURIParams(uri, uri.Headers, n.rec.info.ParentHierarchy,
 				nodesByCRDType, nodesByName, opts)
-			pathItem := buildPathItem(uri, n.info, params, counts)
+			pathItem := buildPathItem(uri, n.rec.info, params, counts)
 			mergePathItem(spec.Paths, uri.URI, pathItem)
 		}
 	}

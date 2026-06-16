@@ -35,7 +35,7 @@ func ConstructNewURIs(n model.NexusAnnotation, urisMap map[string]model.RestURII
 				continue
 			}
 			statusURIPath := uri.Uri + "/status"
-			addStatusURI(statusURIPath, model.StatusURI, urisMap, newUris)
+			addStatusURI(statusURIPath, model.StatusURI, uri, urisMap, newUris)
 
 			for _, c := range []map[string]model.NodeHelperChild{n.Children, n.Links} {
 				processChildOrLink(c, uri, urisMap, newUris)
@@ -52,14 +52,22 @@ func processChildOrLink(nodes map[string]model.NodeHelperChild, uri nexus.RestUR
 		if n.IsNamed {
 			t = model.NamedLinkURI
 		}
-		addURI(uriPath, t, urisMap, newUris)
+		addURI(uriPath, t, uri, urisMap, newUris)
 	}
 }
 
 // addURI registers a single-link or named-link URI with GET only.
-func addURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+// `parent` is the URI this one was derived from — its PathParams
+// (alias → canonical groupKind map) and Headers are inherited so the
+// builder can recognise the synthesised URI's path tokens already
+// cover the parent hierarchy and skip duplicate query/header params.
+func addURI(uriPath string, typeOfURI model.URIType, parent nexus.RestURIs,
+	urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs,
+) {
 	newURI := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:        uriPath,
+		PathParams: parent.PathParams,
+		Headers:    parent.Headers,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 		},
@@ -71,10 +79,15 @@ func addURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.Re
 // addStatusURI registers a /status URI with GET only. PUT and PATCH
 // are intentionally NOT emitted at build time to preserve the
 // existing compiler spec shape — the runtime api-gw consumer adds
-// those methods separately.
-func addStatusURI(uriPath string, typeOfURI model.URIType, urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs) {
+// those methods separately. PathParams/Headers are inherited from
+// the parent URI for the same reason as addURI above.
+func addStatusURI(uriPath string, typeOfURI model.URIType, parent nexus.RestURIs,
+	urisMap map[string]model.RestURIInfo, uris *[]nexus.RestURIs,
+) {
 	newURI := nexus.RestURIs{
-		Uri: uriPath,
+		Uri:        uriPath,
+		PathParams: parent.PathParams,
+		Headers:    parent.Headers,
 		Methods: map[nexus.HTTPMethod]nexus.HTTPCodesResponse{
 			http.MethodGet: nexus.DefaultHTTPGETResponses,
 		},

@@ -6,6 +6,7 @@ package builder
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -144,11 +145,11 @@ func TestBuild_SameDomainCollisionQualifies(t *testing.T) {
 	)
 
 	spec := b.Build("hd.cisco.com")
-	if op := spec.Paths.Value("/v1/config/aislices/{aislice.AISlice}").Get; op == nil || op.OperationID != "getAisliceAISlice" {
-		t.Errorf("expected getAisliceAISlice, got %+v", op)
+	if op := spec.Paths.Value("/v1/config/aislices/{aislice.AISlice}").Get; op == nil || op.OperationID != "getAislice" {
+		t.Errorf("expected getAislice, got %+v", op)
 	}
-	if op := spec.Paths.Value("/v1/inventory/aislices/{discoveredaislice.AISlice}").Get; op == nil || op.OperationID != "getDiscoveredaisliceAISlice" {
-		t.Errorf("expected getDiscoveredaisliceAISlice, got %+v", op)
+	if op := spec.Paths.Value("/v1/inventory/aislices/{discoveredaislice.AISlice}").Get; op == nil || op.OperationID != "getDiscoveredaislice" {
+		t.Errorf("expected getDiscoveredaislice, got %+v", op)
 	}
 
 	// Two qualified tags, no bare "AISlice".
@@ -159,7 +160,7 @@ func TestBuild_SameDomainCollisionQualifies(t *testing.T) {
 	if gotTags["AISlice"] {
 		t.Error("unexpected bare AISlice tag")
 	}
-	for _, want := range []string{"AisliceAISlice", "DiscoveredaisliceAISlice"} {
+	for _, want := range []string{"Aislice", "Discoveredaislice"} {
 		if !gotTags[want] {
 			t.Errorf("missing expected tag %q", want)
 		}
@@ -373,6 +374,38 @@ func TestBuild_OrphanTagPruning(t *testing.T) {
 	}
 	if got["Orphan"] {
 		t.Errorf("orphan tag `Orphan` was emitted but no operation references it: got %v", got)
+	}
+}
+
+// TestBuild_SkipsNodesWithoutURIs verifies that a CRD registered
+// with no URIs contributes ZERO output — no schemas/components, no
+// tags, no paths. At runtime api-gw watches every CRD in the cluster
+// (including internal-only types like rt*.hd.cisco.com whose nexus
+// annotation declares zero REST URIs). Without this skip those
+// internal types would leak their schemas into the served spec.
+func TestBuild_SkipsNodesWithoutURIs(t *testing.T) {
+	b := New()
+	b.AddCRDNode("hd.cisco.com", "public.crd",
+		NodeInfo{Name: "pkg.Public", Description: "Public", Schema: makeSchema()},
+		[]RestURIs{{URI: "/v1/public", Methods: map[string]struct{}{"GET": {}}}})
+	b.AddCRDNode("hd.cisco.com", "internal.crd",
+		NodeInfo{Name: "rtinternal.RTInternal", Description: "Internal-only", Schema: makeSchema()},
+		nil)
+
+	spec := b.Build("hd.cisco.com")
+
+	for key := range spec.Components.Schemas {
+		if strings.Contains(key, "rtinternal") || strings.Contains(key, "RTInternal") {
+			t.Errorf("internal CRD schema leaked into components: %q", key)
+		}
+	}
+	for key := range spec.Components.RequestBodies {
+		if strings.Contains(key, "RTInternal") {
+			t.Errorf("internal CRD request body leaked: %q", key)
+		}
+	}
+	if _, ok := spec.Components.Schemas["pkg.Public.Get"]; !ok {
+		t.Errorf("public CRD schema missing — skip rule must NOT affect URI-bearing nodes")
 	}
 }
 

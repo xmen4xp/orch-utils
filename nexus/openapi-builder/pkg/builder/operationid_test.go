@@ -70,11 +70,11 @@ func TestGetOperationID_WithCollision(t *testing.T) {
 		uriType URIType
 		want    string
 	}{
-		{"get AISlice (config)", "GET", "/v1/config/spaces/{spaces.Space}/aislices/{aislice.AISlice}", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "getAisliceAISlice"},
-		{"put AISlice (config)", "PUT", "/v1/config/spaces/{spaces.Space}/aislices/{aislice.AISlice}", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "putAisliceAISlice"},
-		{"get AISlice (discovered)", "GET", "/v1/inventory/datacenters/{datacenter}/clusters/{cluster}/aislices/{discoveredaislice.AISlice}", NodeInfo{Name: "discoveredaislice.AISlice"}, DefaultURI, "getDiscoveredaisliceAISlice"},
-		{"status put AISlice (config)", "PUT", "/v1/config/.../{aislice.AISlice}/status", NodeInfo{Name: "aislice.AISlice"}, StatusURI, "putAisliceAISliceStatus"},
-		{"list AISlices (config)", "LIST", "/v1/config/spaces/{spaces.Space}/aislices", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "listAisliceAISlices"},
+		{"get AISlice (config)", "GET", "/v1/config/spaces/{spaces.Space}/aislices/{aislice.AISlice}", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "getAislice"},
+		{"put AISlice (config)", "PUT", "/v1/config/spaces/{spaces.Space}/aislices/{aislice.AISlice}", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "putAislice"},
+		{"get AISlice (discovered)", "GET", "/v1/inventory/datacenters/{datacenter}/clusters/{cluster}/aislices/{discoveredaislice.AISlice}", NodeInfo{Name: "discoveredaislice.AISlice"}, DefaultURI, "getDiscoveredaislice"},
+		{"status put AISlice (config)", "PUT", "/v1/config/.../{aislice.AISlice}/status", NodeInfo{Name: "aislice.AISlice"}, StatusURI, "putAisliceStatus"},
+		{"list AISlices (config)", "LIST", "/v1/config/spaces/{spaces.Space}/aislices", NodeInfo{Name: "aislice.AISlice"}, DefaultURI, "listAislices"},
 		{"get Org (no collision)", "GET", "/v1/organizations/{orgs.Org}", NodeInfo{Name: "orgs.Org"}, DefaultURI, "getOrg"},
 	}
 

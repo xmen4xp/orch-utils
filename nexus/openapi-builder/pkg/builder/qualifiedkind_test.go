@@ -26,11 +26,11 @@ func TestQualifiedKind_WithCollision(t *testing.T) {
 		{Name: "orgs.Org"},
 	})
 
-	if got := qualifiedKind([]string{"aislice", "AISlice"}, counts); got != "AisliceAISlice" {
-		t.Errorf("expected AisliceAISlice (collision -> package prefix), got %q", got)
+	if got := qualifiedKind([]string{"aislice", "AISlice"}, counts); got != "Aislice" {
+		t.Errorf("expected Aislice (collision -> package only), got %q", got)
 	}
-	if got := qualifiedKind([]string{"discoveredaislice", "AISlice"}, counts); got != "DiscoveredaisliceAISlice" {
-		t.Errorf("expected DiscoveredaisliceAISlice (collision -> package prefix), got %q", got)
+	if got := qualifiedKind([]string{"discoveredaislice", "AISlice"}, counts); got != "Discoveredaislice" {
+		t.Errorf("expected Discoveredaislice (collision -> package only), got %q", got)
 	}
 	if got := qualifiedKind([]string{"orgs", "Org"}, counts); got != "Org" {
 		t.Errorf("expected Org (no collision in same domain), got %q", got)

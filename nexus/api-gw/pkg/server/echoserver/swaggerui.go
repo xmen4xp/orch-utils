@@ -141,6 +141,12 @@ const (
         url: '{{ .SpecURL }}',
         dom_id: '#swagger-ui',
         deepLinking: true,
+        // Disable the online swagger.io validator badge. The default
+        // validator (validator.swagger.io) fetches the spec URL from
+        // the public internet, which fails for private/internal hosts
+        // and surfaces a noisy red error in the UI footer
+        // ("Can't read from file https://.../openapi.json").
+        validatorUrl: null,
         presets: [
           SwaggerUIBundle.presets.apis,
           SwaggerUIStandalonePreset

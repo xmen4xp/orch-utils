@@ -26,23 +26,29 @@ func isCollidingKind(kind string, counts KindCounts) bool {
 	return counts[kind] > 1
 }
 
-// qualifiedKind returns the Kind portion of a CRD's NodeInfo.Name (the
-// part after the first dot), prefixed with a Title-cased package
-// segment iff more than one CRD in the same domain shares that Kind.
+// qualifiedKind returns the disambiguated name used for OpenAPI tags
+// and operationIds. When the Kind is unique within its domain, the
+// bare Kind is returned. When the Kind collides with another CRD in
+// the same domain, the Title-cased package segment is returned alone
+// (not concatenated with the Kind) — package names are guaranteed
+// globally unique by the Nexus compiler, so the package alone is
+// sufficient to disambiguate, and avoids the visually redundant
+// "AisliceAISlice" / "DiscoveredaisliceAISlice" output.
 // Returns "" when nameParts has no Kind portion.
 //
 // Examples (within a single domain):
 //
 //	["orgs", "Org"]                       (no collision) -> "Org"
-//	["aislice", "AISlice"]                (collision)    -> "AisliceAISlice"
-//	["discoveredaislice", "AISlice"]      (collision)    -> "DiscoveredaisliceAISlice"
+//	["aislice", "AISlice"]                (collision)    -> "Aislice"
+//	["discoveredaislice", "AISlice"]      (collision)    -> "Discoveredaislice"
+//	["rtaislice", "RTAISlice"]            (collision)    -> "Rtaislice"
 func qualifiedKind(nameParts []string, counts KindCounts) string {
 	if len(nameParts) < 2 {
 		return ""
 	}
 	kind := nameParts[1]
 	if isCollidingKind(kind, counts) {
-		return titleFirst(nameParts[0]) + kind
+		return titleFirst(nameParts[0])
 	}
 	return kind
 }
