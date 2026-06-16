@@ -326,6 +326,19 @@ func (b *SpecBuilder) Build(domain string) *openapi3.T {
 		}
 
 		for _, uri := range n.rec.uris {
+			// Suppress parent-side child traversal URIs from the
+			// emitted spec. SingleLinkURI / NamedLinkURI are emitted
+			// by the compiler on a parent node to expose its declared
+			// nexus:child / nexus:children relationships (e.g.
+			// `/v1/.../projects/{project}/Config` shown under the
+			// Project tag). The child resource's own URIs
+			// (DefaultURI, e.g. `/v1/.../configs/{config}`) are
+			// unaffected and remain the canonical way to address the
+			// child in OpenAPI. StatusURI is also unaffected so the
+			// `/status` subresource on each node continues to render.
+			if uri.TypeOfURI == SingleLinkURI || uri.TypeOfURI == NamedLinkURI {
+				continue
+			}
 			params := buildURIParams(uri, uri.Headers, n.rec.info.ParentHierarchy,
 				nodesByCRDType, nodesByName, opts)
 			pathItem := buildPathItem(uri, n.rec.info, params, counts)
@@ -333,16 +346,19 @@ func (b *SpecBuilder) Build(domain string) *openapi3.T {
 		}
 	}
 
-	// Emit extension paths last. They overwrite any auto-emitted path
-	// at the same URI (matches existing runtime behaviour where the
-	// declarative path wins over the datamodel-derived one).
+	// Emit extension paths last. Extensions are merged per-method into
+	// any auto-emitted path at the same URI: the declarative operation
+	// wins over the datamodel-derived one for methods it defines, but
+	// methods that the extension does not declare are preserved. This
+	// prevents an extension that defines only DELETE from wiping out
+	// the GET/PUT auto-emitted from the resource's RestAPISpec.
 	for _, ext := range extensions {
 		pathItem, err := parseExtensionPathItem(ext.OpenAPIPathSpec)
 		if err != nil {
 			logger.Warnf("openapi-builder: skipping extension %q: %v", ext.URI, err)
 			continue
 		}
-		spec.Paths.Set(ext.URI, pathItem)
+		mergePathItem(spec.Paths, ext.URI, pathItem)
 	}
 
 	// Prune root-level tag entries that no emitted operation references.

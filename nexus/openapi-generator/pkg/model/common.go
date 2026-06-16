@@ -22,9 +22,21 @@ const (
 )
 
 type DatamodelConfig struct {
+	// Title is the optional spec.info.title applied to the generated
+	// OpenAPI document. When unset, the openapi-builder's built-in
+	// default ("Nexus API GW APIs") is used. This field is the
+	// build-time half of the single-source-of-truth contract with
+	// the datamodel installer, which reads the same field at runtime
+	// to populate the Datamodel CR's spec.title.
+	Title                   string            `yaml:"title"`
 	IgnoredParentPathParams []string          `yaml:"ignoredParentPathParams"`
 	NodeToHeaderMapping     map[string]string `yaml:"nodeToHeaderMapping"`
 }
+
+// OpenApiTitle is the spec.info.title read from the datamodel
+// config file (nexus.yaml). Empty means the caller should fall back
+// to the openapi-builder's built-in default.
+var OpenApiTitle string
 
 var OpenApiIgnoredParentPathParams map[string]struct{} = make(map[string]struct{})
 
@@ -94,6 +106,11 @@ func InitOpenApiIgnoredParentPathParams(configFile string) {
 	err = yaml.Unmarshal(configStr, &config)
 	if err != nil {
 		log.Fatalf("failed to unmarshal config file %s with error %s", configFile, err)
+	}
+
+	if config.Title != "" {
+		OpenApiTitle = config.Title
+		fmt.Println("adding datamodel title :", config.Title)
 	}
 
 	for _, param := range config.IgnoredParentPathParams {

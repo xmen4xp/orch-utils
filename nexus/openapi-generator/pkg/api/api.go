@@ -37,9 +37,16 @@ var (
 // New initializes (or resets) the spec for `datamodel`. Subsequent
 // AddPath / AddExtensionPath calls extend that spec.
 func New(datamodel string) {
+	// Title resolution order (first non-empty wins):
+	//   1. Per-datamodel registry entry (set by callers that maintain
+	//      runtime metadata; not populated in the build-time path).
+	//   2. model.OpenApiTitle (read from nexus.yaml at startup).
+	//   3. Built-in default below.
 	title := "Nexus API GW APIs"
 	if info, ok := model.DatamodelToDatamodelInfo[datamodel]; ok && info.Title != "" {
 		title = info.Title
+	} else if model.OpenApiTitle != "" {
+		title = model.OpenApiTitle
 	}
 	schemasMutex.Lock()
 	defer schemasMutex.Unlock()

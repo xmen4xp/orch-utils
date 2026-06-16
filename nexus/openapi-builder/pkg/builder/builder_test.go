@@ -307,6 +307,48 @@ func TestBuild_Extension(t *testing.T) {
 	}
 }
 
+// TestBuild_ExtensionMergesWithAutoEmittedMethods verifies that an
+// extension declaring only a subset of HTTP methods on a URI does NOT
+// wipe out the auto-emitted methods at that same URI. Regression for
+// the case where ClusterOffboardingAPI declared only DELETE on
+// /v1/inventory/.../clusters/{cluster} and silently removed the GET
+// and PUT auto-emitted from ClusterRestAPISpec.
+func TestBuild_ExtensionMergesWithAutoEmittedMethods(t *testing.T) {
+	b := New()
+	info := NodeInfo{Name: "clusters.Clusters", Description: "Cluster", Schema: makeSchema()}
+	b.AddCRDNode("hd.cisco.com", "clusters.crd", info, []RestURIs{
+		{URI: "/v1/clusters/{cluster}", Methods: map[string]struct{}{
+			"GET": {},
+			"PUT": {},
+		}},
+	})
+	b.AddExtension("hd.cisco.com", ExtensionSpec{
+		URI: "/v1/clusters/{cluster}",
+		OpenAPIPathSpec: `delete:
+  operationId: deleteCluster
+  tags: ["Clusters"]
+  responses:
+    "202":
+      description: accepted
+`,
+	})
+
+	spec := b.Build("hd.cisco.com")
+	pi := spec.Paths.Value("/v1/clusters/{cluster}")
+	if pi == nil {
+		t.Fatal("/v1/clusters/{cluster} not emitted")
+	}
+	if pi.Get == nil {
+		t.Error("auto-emitted GET was wiped by extension")
+	}
+	if pi.Put == nil {
+		t.Error("auto-emitted PUT was wiped by extension")
+	}
+	if pi.Delete == nil || pi.Delete.OperationID != "deleteCluster" {
+		t.Error("extension DELETE not installed")
+	}
+}
+
 // TestBuild_AddCRDNodeMergesByURI verifies that calling AddCRDNode
 // twice for the same (domain, crdType) merges the URI lists by URI
 // string rather than replacing. This is the contract that lets

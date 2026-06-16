@@ -5,7 +5,21 @@ set -ex
 NAME=${NAME:-}
 DATAMODEL_IMAGE=${IMAGE}
 IMAGE="file://${NAME}"
-TITLE=${TITLE:-}
+# TITLE resolution order (first non-empty wins):
+#   1. TITLE env var (deploy-time override)
+#   2. `title:` field in /nexus.yaml when present (datamodels that
+#      bundle their nexus.yaml into the installer image get a single
+#      source of truth shared with the build-time openapi-generator)
+#   3. Script default (applied via the empty-TITLE branch below)
+# The awk extractor is POSIX-only (no yq dependency). The trailing
+# `|| true` is REQUIRED: this script runs under `set -e`, and awk
+# exits nonzero when /nexus.yaml is absent (which is the common case
+# for the orch-utils template image — only datamodels that bundle
+# their nexus.yaml into the installer image will find the file). The
+# `|| true` keeps the assignment quiet and the script alive in both
+# cases, with TITLE remaining empty so the existing fallback below
+# applies.
+TITLE=${TITLE:-$(awk -F'"' '/^title:[[:space:]]*"/ {print $2; exit}' /nexus.yaml 2>/dev/null || true)}
 SKIP_CRD_INSTALLATION=${SKIP_CRD_INSTALLATION:-false}
 GRAPHQL_ENABLED=${GRAPHQL_ENABLED:-false}
 
