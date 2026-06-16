@@ -16,9 +16,9 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/oauth2 v0.27.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/apiextensions-apiserver v0.31.0
-	k8s.io/apimachinery v0.32.1
-	k8s.io/client-go v0.32.1
+	k8s.io/apiextensions-apiserver v0.32.3
+	k8s.io/apimachinery v0.32.3
+	k8s.io/client-go v0.32.3
 	sigs.k8s.io/controller-runtime v0.19.0
 )
 
@@ -30,11 +30,14 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/vmware-tanzu/graph-framework-for-microservices/common-library v0.0.0-20221020140923-7deb4d75cfcf
 	github.com/vmware-tanzu/graph-framework-for-microservices/nexus v0.0.0-20230908154608-60c8916a498f
-	golang.org/x/crypto v0.36.0
-	k8s.io/api v0.32.1
+	k8s.io/api v0.32.3
 	k8s.io/kube-aggregator v0.24.1
-	nexus/admin/api v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/yaml v1.4.0
+	sigs.k8s.io/yaml v1.6.0
+)
+
+require (
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 )
 
 require (
@@ -135,6 +138,8 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
+	nexus/admin/api v0.0.0-00010101000000-000000000000
+	nexus/openapi-builder v0.0.0-00010101000000-000000000000
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )
@@ -142,3 +147,5 @@ require (
 replace nexus/admin/api => ../api
 
 replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus => ../nexus
+
+replace nexus/openapi-builder => ../openapi-builder
