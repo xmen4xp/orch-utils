@@ -154,11 +154,6 @@ func extractApiSpecHeaders(kv *ast.KeyValueExpr) []string {
 	return params
 }
 
-// aliasRegistry tracks the canonical type each alias maps to across all URIs
-// (across all RestAPISpec validations), so the same alias cannot mean different
-// things in different URIs.
-var aliasRegistry = map[string]string{}
-
 func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser.NodeHelper, crdName string) {
 	r := regexp.MustCompile(`{([^{}]+)}`)
 	crdHelper := parentsMap[crdName]
@@ -171,15 +166,14 @@ func ValidateRestApiSpec(apiSpec nexus.RestAPISpec, parentsMap map[string]parser
 			log.Fatalf("RestApiSpec: Duplicate found: %s and %s", u, uri.Uri)
 		}
 
-		// Cross-URI consistency: every alias must map to the same canonical type wherever it appears.
+		// Publish each alias declared in this URI's PathParams to the
+		// parser-wide registry so downstream validators (notably
+		// ExtensionRestAPIPathParams) can resolve aliases that don't follow
+		// the lowercase-Kind formula. The registry is multi-valued: the same
+		// alias may legitimately map to different canonicals in disjoint URI
+		// subtrees (URIs themselves are unique, so there is no routing
+		// ambiguity; consumers disambiguate via hierarchy context).
 		for alias, canonical := range uri.PathParams {
-			if existing, ok := aliasRegistry[alias]; ok && existing != canonical {
-				log.Fatalf("RestApiSpec: PathParams alias %q is inconsistent — maps to %q in URI %s but already mapped to %q in a previous URI", alias, canonical, uri.Uri, existing)
-			}
-			aliasRegistry[alias] = canonical
-			// Publish to the parser-wide registry so downstream validators
-			// (notably ExtensionRestAPIPathParams) can resolve aliases that
-			// don't follow the lowercase-Kind formula.
 			parser.RegisterPathParamAlias(alias, canonical)
 		}
 
