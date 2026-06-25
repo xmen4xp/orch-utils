@@ -242,6 +242,66 @@ get:
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should resolve the correct canonical when the same alias is overloaded across disjoint subtrees", func() {
+			// Same alias name {cluster} is declared by two unrelated nodes in
+			// disjoint URI subtrees:
+			//   /v1/inventory/.../clusters/{cluster}  -> clusters.Clusters
+			//   /v1/config/.../clusters/{cluster}     -> configcluster.ConfigCluster
+			// URIs themselves are unique, so routing is unambiguous. Validation
+			// must pick the canonical that belongs to the extension's
+			// associated-node hierarchy and not fail with a global-collision
+			// error.
+			localParents := map[string]parser.NodeHelper{
+				"roots.root.test.com": {
+					RestName:    "root.Root",
+					IsSingleton: true,
+				},
+				"datacenters.dc.test.com": {
+					RestName: "datacenters.DataCenters",
+					Parents:  []string{"roots.root.test.com"},
+				},
+				"clusters.cl.test.com": {
+					RestName: "clusters.Clusters",
+					Parents:  []string{"roots.root.test.com", "datacenters.dc.test.com"},
+				},
+				"configdatacenters.cfgdc.test.com": {
+					RestName: "configdatacenter.ConfigDataCenter",
+					Parents:  []string{"roots.root.test.com"},
+				},
+				"configclusters.cfgcl.test.com": {
+					RestName: "configcluster.ConfigCluster",
+					Parents:  []string{"roots.root.test.com", "configdatacenters.cfgdc.test.com"},
+				},
+			}
+			// Both subtrees register the SAME alias to DIFFERENT canonicals.
+			parser.RegisterPathParamAlias("datacenter", "datacenters.DataCenters")
+			parser.RegisterPathParamAlias("cluster", "clusters.Clusters")
+			parser.RegisterPathParamAlias("datacenter", "configdatacenter.ConfigDataCenter")
+			parser.RegisterPathParamAlias("cluster", "configcluster.ConfigCluster")
+
+			// Extension on the inventory side: {cluster} must resolve to
+			// clusters.Clusters, not configcluster.ConfigCluster.
+			invSpec := parser.ExtensionRestAPISpec{
+				Name:           "clusterMetrics",
+				PkgName:        "clusters",
+				Uri:            "/v1/inventory/datacenters/{datacenter}/clusters/{cluster}/metrics",
+				AssociatedNode: "clusters.Clusters",
+				NodeCRDName:    "clusters.cl.test.com",
+			}
+			Expect(parser.ValidateExtensionRestAPIPathParams(invSpec, localParents)).NotTo(HaveOccurred())
+
+			// Extension on the config side: {cluster} must resolve to
+			// configcluster.ConfigCluster.
+			cfgSpec := parser.ExtensionRestAPISpec{
+				Name:           "configClusterAction",
+				PkgName:        "configcluster",
+				Uri:            "/v1/config/datacenters/{datacenter}/clusters/{cluster}/action",
+				AssociatedNode: "configcluster.ConfigCluster",
+				NodeCRDName:    "configclusters.cfgcl.test.com",
+			}
+			Expect(parser.ValidateExtensionRestAPIPathParams(cfgSpec, localParents)).NotTo(HaveOccurred())
+		})
+
 		It("should pass validation with mixed alias and canonical path params", func() {
 			spec := parser.ExtensionRestAPISpec{
 				Name:           "myApi",

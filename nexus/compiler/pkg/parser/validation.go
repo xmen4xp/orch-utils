@@ -21,32 +21,54 @@ func PathParamAliasFor(canonical string) string {
 	return strings.ToLower(canonical[idx+1:])
 }
 
-// pathParamAliases is a process-wide registry of alias -> canonical mappings
-// declared via RestURIs.PathParams across all RestAPISpec values. It lets
-// validators (in this package and in the rest sub-package) resolve
-// URI-token aliases that don't follow the lowercase-Kind formula —
-// e.g. {datacenter} -> datacenters.DataCenters.
-//
-// The registry is populated as RestAPISpec values are parsed. ExtensionRestAPI
-// URIs have no PathParams map of their own, so they rely on this registry to
-// recognize aliases declared by the associated node's RestURIs.
-var pathParamAliases = map[string]string{}
+// pathParamAliases is a process-wide registry of alias -> set of canonicals
+// declared via RestURIs.PathParams across all RestAPISpec values. The same
+// alias may legitimately map to different canonical types in disjoint URI
+// subtrees (e.g. {cluster} -> clusters.Clusters under /v1/inventory and
+// {cluster} -> configcluster.ConfigCluster under /v1/config). Because URIs
+// themselves are unique, there is no routing ambiguity; validators that need
+// to disambiguate use ResolvePathParamAliasInHierarchy with the caller's
+// hierarchy context.
+var pathParamAliases = map[string]map[string]struct{}{}
 
 // RegisterPathParamAlias records a URI-token alias declared by a RestURIs
-// PathParams entry. Idempotent for the same alias->canonical pair; conflicting
-// remappings are silently ignored here (cross-URI consistency is enforced by
-// rest.ValidateRestApiSpec, which fatals on conflicts before reaching us).
+// PathParams entry. Idempotent. Multiple canonicals are allowed per alias —
+// disambiguation happens at resolution time via ResolvePathParamAliasInHierarchy.
 func RegisterPathParamAlias(alias, canonical string) {
 	if alias == "" || canonical == "" {
 		return
 	}
-	pathParamAliases[alias] = canonical
+	if pathParamAliases[alias] == nil {
+		pathParamAliases[alias] = map[string]struct{}{}
+	}
+	pathParamAliases[alias][canonical] = struct{}{}
 }
 
-// ResolvePathParamAlias returns the canonical "package.Kind" RestName for a
-// previously registered alias, or "" if none was registered.
+// ResolvePathParamAlias returns one canonical "package.Kind" RestName for a
+// previously registered alias, or "" if none was registered. If the alias is
+// declared in multiple subtrees, the returned canonical is unspecified;
+// callers that need hierarchy-correct resolution must use
+// ResolvePathParamAliasInHierarchy.
 func ResolvePathParamAlias(alias string) string {
-	return pathParamAliases[alias]
+	for c := range pathParamAliases[alias] {
+		return c
+	}
+	return ""
+}
+
+// ResolvePathParamAliasInHierarchy returns the canonical RestName for an
+// alias, picking the candidate that belongs to the caller-provided set of
+// valid hierarchy nodes. Returns "" if no registered canonical matches.
+// Used by ExtensionRestAPI validation, which knows its associated node's
+// hierarchy and can pick the right canonical even when the alias is
+// overloaded across disjoint subtrees.
+func ResolvePathParamAliasInHierarchy(alias string, validNodes map[string]bool) string {
+	for c := range pathParamAliases[alias] {
+		if validNodes[c] {
+			return c
+		}
+	}
+	return ""
 }
 
 // ValidateRequiredParents checks that all non-singleton, non-ignored parent nodes
@@ -109,8 +131,10 @@ func pathParamExists(name string, params [][]string) bool {
 			return true
 		}
 		// User-declared alias registered via RestURIs.PathParams (e.g.
-		// {datacenter} -> datacenters.DataCenters).
-		if ResolvePathParamAlias(token) == name {
+		// {datacenter} -> datacenters.DataCenters). The alias may be
+		// overloaded across disjoint subtrees, so check membership in the
+		// set of canonicals registered for this token.
+		if _, ok := pathParamAliases[token][name]; ok {
 			return true
 		}
 	}

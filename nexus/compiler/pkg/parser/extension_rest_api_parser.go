@@ -234,8 +234,11 @@ func ValidateExtensionRestAPIPathParams(spec ExtensionRestAPISpec, parentsMap ma
 		// User-declared alias registered via some RestURIs.PathParams (e.g.
 		// {datacenter} -> datacenters.DataCenters). ExtensionRestAPI URIs do
 		// not carry their own PathParams map, so they rely on aliases
-		// declared by the associated node's RestURIs.
-		if canonical := ResolvePathParamAlias(pathParam); canonical != "" && validNodes[canonical] {
+		// declared by the associated node's RestURIs. The same alias may be
+		// declared in multiple disjoint URI subtrees with different
+		// canonicals; pick the one that belongs to this extension's
+		// associated-node hierarchy.
+		if canonical := ResolvePathParamAliasInHierarchy(pathParam, validNodes); canonical != "" {
 			continue
 		}
 		return fmt.Errorf("path param {%s} not found in hierarchy of node %s. Valid nodes: %v",

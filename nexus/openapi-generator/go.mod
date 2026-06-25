@@ -15,7 +15,11 @@ require (
 	k8s.io/apiextensions-apiserver v0.32.3
 )
 
+require go.yaml.in/yaml/v2 v2.4.2 // indirect
+
 replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus => ../nexus
+
+replace nexus/openapi-builder => ../openapi-builder
 
 require (
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
@@ -45,7 +49,8 @@ require (
 	k8s.io/apimachinery v0.32.3 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e // indirect
+	nexus/openapi-builder v0.0.0-00010101000000-000000000000
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )
