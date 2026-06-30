@@ -185,12 +185,12 @@ func tsmPopulateValuesForResolver(nodes []*NodeProperty, parentsMap map[string]p
 		for _, i := range n.ResolverFields[n.PkgName+n.NodeName] {
 			if i.IsMapTypeField || i.IsStringType {
 				fieldCount += 1
-				retType += fmt.Sprintf("\t%s: &%sData,\n", i.FieldName, i.FieldName)
+				retType += fmt.Sprintf("\t%s: &%sData,\n", gqlGoTypeName(i.FieldName), i.FieldName)
 				aliasVal += jsonMarshalResolver(i.FieldName, n.NodeName)
 			} else if i.IsStdTypeField {
 				if len(convertGoStdType(i.FieldType)) != 0 {
 					fieldCount += 1
-					retType += fmt.Sprintf("\t%s: &v%s,\n", i.FieldName, i.FieldName)
+					retType += fmt.Sprintf("\t%s: &v%s,\n", gqlGoTypeName(i.FieldName), i.FieldName)
 					listRetVal += fmt.Sprintf("v%s := %s(i.%s)\n", i.FieldName, convertGoStdType(i.FieldType), i.FieldName)
 					aliasVal += fmt.Sprintf("v%s := %s(v%s.Spec.%s)\n", i.FieldName, convertGoStdType(i.FieldType), i.NodeName, i.FieldName)
 				}
