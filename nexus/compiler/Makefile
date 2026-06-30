@@ -121,7 +121,7 @@ docker.builder.image.exists:
 docker: docker.builder.image.exists init_submodules build_openapigen_in_container build_gqlgen_in_container build_install_validator_in_container
 	tar -cf compiler.tar --exclude=compiler.tar .
 	cd .. && tar -rf compiler/compiler.tar ../.git
-	tar -rf compiler.tar ../gqlgen ../kube-openapi ../nexus ../install-validator ../common-library
+	tar -rf compiler.tar ../kube-openapi ../nexus ../install-validator ../common-library
 	docker build --load \
 		--build-arg HTTPS_PROXY=$(HTTPS_PROXY) \
 		--build-arg HTTP_PROXY=$(HTTP_PROXY) \
@@ -153,7 +153,7 @@ tools:
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/mikefarah/yq/v4@latest
 	go install ../kube-openapi/cmd/nexus-openapi-gen
-	cd ../gqlgen && go install && cd -
+	go install github.com/99designs/gqlgen@v0.17.66
 	su - appuser -c "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b '$$(go env GOPATH)'/bin v1.49.0"
 
 .PHONY: build_openapigen_in_container
@@ -170,7 +170,7 @@ build_gqlgen_in_container:
 	$(call run_in_container,make build_gqlgen)
 
 build_gqlgen:
-	cd ../gqlgen && GOBIN=${PKG_NAME}/cmd go install
+	GOBIN=${PKG_NAME}/cmd go install github.com/99designs/gqlgen@v0.17.66
 
 build_install_validator_in_container:
 	$(call run_in_container,make build_install_validator)
@@ -314,7 +314,7 @@ generate_code:
 .PHONY: test_generate_code_in_container
 test_generate_code_in_container: docker.builder.image.exists init_submodules
 	$(call run_in_container, go install ../kube-openapi/cmd/nexus-openapi-gen && \
-	cd ../gqlgen && go install && cd - && \
+	go install github.com/99designs/gqlgen@v0.17.66 && \
 	make generate_code DATAMODEL_PATH=example/datamodel \
 	CONFIG_FILE=example/nexus-sdk.yaml \
 	CRD_MODULE_PATH="github.com/vmware-tanzu/graph-framework-for-microservices/compiler/example/output/generated/" \

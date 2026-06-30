@@ -53,7 +53,7 @@ go mod edit -replace k8s.io/apiextensions-apiserver=k8s.io/apiextensions-apiserv
 go mod edit -replace k8s.io/apimachinery=k8s.io/apimachinery@$DEFAULT_CLIENT_VERSION_TAG
 go mod edit -replace k8s.io/client-go=k8s.io/client-go@$DEFAULT_CLIENT_VERSION_TAG
 go mod edit -require sigs.k8s.io/yaml@v1.3.0
-go mod edit -replace github.com/vmware-tanzu/graph-framework-for-microservices/gqlgen=${COMPILER_SRC_DIRECTORY}/../gqlgen
+go mod edit -require github.com/99designs/gqlgen@v0.17.66
 go mod edit -replace github.com/vmware-tanzu/graph-framework-for-microservices/kube-openapi=${COMPILER_SRC_DIRECTORY}/../kube-openapi
 go mod edit -replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus=${COMPILER_SRC_DIRECTORY}/../nexus
 go mod edit -replace nexus/base=${COMPILER_SRC_DIRECTORY}/../nexus

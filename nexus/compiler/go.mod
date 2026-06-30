@@ -82,8 +82,6 @@ require (
 
 replace github.com/vmware-tanzu/graph-framework-for-microservices/kube-openapi => ../kube-openapi
 
-replace github.com/vmware-tanzu/graph-framework-for-microservices/gqlgen => ../gqlgen
-
 replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus => ../nexus
 
 replace github.com/vmware-tanzu/graph-framework-for-microservices/common-library => ../common-library

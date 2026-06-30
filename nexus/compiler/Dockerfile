@@ -21,7 +21,7 @@ RUN mkdir -p /home/appuser/.cache/go-build \
 USER root
 RUN chown -R appuser:appuser /go/src/github.com/vmware-tanzu/graph-framework-for-microservices/compiler
 WORKDIR /go/src/github.com/vmware-tanzu/graph-framework-for-microservices/compiler
-RUN mv .git kube-openapi gqlgen nexus install-validator common-library ..
+RUN mv .git kube-openapi nexus install-validator common-library ..
 USER appuser
 
 # Ignore errors if git config fails; for cases where compiler repo is imported as git submodule.
