@@ -33,6 +33,7 @@ func populateValuesForEachNode(nodes []*NodeProperty, linkAPI map[string]string,
 		resNodeProp.PkgName = n.PkgName
 		resNodeProp.NodeName = n.NodeName
 		resNodeProp.SchemaName = n.SchemaName
+		resNodeProp.GoTypeName = gqlGoTypeName(n.SchemaName)
 
 		// populate return values for root of the graph
 		if !n.HasParent && n.IsParentNode {
@@ -115,9 +116,11 @@ func populateValuesForResolver(nodes []*NodeProperty, parentsMap map[string]pars
 			IsSingleton                             bool
 		)
 
-		retType += fmt.Sprintf("ret := &model.%s%s {\n", n.PkgName, n.NodeName)
+		retType += fmt.Sprintf("ret := &model.%s {\n", n.GoTypeName)
 		if n.IsNexusNode || n.IsSingletonNode {
-			retType += fmt.Sprintf("\t%s: &%s,\n", "Id", "dn")
+			// "ID" matches the Go field name that gqlgen's modelgen emits for
+			// the schema field "Id" (which is a CommonInitialism).
+			retType += fmt.Sprintf("\t%s: &%s,\n", "ID", "dn")
 			aliasVal += fmt.Sprintf("%s := v%s.DisplayName()\n", "dn", n.NodeName)
 
 			retType += fmt.Sprintf("\t%s: %s,\n", "ParentLabels", "parentLabels")
@@ -213,6 +216,7 @@ func processNonNexusFields(aliasNameMap map[string]string, node *ast.TypeSpec,
 			fieldProp.FieldType = typeString
 			fieldProp.PkgName = simpleGroupTypeName
 			fieldProp.NodeName = node.Name.String()
+			fieldProp.ParentGoTypeName = nodeProp.GoTypeName
 		}
 
 		if parser.IgnoreField(f) {
@@ -278,6 +282,7 @@ func processNexusFields(pkg parser.Package, aliasNameMap map[string]string, node
 			}
 			fieldProp.PkgName = simpleGroupTypeName
 			fieldProp.NodeName = node.Name.String()
+			fieldProp.ParentGoTypeName = nodeProp.GoTypeName
 		}
 
 		// Except for nexus fields (nexus.Node and nexus.SingletonNode),
@@ -318,13 +323,14 @@ func processNexusFields(pkg parser.Package, aliasNameMap map[string]string, node
 		// nexus link field
 		typeString := ConstructType(aliasNameMap, nf)
 		if parser.IsOnlyLinkField(nf) {
-			schemaTypeName, resolverTypeName := ValidateImportPkg(nodeProp.PkgName, typeString, importMap, pkgs)
+			schemaTypeName, resolverTypeName, goTypeName := ValidateImportPkgWithGoName(nodeProp.PkgName, typeString, importMap, pkgs)
 			// `type:string` annotation used to consider the type as string `nexus-graphql:"type:string"`
 			fieldProp.SchemaFieldName = fmt.Sprintf("%s: %s!", fieldProp.FieldName, schemaTypeName)
 			fieldProp.IsResolver = true
 			fieldProp.IsNexusTypeField = true
 			fieldProp.FieldType = typeString
 			fieldProp.FieldTypePkgPath = resolverTypeName
+			fieldProp.GoFieldTypeName = goTypeName
 			fieldProp.SchemaTypeName = schemaTypeName
 			fieldProp.BaseTypeName = getBaseNodeType(typeString)
 			nodeProp.LinkFields = append(nodeProp.LinkFields, fieldProp)
@@ -332,12 +338,13 @@ func processNexusFields(pkg parser.Package, aliasNameMap map[string]string, node
 
 		// nexus child field
 		if parser.IsOnlyChildField(nf) {
-			schemaTypeName, resolverTypeName := ValidateImportPkg(nodeProp.PkgName, typeString, importMap, pkgs)
+			schemaTypeName, resolverTypeName, goTypeName := ValidateImportPkgWithGoName(nodeProp.PkgName, typeString, importMap, pkgs)
 			fieldProp.SchemaFieldName = fmt.Sprintf("%s: %s!", fieldProp.FieldName, schemaTypeName)
 			fieldProp.SchemaTypeName = schemaTypeName
 			fieldProp.IsNexusTypeField = true
 			fieldProp.FieldType = typeString
 			fieldProp.FieldTypePkgPath = resolverTypeName
+			fieldProp.GoFieldTypeName = goTypeName
 			fieldProp.BaseTypeName = getBaseNodeType(typeString)
 			nodeProp.ChildFields = append(nodeProp.ChildFields, fieldProp)
 		}
@@ -345,12 +352,13 @@ func processNexusFields(pkg parser.Package, aliasNameMap map[string]string, node
 		// nexus children or links field
 		if parser.IsNamedChildOrLink(nf) {
 			fieldProp.IsChildrenOrLinks = true
-			schemaTypeName, resolverTypeName := ValidateImportPkg(nodeProp.PkgName, typeString, importMap, pkgs)
+			schemaTypeName, resolverTypeName, goTypeName := ValidateImportPkgWithGoName(nodeProp.PkgName, typeString, importMap, pkgs)
 			fieldProp.SchemaFieldName = fmt.Sprintf("%s(Id: ID): [%s!]", fieldProp.FieldName, schemaTypeName)
 			fieldProp.IsResolver = true
 			fieldProp.IsNexusTypeField = true
 			fieldProp.FieldType = typeString
 			fieldProp.FieldTypePkgPath = resolverTypeName
+			fieldProp.GoFieldTypeName = goTypeName
 			fieldProp.SchemaTypeName = schemaTypeName
 			fieldProp.BaseTypeName = getBaseNodeType(typeString)
 			if parser.IsOnlyChildrenField(nf) {
@@ -424,6 +432,7 @@ func GenerateGraphqlResolverVars(baseGroupName, crdModulePath string, pkgs parse
 			}
 			setNexusProperties(nodeHelper, node, nodeProp)
 			nodeProp.SchemaName = fmt.Sprintf("%s_%s", pkg.Name, parser.GetTypeName(node))
+			nodeProp.GoTypeName = gqlGoTypeName(nodeProp.SchemaName)
 
 			// Iterate each node's nexus fields and set its properties
 			processNexusFields(pkg, aliasNameMap, node, nodeProp, simpleGroupTypeName, pkgs)

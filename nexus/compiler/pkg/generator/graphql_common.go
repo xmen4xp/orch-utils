@@ -12,13 +12,14 @@ import (
 
 	"k8s.io/utils/strings/slices"
 
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-
+	gqlgenTemplates "github.com/99designs/gqlgen/codegen/templates"
 	log "github.com/sirupsen/logrus"
+
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/parser"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/util"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/nexus/nexus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -59,32 +60,49 @@ type FieldProperty struct {
 	IsSingleton             bool
 	PkgName                 string
 	NodeName                string
-	FieldName               string
-	FieldType               string
-	FieldTypePkgPath        string
-	ModelType               string
-	SchemaFieldName         string
-	SchemaTypeName          string
-	BaseTypeName            string
-	Alias                   string
-	ReturnType              string
-	FieldCount              int
-	CRDName                 string
-	ChainAPI                string
-	LinkAPI                 string
+	// ParentGoTypeName is the gqlgen-normalized Go type name of this field's
+	// owning node (= gqlGoTypeName(parentSchemaName)). Templates must use
+	// model.<ParentGoTypeName> when emitting references to the parent node's
+	// model struct, rather than concatenating PkgName + NodeName.
+	ParentGoTypeName string
+	FieldName        string
+	FieldType        string
+	FieldTypePkgPath string
+	// GoFieldTypeName is the gqlgen-normalized Go type name for this field's
+	// target type. Templates should use model.<GoFieldTypeName> rather than
+	// model.<FieldTypePkgPath>; FieldTypePkgPath remains the legacy compiler-
+	// internal identifier (used as retMap/linkAPI key) and may diverge from
+	// what gqlgen's modelgen actually emits.
+	GoFieldTypeName string
+	ModelType       string
+	SchemaFieldName string
+	SchemaTypeName  string
+	BaseTypeName    string
+	Alias           string
+	ReturnType      string
+	FieldCount      int
+	CRDName         string
+	ChainAPI        string
+	LinkAPI         string
 }
 
 type NodeProperty struct {
-	IsParentNode           bool
-	HasParent              bool
-	IsSingletonNode        bool
-	IsNexusNode            bool
-	BaseImportPath         string
-	CrdName                string
-	ResolverCount          int
-	PkgName                string
-	NodeName               string
-	SchemaName             string
+	IsParentNode    bool
+	HasParent       bool
+	IsSingletonNode bool
+	IsNexusNode     bool
+	BaseImportPath  string
+	CrdName         string
+	ResolverCount   int
+	PkgName         string
+	NodeName        string
+	SchemaName      string
+	// GoTypeName is the Go type name that gqlgen's modelgen emits for this
+	// node's schema type (= gqlGoTypeName(SchemaName)). Resolver templates
+	// must reference model.<GoTypeName> rather than concatenating PkgName +
+	// NodeName, which can diverge from gqlgen's normalization for names
+	// containing trailing all-caps tokens (e.g. RTVGPU -> Rtvgpu).
+	GoTypeName             string
 	Alias                  string
 	ReturnType             string
 	GroupResourceNameTitle string
@@ -145,29 +163,61 @@ func GetPkg(pkgs parser.Packages, pkgPath string) parser.Package {
 	return pkgs[importPath]
 }
 
+// gqlGoTypeName returns the Go type name that gqlgen's modelgen will emit for
+// a given GraphQL schema type name. It is the single source of truth for
+// translating schema names to Go names; resolver code emitted by the compiler
+// must reference model types via this normalization so the symbols line up
+// with the structs gqlgen generates in models_gen.go.
+func gqlGoTypeName(schemaName string) string {
+	return gqlgenTemplates.ToGo(schemaName)
+}
+
 func genSchemaResolverName(fn1, fn2 string) (string, string) {
 	return fmt.Sprintf("%s_%s", strings.ToLower(fn1), fn2), cases.Title(language.Und, cases.NoLower).String(fn1) + cases.Title(language.Und, cases.NoLower).String(fn2)
 }
 
+// genSchemaResolverNames is like genSchemaResolverName but additionally returns
+// the gqlgen-normalized Go type name (matching what gqlgen's modelgen will emit
+// in models_gen.go). Callers that need to reference the model type from
+// generated resolver code should use the third return value; the second return
+// value remains the legacy compiler-internal resolver type name used as a key
+// in retMap/linkAPI maps.
+func genSchemaResolverNames(fn1, fn2 string) (schemaName, resolverTypeName, goTypeName string) {
+	schemaName, resolverTypeName = genSchemaResolverName(fn1, fn2)
+	goTypeName = gqlGoTypeName(schemaName)
+	return
+}
+
+// ValidateImportPkg returns the GraphQL schema type name and the legacy
+// compiler-internal resolver type name used as a key in retMap/linkAPI maps.
 func ValidateImportPkg(pkgName, typeString string, importMap map[string]string, pkgs parser.Packages) (string, string) {
+	schemaName, resolverTypeName, _ := ValidateImportPkgWithGoName(pkgName, typeString, importMap, pkgs)
+	return schemaName, resolverTypeName
+}
+
+// ValidateImportPkgWithGoName extends ValidateImportPkg with a third return
+// value: the gqlgen-normalized Go type name for the field's target type.
+// Resolver template references like model.<X> must use this third value rather
+// than the legacy resolverTypeName so symbols match gqlgen's modelgen output.
+func ValidateImportPkgWithGoName(pkgName, typeString string, importMap map[string]string, pkgs parser.Packages) (string, string, string) {
 	typeWithoutPointers := strings.ReplaceAll(typeString, "*", "")
 	if strings.Contains(typeWithoutPointers, ".") {
 		part := strings.Split(typeWithoutPointers, ".")
 		if val, ok := importMap[part[0]]; ok {
-			pkgName := getPkgName(pkgs, val)
-			repName := strings.ReplaceAll(pkgName, "-", "")
-			return genSchemaResolverName(repName, part[1])
+			resolvedPkgName := getPkgName(pkgs, val)
+			repName := strings.ReplaceAll(resolvedPkgName, "-", "")
+			return genSchemaResolverNames(repName, part[1])
 		}
 		for _, v := range importMap {
-			pkgName := getPkgName(pkgs, v)
-			if pkgName == part[0] {
-				repName := strings.ReplaceAll(pkgName, "-", "")
-				return genSchemaResolverName(repName, part[1])
+			resolvedPkgName := getPkgName(pkgs, v)
+			if resolvedPkgName == part[0] {
+				repName := strings.ReplaceAll(resolvedPkgName, "-", "")
+				return genSchemaResolverNames(repName, part[1])
 			}
 		}
-		return genSchemaResolverName(pkgName, part[1])
+		return genSchemaResolverNames(pkgName, part[1])
 	}
-	return genSchemaResolverName(pkgName, typeWithoutPointers)
+	return genSchemaResolverNames(pkgName, typeWithoutPointers)
 }
 
 func GetNexusSchemaFieldName(GraphQlSpec nexus.GraphQLSpec) string {

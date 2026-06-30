@@ -70,7 +70,7 @@ func getK8sAPIEndpointConfig() *rest.Config {
 // Singleton Resolver for Parent Node
 // PKG: {{$node.PkgName}}, NODE: {{$node.PkgName}}
 //////////////////////////////////////
-func getRootResolver() (*model.{{$node.PkgName}}{{$node.NodeName}}, error) {
+func getRootResolver() (*model.{{$node.GoTypeName}}, error) {
 	if nc == nil {
 		k8sApiConfig := getK8sAPIEndpointConfig()
 		nexusClient, err := nexus_client.NewForConfig(k8sApiConfig)
@@ -97,7 +97,7 @@ func getRootResolver() (*model.{{$node.PkgName}}{{$node.NodeName}}, error) {
 // Non Singleton Resolver for Parent Node
 // PKG: {{$node.PkgName}}, NODE: {{$node.PkgName}}
 //////////////////////////////////////
-func getRootResolver(id *string) ([]*model.{{$node.PkgName}}{{$node.NodeName}}, error) {
+func getRootResolver(id *string) ([]*model.{{$node.GoTypeName}}, error) {
 	if nc == nil {
 		k8sApiConfig := getK8sAPIEndpointConfig()
 		nexusClient, err := nexus_client.NewForConfig(k8sApiConfig)
@@ -109,7 +109,7 @@ func getRootResolver(id *string) ([]*model.{{$node.PkgName}}{{$node.NodeName}}, 
 		log.Debugf("Subscribed to all nodes in datamodel")
 	}
 
-	var v{{$node.NodeName}}List []*model.{{$node.PkgName}}{{$node.NodeName}}
+	var v{{$node.NodeName}}List []*model.{{$node.GoTypeName}}
 	if id != nil && *id != "" {
 		log.Debugf("[getRootResolver]Id: %q", *id)
 		v{{$node.NodeName}}, err := nc.Get{{$node.PkgName}}{{$node.NodeName}}(context.TODO(), *id)
@@ -148,7 +148,7 @@ func getRootResolver(id *string) ([]*model.{{$node.PkgName}}{{$node.NodeName}}, 
 {{ end }}{{end}}
 {{- range $key, $query := $node.CustomQueries }}
 // Custom query
-func get{{$node.PkgName}}{{$node.NodeName}}{{$query.Name}}Resolver(obj *model.{{$node.PkgName}}{{$node.NodeName}}, {{ range $key, $arg := $query.Args }} {{- if $arg.AliasType }} {{$arg.Name}} *model.{{$arg.Type}}, {{- else }} {{$arg.Name}} *{{$arg.Type}}, {{- end}}{{ end }}) ({{- if eq $query.ApiType 0 }}*model.NexusGraphqlResponse{{- else if eq $query.ApiType 1 }}*model.TimeSeriesData {{- end}}, error) {
+func get{{$node.PkgName}}{{$node.NodeName}}{{$query.Name}}Resolver(obj *model.{{$node.GoTypeName}}, {{ range $key, $arg := $query.Args }} {{- if $arg.AliasType }} {{$arg.Name}} *model.{{$arg.Type}}, {{- else }} {{$arg.Name}} *{{$arg.Type}}, {{- end}}{{ end }}) ({{- if eq $query.ApiType 0 }}*model.NexusGraphqlResponse{{- else if eq $query.ApiType 1 }}*model.TimeSeriesData {{- end}}, error) {
 	parentLabels := make(map[string]string)
 	if obj != nil {
 		for k, v := range obj.ParentLabels {
@@ -212,12 +212,12 @@ func get{{$node.PkgName}}{{$node.NodeName}}{{$query.Name}}Resolver(obj *model.{{
 // CHILD RESOLVER (Singleton)
 // FieldName: {{$child.FieldName}} Node: {{$child.NodeName}} PKG: {{$child.PkgName}}
 //////////////////////////////////////
-func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.PkgName}}{{$child.NodeName}}) (*model.{{$child.FieldTypePkgPath}}, error) {
+func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}) (*model.{{$child.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Parent Object %+v", obj)
 	v{{$child.BaseTypeName}}, err := {{$child.ChainAPI}}.Get{{$child.FieldName}}(context.TODO())
 	if err != nil {
 	    log.Errorf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Error getting {{$child.NodeName}} node %s", err)
-        return &model.{{$child.FieldTypePkgPath}}{}, nil
+        return &model.{{$child.GoFieldTypeName}}{}, nil
     }
 	{{ $child.Alias }}
     for k, v := range obj.ParentLabels {
@@ -233,14 +233,14 @@ func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *m
 // CHILD RESOLVER (Non Singleton)
 // FieldName: {{$child.FieldName}} Node: {{$child.NodeName}} PKG: {{$child.PkgName}}
 //////////////////////////////////////
-func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.PkgName}}{{$child.NodeName}}, id *string) (*model.{{$child.FieldTypePkgPath}}, error) {
+func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}, id *string) (*model.{{$child.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Parent Object %+v", obj)
 	if id != nil && *id != "" {
 	     log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Id %q", *id)
 		v{{$child.BaseTypeName}}, err := {{$child.ChainAPI}}.Get{{$child.FieldName}}(context.TODO(), *id)
 		if err != nil {
 			log.Errorf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Error getting {{$child.FieldName}} node %q : %s", *id, err)
-			return &model.{{$child.FieldTypePkgPath}}{}, nil
+			return &model.{{$child.GoFieldTypeName}}{}, nil
 		}
 		{{ $child.Alias }}
 		for k, v := range obj.ParentLabels {
@@ -255,12 +255,12 @@ func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *m
 	v{{$child.BaseTypeName}}Parent, err := {{$child.LinkAPI}}
 	if err != nil {
 	    log.Errorf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Failed to get parent node %s", err)
-        return &model.{{$child.FieldTypePkgPath}}{}, nil
+        return &model.{{$child.GoFieldTypeName}}{}, nil
     }
 	v{{$child.BaseTypeName}}, err := v{{$child.BaseTypeName}}Parent.Get{{$child.FieldName}}(context.TODO())
 	if err != nil {
 	    log.Errorf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Error getting {{$child.FieldName}} node %s", err)
-        return &model.{{$child.FieldTypePkgPath}}{}, nil
+        return &model.{{$child.GoFieldTypeName}}{}, nil
     }
 	{{ $child.Alias }}
     for k, v := range obj.ParentLabels {
@@ -278,17 +278,17 @@ func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *m
 // LINK RESOLVER
 // FieldName: {{$link.FieldName}} Node: {{$link.NodeName}} PKG: {{$link.PkgName}}
 //////////////////////////////////////
-func get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver(obj *model.{{$link.PkgName}}{{$link.NodeName}}) (*model.{{$link.FieldTypePkgPath}}, error) {
+func get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver(obj *model.{{$link.ParentGoTypeName}}) (*model.{{$link.GoFieldTypeName}}, error) {
     log.Debugf("[get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver]Parent Object %+v", obj)
 	v{{$link.BaseTypeName}}Parent, err := {{$link.LinkAPI}}
 	if err != nil {
 	    log.Errorf("[get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver]Error getting parent node %s", err)
-        return &model.{{$link.FieldTypePkgPath}}{}, nil
+        return &model.{{$link.GoFieldTypeName}}{}, nil
     }
 	v{{$link.BaseTypeName}}, err := v{{$link.BaseTypeName}}Parent.Get{{$link.FieldName}}(context.TODO())
 	if err != nil {
 		log.Errorf("[get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver]Error getting {{$link.FieldName}} object %s", err)
-        return &model.{{$link.FieldTypePkgPath}}{}, nil
+        return &model.{{$link.GoFieldTypeName}}{}, nil
     }
 	{{ $link.Alias }}
     for k, v := range obj.ParentLabels {
@@ -305,9 +305,9 @@ func get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver(obj *mode
 // CHILDREN RESOLVER
 // FieldName: {{$children.FieldName}} Node: {{$children.NodeName}} PKG: {{$children.PkgName}}
 //////////////////////////////////////
-func get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver(obj *model.{{$children.PkgName}}{{$children.NodeName}}, id *string) ([]*model.{{$children.FieldTypePkgPath}}, error) {
+func get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver(obj *model.{{$children.ParentGoTypeName}}, id *string) ([]*model.{{$children.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver]Parent Object %+v", obj)
-	var v{{$children.FieldTypePkgPath}}List []*model.{{$children.FieldTypePkgPath}}
+	var v{{$children.FieldTypePkgPath}}List []*model.{{$children.GoFieldTypeName}}
 	if id != nil && *id != "" {
 		log.Debugf("[get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver]Id %q", *id)
 		{{ if $children.IsSingleton }}v{{$children.BaseTypeName}}, err := {{$children.ChainAPI}}.Get{{$children.FieldName}}(context.TODO()){{ else }}v{{$children.BaseTypeName}}, err := {{$children.ChainAPI}}.Get{{$children.FieldName}}(context.TODO(), *id){{ end }}
@@ -363,9 +363,9 @@ func get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolv
 // LINKS RESOLVER
 // FieldName: {{$links.FieldName}} Node: {{$links.NodeName}} PKG: {{$links.PkgName}}
 //////////////////////////////////////
-func get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver(obj *model.{{$links.PkgName}}{{$links.NodeName}}, id *string) ([]*model.{{$links.FieldTypePkgPath}}, error) {
+func get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver(obj *model.{{$links.ParentGoTypeName}}, id *string) ([]*model.{{$links.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver]Parent Object %+v", obj)
-	var v{{$links.FieldTypePkgPath}}List []*model.{{$links.FieldTypePkgPath}}
+	var v{{$links.FieldTypePkgPath}}List []*model.{{$links.GoFieldTypeName}}
 	if id != nil && *id != "" {
 		log.Debugf("[get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver]Id %q", *id)
 		v{{$links.BaseTypeName}}Parent, err := {{$links.LinkAPI}}

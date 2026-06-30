@@ -7,6 +7,7 @@ module github.com/vmware-tanzu/graph-framework-for-microservices/compiler
 go 1.25.4
 
 require (
+	github.com/99designs/gqlgen v0.17.66
 	github.com/fatih/structtag v1.2.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.2
