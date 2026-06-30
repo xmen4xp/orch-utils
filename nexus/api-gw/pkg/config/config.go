@@ -25,6 +25,10 @@ type Config struct {
 	CustomNotFoundPage      string            `json:"customNotFoundPage" yaml:"customNotFoundPage,omitempty"`
 	ProxyInsecureSkipVerify bool              `json:"proxyInsecureSkipVerify" yaml:"proxyInsecureSkipVerify,omitempty"`
 	HeaderAliases           map[string]string `json:"headerAliases" yaml:"headerAliases,omitempty"`
+	// GraphQLBackend is the cluster-internal base URL of the nexus-graphql
+	// service (e.g. http://<release>-nexus-graphql.<ns>.svc.cluster.local:80).
+	// When set, requests to /apis/graphql/v1/* are reverse-proxied to it.
+	GraphQLBackend string `json:"graphqlBackend" yaml:"graphqlBackend,omitempty"`
 }
 
 type ServerConfig struct {

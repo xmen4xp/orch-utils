@@ -21,6 +21,12 @@ resolver:
   dir: graph
   package: graph
 
+# Skip gqlgen's internal `go mod tidy`. The vendored gqlgen fork ships test
+# files that import non-existent packages (plugin/modelgen/out,
+# plugin/federation/testdata/...), so a strict tidy fails. The compiler Makefile
+# runs `go mod tidy -e` (tolerant) after generation instead.
+skip_mod_tidy: true
+
 models:
   ID:
     model:

@@ -8,7 +8,15 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   api-gw-config: |
-    {{- toYaml .Values.config | nindent 4 }}
+    {{- $cfg := omit .Values.config "graphql" }}
+    {{- $gql := .Values.config.graphql | default dict }}
+    {{- if $gql.enabled }}
+    {{- $svc := $gql.service | default (printf "%s-nexus-graphql" .Release.Name) }}
+    {{- $ns := $gql.namespace | default .Release.Namespace }}
+    {{- $port := $gql.port | default 80 }}
+    {{- $_ := set $cfg "graphqlBackend" (printf "http://%s.%s.svc.cluster.local:%v" $svc $ns $port) }}
+    {{- end }}
+    {{- toYaml $cfg | nindent 4 }}
 ---
 {{- if .Values.nexusK8sProxyKubeconfig.create }}
 apiVersion: v1

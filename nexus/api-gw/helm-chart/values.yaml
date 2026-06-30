@@ -29,6 +29,16 @@ config:
   headerAliases:
     "orgs.Org": "x-org-id"
     "projects.Project": "x-project-id"
+  # GraphQL reverse-proxy (/apis/graphql/v1/* -> datamodel GraphQL server).
+  # When enabled, the chart derives the backend URL from the release name and
+  # namespace (service: <Release.Name>-nexus-graphql), so nothing is hardcoded.
+  # The rendered api-gw config gets a `graphqlBackend` key built from these.
+  graphql:
+    enabled: false
+    # Optional overrides (defaults shown). Leave blank to use the convention.
+    service: ""    # default: <Release.Name>-nexus-graphql
+    namespace: ""  # default: the api-gw release namespace
+    port: 80
 
 nexusK8sProxyKubeconfig:
   create: true

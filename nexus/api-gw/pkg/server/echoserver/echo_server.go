@@ -659,6 +659,11 @@ func NewEchoServer(conf *config.Config, client KubernetesClient, nc *nexusClient
 		k8sProxy = kubeSetupProxy(e)
 	}
 
+	// Setup proxy to the datamodel GraphQL server (no-op if unconfigured).
+	// Registered after the kube proxy so the more-specific /apis/graphql/v1/*
+	// route takes precedence over the /apis/* catch-all.
+	setupGraphQLProxy(e, conf)
+
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 		Format: "ACCESS[${time_rfc3339}] method=${method}, uri=${uri}, status=${status}\n",
 	}))

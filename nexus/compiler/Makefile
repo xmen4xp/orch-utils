@@ -42,6 +42,12 @@ PREPARSER_MODPATH          ?= model
 NEXUS_KUBEOPENAPI_VERSION ?= 7416bd4754d3c0dd8b3fa37fff53d36594f11607
 NEXUS_GRAPHQLGEN_VERSION ?= 32f028bce22efeb70b47a640195bd969dbb337f0
 
+# When true, generate_code also runs gqlgen codegen and compiles the
+# standalone GraphQL server binary (_generated/nexus-gql/server). Datamodels
+# that want a GraphQL API set this to true; it defaults to false so existing
+# datamodel builds remain unaffected.
+GENERATE_GRAPHQL_SERVER ?= false
+
 INCLUDE_LOCAL_CHANGES ?= false
 
 ifeq ($(COMPILER_SRC_DIRECTORY),"")
@@ -275,18 +281,26 @@ generate_code:
 	else \
 		cd _generated && goimports -w .; \
 	fi
-	# Disabling GRAPHQL generation...
-	# @echo "Nexus Compiler: Generating GRAPHQL PKG"
-	# cd _generated/nexus-gql && gqlgen generate
-	# @echo "Nexus Compiler: GRAPHQL Generating completed"
-	# cp -rf _generated/* ${GOPATH}/src/nexustempmodule/
-	# cd ${GOPATH}/src/nexustempmodule && cd nexus-gql && go mod init && \
-	# go mod edit -replace nexustempmodule=${GOPATH}/src/nexustempmodule && \
-	# ${COMPILER_SRC_DIRECTORY}/scripts/pin_graphql_build_version.sh ${COMPILER_SRC_DIRECTORY} && \
-	# go mod edit -go=1.23.2 && \
-	# go mod tidy -e && \
-	# GOARCH=amd64 GOOS=linux go build -ldflags="-w -s" server.go
-	# cp -r ${GOPATH}/src/nexustempmodule/nexus-gql/* _generated/nexus-gql/
+	if [ "${GENERATE_GRAPHQL_SERVER}" = "true" ]; then \
+		echo "Nexus Compiler: Building GraphQL server binary"; \
+		rm -rf ${GOPATH}/src/nexustempmodule && mkdir -p ${GOPATH}/src/nexustempmodule; \
+		cp -rf _generated/* ${GOPATH}/src/nexustempmodule/; \
+		cd ${GOPATH}/src/nexustempmodule/nexus-gql && \
+			go mod init nexustempmodule/nexus-gql && \
+			go mod edit -replace nexustempmodule=${GOPATH}/src/nexustempmodule && \
+			${COMPILER_SRC_DIRECTORY}/scripts/pin_graphql_build_version.sh ${COMPILER_SRC_DIRECTORY} && \
+			go mod edit -go=1.25.4 && \
+			go mod tidy -e && \
+			echo "Nexus Compiler: Generating GraphQL PKG" && \
+			gqlgen generate && \
+			echo "Nexus Compiler: GraphQL generation completed" && \
+			go mod tidy -e && \
+			GOARCH=amd64 GOOS=linux go build -ldflags="-w -s" -o server server.go; \
+		cp -r ${GOPATH}/src/nexustempmodule/nexus-gql/* _generated/nexus-gql/; \
+		echo "Nexus Compiler: GraphQL server build completed"; \
+	else \
+		echo "Nexus Compiler: Skipping GraphQL server generation (set GENERATE_GRAPHQL_SERVER=true to enable)"; \
+	fi
 	@echo "Updating module name"
 	./scripts/replace_mod_path.sh
 	find . -name "*.bak" -type f -delete
