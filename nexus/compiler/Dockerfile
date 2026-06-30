@@ -14,6 +14,7 @@ ADD --chown=appuser:appuser compiler.tar /go/src/github.com/vmware-tanzu/graph-f
 
 COPY --chown=appuser:appuser cmd/nexus-openapi-gen /go/bin/nexus-openapi-gen
 COPY --chown=appuser:appuser cmd/gqlgen /go/bin/gqlgen
+COPY --chown=appuser:appuser cmd/wire-graphql-resolvers-bin /go/bin/wire-graphql-resolvers
 
 RUN mkdir -p /home/appuser/.cache/go-build \
     && chown -R appuser:appuser /home/appuser/.cache

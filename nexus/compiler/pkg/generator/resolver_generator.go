@@ -217,6 +217,7 @@ func processNonNexusFields(aliasNameMap map[string]string, node *ast.TypeSpec,
 			fieldProp.PkgName = simpleGroupTypeName
 			fieldProp.NodeName = node.Name.String()
 			fieldProp.ParentGoTypeName = nodeProp.GoTypeName
+			fieldProp.GoFieldName = gqlGoTypeName(fieldProp.FieldName)
 		}
 
 		if parser.IgnoreField(f) {
@@ -283,6 +284,7 @@ func processNexusFields(pkg parser.Package, aliasNameMap map[string]string, node
 			fieldProp.PkgName = simpleGroupTypeName
 			fieldProp.NodeName = node.Name.String()
 			fieldProp.ParentGoTypeName = nodeProp.GoTypeName
+			fieldProp.GoFieldName = gqlGoTypeName(fieldProp.FieldName)
 		}
 
 		// Except for nexus fields (nexus.Node and nexus.SingletonNode),

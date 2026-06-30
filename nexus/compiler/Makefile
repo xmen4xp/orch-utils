@@ -118,7 +118,7 @@ docker.builder.image.exists:
   (echo "Image  ${BUILDER_DOCKER_TAG} does not exist. Run 'make compiler.builder' to generate it" && false)
 
 .PHONY: docker
-docker: docker.builder.image.exists init_submodules build_openapigen_in_container build_gqlgen_in_container build_install_validator_in_container
+docker: docker.builder.image.exists init_submodules build_openapigen_in_container build_gqlgen_in_container build_wire_graphql_resolvers_in_container build_install_validator_in_container
 	tar -cf compiler.tar --exclude=compiler.tar .
 	cd .. && tar -rf compiler/compiler.tar ../.git
 	tar -rf compiler.tar ../kube-openapi ../nexus ../install-validator ../common-library
@@ -171,6 +171,12 @@ build_gqlgen_in_container:
 
 build_gqlgen:
 	GOBIN=${PKG_NAME}/cmd go install github.com/99designs/gqlgen@v0.17.66
+
+build_wire_graphql_resolvers_in_container:
+	$(call run_in_container,make build_wire_graphql_resolvers)
+
+build_wire_graphql_resolvers:
+	go build -o ${PKG_NAME}/cmd/wire-graphql-resolvers-bin ./cmd/wire-graphql-resolvers
 
 build_install_validator_in_container:
 	$(call run_in_container,make build_install_validator)
@@ -294,10 +300,13 @@ generate_code:
 			echo "Nexus Compiler: Generating GraphQL PKG" && \
 			gqlgen generate && \
 			echo "Nexus Compiler: GraphQL generation completed" && \
+			echo "Nexus Compiler: Wiring GraphQL resolver stubs" && \
+			wire-graphql-resolvers graph/schema.resolvers.go && \
+			goimports -w graph/schema.resolvers.go && \
 			go mod tidy -e && \
-			GOARCH=amd64 GOOS=linux go build -ldflags="-w -s" -o server server.go; \
-		cp -r ${GOPATH}/src/nexustempmodule/nexus-gql/* _generated/nexus-gql/; \
-		echo "Nexus Compiler: GraphQL server build completed"; \
+			GOARCH=amd64 GOOS=linux go build -ldflags="-w -s" -o server server.go && \
+			cp -r ${GOPATH}/src/nexustempmodule/nexus-gql/* ${COMPILER_SRC_DIRECTORY}/_generated/nexus-gql/ && \
+			echo "Nexus Compiler: GraphQL server build completed"; \
 	else \
 		echo "Nexus Compiler: Skipping GraphQL server generation (set GENERATE_GRAPHQL_SERVER=true to enable)"; \
 	fi

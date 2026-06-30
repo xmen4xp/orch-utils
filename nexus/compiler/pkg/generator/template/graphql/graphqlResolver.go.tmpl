@@ -212,7 +212,7 @@ func get{{$node.PkgName}}{{$node.NodeName}}{{$query.Name}}Resolver(obj *model.{{
 // CHILD RESOLVER (Singleton)
 // FieldName: {{$child.FieldName}} Node: {{$child.NodeName}} PKG: {{$child.PkgName}}
 //////////////////////////////////////
-func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}) (*model.{{$child.GoFieldTypeName}}, error) {
+func get{{$child.ParentGoTypeName}}{{$child.GoFieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}) (*model.{{$child.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Parent Object %+v", obj)
 	v{{$child.BaseTypeName}}, err := {{$child.ChainAPI}}.Get{{$child.FieldName}}(context.TODO())
 	if err != nil {
@@ -233,7 +233,7 @@ func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *m
 // CHILD RESOLVER (Non Singleton)
 // FieldName: {{$child.FieldName}} Node: {{$child.NodeName}} PKG: {{$child.PkgName}}
 //////////////////////////////////////
-func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}, id *string) (*model.{{$child.GoFieldTypeName}}, error) {
+func get{{$child.ParentGoTypeName}}{{$child.GoFieldName}}Resolver(obj *model.{{$child.ParentGoTypeName}}, id *string) (*model.{{$child.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Parent Object %+v", obj)
 	if id != nil && *id != "" {
 	     log.Debugf("[get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver]Id %q", *id)
@@ -278,7 +278,7 @@ func get{{$child.PkgName}}{{$child.NodeName}}{{$child.FieldName}}Resolver(obj *m
 // LINK RESOLVER
 // FieldName: {{$link.FieldName}} Node: {{$link.NodeName}} PKG: {{$link.PkgName}}
 //////////////////////////////////////
-func get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver(obj *model.{{$link.ParentGoTypeName}}) (*model.{{$link.GoFieldTypeName}}, error) {
+func get{{$link.ParentGoTypeName}}{{$link.GoFieldName}}Resolver(obj *model.{{$link.ParentGoTypeName}}) (*model.{{$link.GoFieldTypeName}}, error) {
     log.Debugf("[get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver]Parent Object %+v", obj)
 	v{{$link.BaseTypeName}}Parent, err := {{$link.LinkAPI}}
 	if err != nil {
@@ -305,7 +305,7 @@ func get{{$link.PkgName}}{{$link.NodeName}}{{$link.FieldName}}Resolver(obj *mode
 // CHILDREN RESOLVER
 // FieldName: {{$children.FieldName}} Node: {{$children.NodeName}} PKG: {{$children.PkgName}}
 //////////////////////////////////////
-func get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver(obj *model.{{$children.ParentGoTypeName}}, id *string) ([]*model.{{$children.GoFieldTypeName}}, error) {
+func get{{$children.ParentGoTypeName}}{{$children.GoFieldName}}Resolver(obj *model.{{$children.ParentGoTypeName}}, id *string) ([]*model.{{$children.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolver]Parent Object %+v", obj)
 	var v{{$children.FieldTypePkgPath}}List []*model.{{$children.GoFieldTypeName}}
 	if id != nil && *id != "" {
@@ -363,7 +363,7 @@ func get{{$children.PkgName}}{{$children.NodeName}}{{$children.FieldName}}Resolv
 // LINKS RESOLVER
 // FieldName: {{$links.FieldName}} Node: {{$links.NodeName}} PKG: {{$links.PkgName}}
 //////////////////////////////////////
-func get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver(obj *model.{{$links.ParentGoTypeName}}, id *string) ([]*model.{{$links.GoFieldTypeName}}, error) {
+func get{{$links.ParentGoTypeName}}{{$links.GoFieldName}}Resolver(obj *model.{{$links.ParentGoTypeName}}, id *string) ([]*model.{{$links.GoFieldTypeName}}, error) {
 	log.Debugf("[get{{$links.PkgName}}{{$links.NodeName}}{{$links.FieldName}}Resolver]Parent Object %+v", obj)
 	var v{{$links.FieldTypePkgPath}}List []*model.{{$links.GoFieldTypeName}}
 	if id != nil && *id != "" {

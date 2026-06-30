@@ -74,6 +74,11 @@ type FieldProperty struct {
 	// internal identifier (used as retMap/linkAPI key) and may diverge from
 	// what gqlgen's modelgen actually emits.
 	GoFieldTypeName string
+	// GoFieldName is the gqlgen-normalized Go identifier for this field's
+	// name (= gqlGoTypeName(FieldName)). Templates must use this when
+	// composing helper function names so they match the resolver method
+	// names gqlgen emits into schema.resolvers.go.
+	GoFieldName     string
 	ModelType       string
 	SchemaFieldName string
 	SchemaTypeName  string
