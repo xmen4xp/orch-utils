@@ -18,6 +18,7 @@ import (
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -141,24 +142,44 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		return err
 	}
 
-	labels := obj.GetLabels()
-
-	// Delete all children
-	listOpts := metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", crdType, labels["nexus/display_name"])}
-	for k := range crdInfo.Children {
-		err = DeleteChildren(k, listOpts)
+	if len(crdInfo.Children) > 0 {
+		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
 		if err != nil {
 			return err
+		}
+		// Delete all children
+		for k := range crdInfo.Children {
+			if err = DeleteChildren(k, listOpts); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Delete object
-	err = Client.Resource(gvr).Delete(context.TODO(), hashedName, metav1.DeleteOptions{})
-	if err != nil {
+	if err = Client.Resource(gvr).Delete(context.TODO(), hashedName, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func cascadeListOptions(objectLabels map[string]string, crdType string, parentHierarchy []string) (metav1.ListOptions, error) {
+	selectorLabels := k8slabels.Set{}
+	for _, parent := range parentHierarchy {
+		value := objectLabels[parent]
+		if value == "" {
+			return metav1.ListOptions{}, fmt.Errorf("cannot safely delete children: missing hierarchy label %q", parent)
+		}
+		selectorLabels[parent] = value
+	}
+
+	displayName := objectLabels["nexus/display_name"]
+	if displayName == "" {
+		return metav1.ListOptions{}, fmt.Errorf("cannot safely delete children: missing hierarchy label %q", "nexus/display_name")
+	}
+	selectorLabels[crdType] = displayName
+
+	return metav1.ListOptions{LabelSelector: k8slabels.SelectorFromSet(selectorLabels).String()}, nil
 }
 
 func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
