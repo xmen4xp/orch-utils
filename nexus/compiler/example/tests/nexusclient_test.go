@@ -811,6 +811,29 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(setState.Temperature).To(Equal(2222))
 		})
 
+		It("should persist SetState through a fresh GetGnsByName read", func() {
+			gnsDef := &gnsv1.Gns{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "gnsName",
+				},
+			}
+			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = gns.SetState(context.TODO(), &gnsv1.GnsState{
+				Temperature: 4242,
+				Working:     true,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Re-fetch by hashed name — not GetState on the original handle.
+			// FakeClient Create uses baseClient; SetStatus must write the same store.
+			refetched, err := fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(refetched.Status.State.Working).To(BeTrue())
+			Expect(refetched.Status.State.Temperature).To(Equal(4242))
+		})
+
 		It("should clear object state", func() {
 			gnsDef := &gnsv1.Gns{
 				ObjectMeta: metav1.ObjectMeta{

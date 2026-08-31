@@ -74,6 +74,10 @@ var informerResyncPeriod time.Duration = 36000
 type Clientset struct {
 	baseClient                   baseClientset.Interface
 	DynamicClient                dynamic.Interface
+	// unifiedFakeStore is set by NewFakeClient. Create uses baseClient while
+	// SetStatus uses DynamicClient in production; the fake stores are separate
+	// unless status updates go through the typed client's status subresource.
+	unifiedFakeStore             bool
 	rootTsmV1                    *RootTsmV1
 	configTsmV1                  *ConfigTsmV1
 	gnsTsmV1                     *GnsTsmV1
@@ -351,6 +355,7 @@ func NewFakeClient() *Clientset {
 	scheme := runtime.NewScheme()
 	client.baseClient = fakeBaseClienset.NewSimpleClientset()
 	client.DynamicClient = fakeDynamicClientset.NewSimpleDynamicClient(scheme)
+	client.unifiedFakeStore = true
 	client.rootTsmV1 = newRootTsmV1(client)
 	client.configTsmV1 = newConfigTsmV1(client)
 	client.gnsTsmV1 = newGnsTsmV1(client)
@@ -6256,7 +6261,23 @@ func (group *GnsTsmV1) SetGnsStateByName(ctx context.Context,
 	newCtx := context.TODO()
 	retryCount := 0
 	for {
-		_, err := group.client.DynamicClient.Resource(gvr).UpdateStatus(ctx, &unstructured.Unstructured{Object: mapInterface}, metav1.UpdateOptions{})
+		var err error
+		if group.client.unifiedFakeStore {
+			patchBody, patchErr := json.Marshal(map[string]interface{}{
+				"status": map[string]interface{}{
+					"state": status,
+				},
+			})
+			if patchErr != nil {
+				return nil, patchErr
+			}
+			_, err = group.client.baseClient.
+				GnsTsmV1().
+				Gnses().
+				Patch(ctx, hashedName, types.MergePatchType, patchBody, metav1.PatchOptions{}, "status")
+		} else {
+			_, err = group.client.DynamicClient.Resource(gvr).UpdateStatus(ctx, &unstructured.Unstructured{Object: mapInterface}, metav1.UpdateOptions{})
+		}
 		if err == nil {
 			logger.Debugf("[SetGnsStateByName] Updating status for Gns node %s successful", hashedName)
 			break
@@ -6278,6 +6299,8 @@ func (group *GnsTsmV1) SetGnsStateByName(ctx context.Context,
 		}
 		time.Sleep(time.Second)
 	}
+
+	objToUpdate.Status.State = *status
 
 	/*
 		if s, ok := subscriptionMap.Load("gnses.gns.tsm.tanzu.vmware.com"); ok {
@@ -14483,7 +14506,23 @@ func (group *PolicypkgTsmV1) SetACPConfigStatusByName(ctx context.Context,
 	newCtx := context.TODO()
 	retryCount := 0
 	for {
-		_, err := group.client.DynamicClient.Resource(gvr).UpdateStatus(ctx, &unstructured.Unstructured{Object: mapInterface}, metav1.UpdateOptions{})
+		var err error
+		if group.client.unifiedFakeStore {
+			patchBody, patchErr := json.Marshal(map[string]interface{}{
+				"status": map[string]interface{}{
+					"status": status,
+				},
+			})
+			if patchErr != nil {
+				return nil, patchErr
+			}
+			_, err = group.client.baseClient.
+				PolicypkgTsmV1().
+				ACPConfigs().
+				Patch(ctx, hashedName, types.MergePatchType, patchBody, metav1.PatchOptions{}, "status")
+		} else {
+			_, err = group.client.DynamicClient.Resource(gvr).UpdateStatus(ctx, &unstructured.Unstructured{Object: mapInterface}, metav1.UpdateOptions{})
+		}
 		if err == nil {
 			logger.Debugf("[SetACPConfigStatusByName] Updating status for ACPConfig node %s successful", hashedName)
 			break
@@ -14505,6 +14544,8 @@ func (group *PolicypkgTsmV1) SetACPConfigStatusByName(ctx context.Context,
 		}
 		time.Sleep(time.Second)
 	}
+
+	objToUpdate.Status.Status = *status
 
 	/*
 		if s, ok := subscriptionMap.Load("acpconfigs.policypkg.tsm.tanzu.vmware.com"); ok {
