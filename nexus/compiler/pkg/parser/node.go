@@ -24,6 +24,10 @@ type Node struct {
 	MultipleLink     map[string]Node
 	GraphqlQuerySpec nexus.GraphQLQuerySpec
 	GraphqlSpec      nexus.GraphQLSpec
+	// OnDeletePolicy is the value of the nexus-on-delete tag on the parent
+	// field that declares this node as a child (e.g. "restrict"). Empty means
+	// the default, "cascade".
+	OnDeletePolicy string
 }
 
 type NodeHelper struct {
@@ -43,6 +47,8 @@ type NodeHelperChild struct {
 	FieldNameGvk   string `json:"fieldNameGvk"`
 	GoFieldNameGvk string `json:"goFieldNameGvk"`
 	IsNamed        bool   `json:"isNamed"`
+	// OnDeletePolicy mirrors Node.OnDeletePolicy for this child edge.
+	OnDeletePolicy string `json:"onDeletePolicy,omitempty"`
 }
 
 type NonNexusTypes struct {

@@ -408,7 +408,6 @@ type NexusAnnotation struct {
 	NexusRestAPIGen  nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
 	Description      string                            `json:"description,omitempty"`
 	DeferredDelete   bool                              `json:"deferred-delete,omitempty"`
-	DeletionPolicy   string                            `json:"deletion-policy,omitempty"`
 	RestrictChildren []string                          `json:"deletion-restrict-children,omitempty"`
 }
 
@@ -495,30 +494,15 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			}
 			nexusAnnotation.DeferredDelete = annotationInBool
 		}
-		if annotation, ok := parser.GetNexusDeletionPolicyAnnotation(pkg, typeName); ok {
-			nexusAnnotation.DeletionPolicy = strings.ToLower(strings.TrimSpace(annotation))
-		}
-		if nexusAnnotation.DeletionPolicy == parser.DeletionPolicyRestrict {
-			if kinds, ok := parser.GetNexusDeletionRestrictChildrenAnnotation(pkg, typeName); ok {
-				var gated []string
-				for _, kind := range kinds {
-					plural := strings.ToLower(util.ToPlural(strings.TrimSpace(kind)))
-					matched := false
-					for childCrd := range nexusAnnotation.Children {
-						if strings.SplitN(childCrd, ".", 2)[0] == plural {
-							gated = append(gated, childCrd)
-							matched = true
-						}
-					}
-					if !matched {
-						return nil, fmt.Errorf(
-							"nexus-deletion-restrict-children on %s references child kind %q that is not a child of it",
-							typeName, kind)
-					}
-				}
-				nexusAnnotation.RestrictChildren = gated
+		// Collect children whose nexus-on-delete tag is "restrict"; these block
+		// deletion of this node while they exist.
+		var restrictChildren []string
+		for childCrd, child := range nexusAnnotation.Children {
+			if child.OnDeletePolicy == parser.DeletionPolicyRestrict {
+				restrictChildren = append(restrictChildren, childCrd)
 			}
 		}
+		nexusAnnotation.RestrictChildren = restrictChildren
 
 		nexusAnnotationStr, err := json.Marshal(nexusAnnotation)
 		if err != nil {

@@ -187,7 +187,7 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 
 func TestDeleteObjectRestrictRejectsWhenChildrenExist(t *testing.T) {
 	info := recursiveNodeInfo()
-	info.DeletionPolicy = model.DeletionPolicyRestrict
+	info.RestrictChildren = []string{testAISliceType}
 	fakeClient := setupDeleteTest(t, map[string]string{
 		testOrgType:          "org-a",
 		testProjectType:      "project-a",
@@ -231,7 +231,7 @@ func TestDeleteObjectRestrictRejectsWhenChildrenExist(t *testing.T) {
 
 func TestDeleteObjectRestrictAllowsWhenNoChildren(t *testing.T) {
 	info := recursiveNodeInfo()
-	info.DeletionPolicy = model.DeletionPolicyRestrict
+	info.RestrictChildren = []string{testAISliceType}
 	fakeClient := setupDeleteTest(t, map[string]string{
 		testOrgType:          "org-a",
 		testProjectType:      "project-a",
@@ -265,7 +265,6 @@ func TestDeleteObjectRestrictGatesOnlyListedChild(t *testing.T) {
 		testAISliceType: {},
 		testFooType:     {},
 	}
-	info.DeletionPolicy = model.DeletionPolicyRestrict
 	info.RestrictChildren = []string{testAISliceType}
 
 	t.Run("rejects when the gated child (AISlice) exists", func(t *testing.T) {

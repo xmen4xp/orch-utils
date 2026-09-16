@@ -28,33 +28,27 @@ var _ = Describe("Node config tests", func() {
 		Expect(annotation).To(Equal("GNSRestAPISpec"))
 	})
 
-	It("should parse the nexus-deletion-policy annotation", func() {
+	It("should parse the nexus-on-delete child tag", func() {
 		policyPkgs := parser.ParseDSLPkg("../../example/test-utils/deletion-policy-datamodel")
 		policyPkg, found := policyPkgs["example.com/deletion-policy-datamodel"]
 		Expect(found).To(BeTrue())
 
-		policy, ok := parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Root")
-		Expect(ok).To(BeTrue())
-		Expect(policy).To(Equal(parser.DeletionPolicyRestrict))
-
-		policy, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "AISlice")
-		Expect(ok).To(BeTrue())
-		Expect(policy).To(Equal(parser.DeletionPolicyCascade))
-
-		_, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Foo")
-		Expect(ok).To(BeFalse())
-	})
-
-	It("should parse the nexus-deletion-restrict-children annotation", func() {
-		policyPkgs := parser.ParseDSLPkg("../../example/test-utils/deletion-policy-datamodel")
-		policyPkg, found := policyPkgs["example.com/deletion-policy-datamodel"]
-		Expect(found).To(BeTrue())
-
-		children, ok := parser.GetNexusDeletionRestrictChildrenAnnotation(policyPkg, "Root")
-		Expect(ok).To(BeTrue())
-		Expect(children).To(Equal([]string{"AISlice"}))
-
-		_, ok = parser.GetNexusDeletionRestrictChildrenAnnotation(policyPkg, "AISlice")
-		Expect(ok).To(BeFalse())
+		var rootFound bool
+		var restrictCount int
+		for _, n := range policyPkg.GetNexusNodes() {
+			if parser.GetTypeName(n) != "Root" {
+				continue
+			}
+			rootFound = true
+			for _, f := range parser.GetChildFields(n) {
+				if policy, present := parser.GetChildOnDeletePolicy(f); present {
+					Expect(policy).To(Equal(parser.DeletionPolicyRestrict))
+					restrictCount++
+				}
+			}
+		}
+		Expect(rootFound).To(BeTrue())
+		// Exactly one child (AISlice) is tagged restrict; Foo has no tag.
+		Expect(restrictCount).To(Equal(1))
 	})
 })

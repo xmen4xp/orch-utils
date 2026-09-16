@@ -362,6 +362,20 @@ func IsChildField(f *ast.Field) bool {
 	return false
 }
 
+// GetChildOnDeletePolicy returns the value of the nexus-on-delete tag on a
+// child field (lowercased) and whether the tag was present. Absence means the
+// default policy, "cascade".
+func GetChildOnDeletePolicy(f *ast.Field) (string, bool) {
+	if f == nil || f.Tag == nil {
+		return "", false
+	}
+	tags := ParseFieldTags(f.Tag.Value)
+	if val, err := tags.Get(NexusOnDeleteTag); err == nil {
+		return strings.ToLower(strings.TrimSpace(val.Name)), true
+	}
+	return "", false
+}
+
 func IsNamedChildOrLink(f *ast.Field) bool {
 	if f == nil {
 		return false

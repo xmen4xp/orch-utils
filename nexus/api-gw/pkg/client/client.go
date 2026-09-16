@@ -149,10 +149,10 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 			return err
 		}
 
-		// deletion-policy: restrict - reject the delete while any children still
-		// exist, before any child is removed. This runs first so a restricted
-		// parent's subtree is never partially deleted.
-		if strings.EqualFold(crdInfo.DeletionPolicy, model.DeletionPolicyRestrict) {
+		// nexus-on-delete: restrict - reject the delete while any gated child
+		// still exists, before any child is removed. This runs first so a
+		// restricted parent's subtree is never partially deleted.
+		if len(crdInfo.RestrictChildren) > 0 {
 			if err = rejectIfChildrenExist(crdInfo, gvr, hashedName, listOpts); err != nil {
 				return err
 			}
@@ -175,21 +175,14 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 }
 
 // rejectIfChildrenExist returns a Conflict error if the object identified by
-// parentGvr/hashedName still has a gated child. When crdInfo.RestrictChildren
-// is set, only those child types gate deletion; otherwise all children do. It
-// performs an authoritative List against the API server using the cascade
-// selector so the result is not dependent on any in-process cache being warm.
+// parentGvr/hashedName still has any child tagged nexus-on-delete:"restrict"
+// (crdInfo.RestrictChildren). It performs an authoritative List against the API
+// server using the cascade selector so the result does not depend on any
+// in-process cache being warm.
 func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersionResource,
 	hashedName string, listOpts metav1.ListOptions,
 ) error {
-	gatedChildTypes := crdInfo.RestrictChildren
-	if len(gatedChildTypes) == 0 {
-		gatedChildTypes = make([]string, 0, len(crdInfo.Children))
-		for childType := range crdInfo.Children {
-			gatedChildTypes = append(gatedChildTypes, childType)
-		}
-	}
-	for _, childType := range gatedChildTypes {
+	for _, childType := range crdInfo.RestrictChildren {
 		childGvr := gvrFromCrdType(childType)
 		list, err := Client.Resource(childGvr).List(context.TODO(), listOpts)
 		if err != nil {
@@ -197,7 +190,7 @@ func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersion
 		}
 		if len(list.Items) > 0 {
 			return apierrors.NewConflict(parentGvr.GroupResource(), hashedName,
-				fmt.Errorf("cannot delete %q: deletion-policy is restrict and %d dependent %s still exist",
+				fmt.Errorf("cannot delete %q: %d dependent %s still exist (nexus-on-delete: restrict)",
 					hashedName, len(list.Items), childType))
 		}
 	}
