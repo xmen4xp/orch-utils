@@ -355,8 +355,9 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 		return err
 	}
 	{{ if $node.RestrictDelete }}
-	// deletion-policy: restrict - reject deletion while any children still exist.
+	// deletion-policy: restrict - reject deletion while gated children still exist.
 	{{ range $key, $link := .Children }}
+	{{ if $link.Restrict }}
 	if existingChildren := GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}"); len(existingChildren) > 0 {
 		logger.Errorf("[Delete{{$node.BaseNodeName}}ByName] Rejecting deletion of %s: deletion-policy is restrict and %d {{$link.BaseNodeName}} child(ren) still exist", hashedName, len(existingChildren))
 		return errors.NewConflict(
@@ -365,6 +366,7 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 			fmt.Errorf("cannot delete %q: deletion-policy is restrict and %d {{$link.BaseNodeName}} child(ren) still exist", hashedName, len(existingChildren)),
 		)
 	}
+	{{ end }}
 	{{ end }}
 	{{ end }}
 	{{ range $key, $link := .Children }}

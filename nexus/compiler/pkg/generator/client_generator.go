@@ -101,6 +101,8 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	if _, ok := parser.GetNexusDeferredDeleteAnnotation(pkg, parser.GetTypeName(node)); ok {
 		clientGroupVars.DeferredDelete = true
 	}
+	restrictChildKinds := map[string]bool{}
+	restrictAllChildren := false
 	if policy, ok := parser.GetNexusDeletionPolicyAnnotation(pkg, parser.GetTypeName(node)); ok {
 		switch strings.ToLower(strings.TrimSpace(policy)) {
 		case parser.DeletionPolicyRestrict:
@@ -110,6 +112,16 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 		default:
 			log.Fatalf("invalid nexus-deletion-policy %q on node %s (allowed values: %q, %q)",
 				policy, parser.GetTypeName(node), parser.DeletionPolicyCascade, parser.DeletionPolicyRestrict)
+		}
+	}
+	if clientGroupVars.RestrictDelete {
+		if kinds, ok := parser.GetNexusDeletionRestrictChildrenAnnotation(pkg, parser.GetTypeName(node)); ok {
+			for _, k := range kinds {
+				restrictChildKinds[strings.ToLower(k)] = true
+			}
+		} else {
+			// No explicit child list: restrict on all children.
+			restrictAllChildren = true
 		}
 	}
 
@@ -163,9 +175,26 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 		if parser.IsLinkField(link) {
 			clientGroupVars.Links = append(clientGroupVars.Links, clientVarsLink)
 		} else {
+			if clientGroupVars.RestrictDelete {
+				kind := strings.ToLower(clientVarsLink.BaseNodeName)
+				if restrictAllChildren || restrictChildKinds[kind] {
+					clientVarsLink.Restrict = true
+				}
+				// Mark the kind as resolved so we can detect typos afterwards.
+				delete(restrictChildKinds, kind)
+			}
 			clientGroupVars.Children = append(clientGroupVars.Children, clientVarsLink)
 		}
 		clientGroupVars.LinksAndChildren = append(clientGroupVars.LinksAndChildren, clientVarsLink)
+	}
+
+	if len(restrictChildKinds) > 0 {
+		unknown := make([]string, 0, len(restrictChildKinds))
+		for k := range restrictChildKinds {
+			unknown = append(unknown, k)
+		}
+		log.Fatalf("nexus-deletion-restrict-children on node %s references child kind(s) that are not children of it: %v",
+			parser.GetTypeName(node), unknown)
 	}
 
 	for _, f := range parser.GetSpecFields(node) {
@@ -356,4 +385,7 @@ type apiGroupsClientVarsLink struct {
 	GroupResourceNameTitle string
 	GroupResourceType      string
 	CrdName                string
+	// Restrict marks this child as one whose presence blocks deletion of the
+	// parent when the parent uses deletion-policy: restrict.
+	Restrict bool
 }

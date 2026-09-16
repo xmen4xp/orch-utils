@@ -20,6 +20,10 @@ const (
 	NexusGraphqlSpecAnnotation      = "nexus-graphql-spec"
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
 	NexusDeletionPolicyAnnotation   = "nexus-deletion-policy"
+	// NexusDeletionRestrictChildrenAnnotation optionally scopes a restrict
+	// policy to specific child kinds (comma-separated). When absent, a restrict
+	// policy applies to all children.
+	NexusDeletionRestrictChildrenAnnotation = "nexus-deletion-restrict-children"
 )
 
 // Supported values for the nexus-deletion-policy annotation.
@@ -58,6 +62,23 @@ func GetNexusDeferredDeleteAnnotation(pkg Package, name string) (string, bool) {
 
 func GetNexusDeletionPolicyAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusDeletionPolicyAnnotation)
+}
+
+// GetNexusDeletionRestrictChildrenAnnotation returns the list of child kinds a
+// restrict policy is scoped to. Returns (nil, false) when the annotation is
+// absent or empty, which callers should treat as "all children".
+func GetNexusDeletionRestrictChildrenAnnotation(pkg Package, name string) ([]string, bool) {
+	anno, ok := getNexusAnnotation(pkg, name, NexusDeletionRestrictChildrenAnnotation)
+	if !ok || strings.TrimSpace(anno) == "" {
+		return nil, false
+	}
+	var children []string
+	for _, part := range strings.Split(anno, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			children = append(children, trimmed)
+		}
+	}
+	return children, len(children) > 0
 }
 
 func GetNexusGraphqlSpecAnnotation(pkg Package, name string) (string, bool) {

@@ -175,13 +175,21 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 }
 
 // rejectIfChildrenExist returns a Conflict error if the object identified by
-// parentGvr/hashedName still has any child of any type. It performs an
-// authoritative List against the API server using the cascade selector so the
-// result is not dependent on any in-process cache being warm.
+// parentGvr/hashedName still has a gated child. When crdInfo.RestrictChildren
+// is set, only those child types gate deletion; otherwise all children do. It
+// performs an authoritative List against the API server using the cascade
+// selector so the result is not dependent on any in-process cache being warm.
 func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersionResource,
 	hashedName string, listOpts metav1.ListOptions,
 ) error {
-	for childType := range crdInfo.Children {
+	gatedChildTypes := crdInfo.RestrictChildren
+	if len(gatedChildTypes) == 0 {
+		gatedChildTypes = make([]string, 0, len(crdInfo.Children))
+		for childType := range crdInfo.Children {
+			gatedChildTypes = append(gatedChildTypes, childType)
+		}
+	}
+	for _, childType := range gatedChildTypes {
 		childGvr := gvrFromCrdType(childType)
 		list, err := Client.Resource(childGvr).List(context.TODO(), listOpts)
 		if err != nil {

@@ -37,11 +37,24 @@ var _ = Describe("Node config tests", func() {
 		Expect(ok).To(BeTrue())
 		Expect(policy).To(Equal(parser.DeletionPolicyRestrict))
 
-		policy, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Child")
+		policy, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "AISlice")
 		Expect(ok).To(BeTrue())
 		Expect(policy).To(Equal(parser.DeletionPolicyCascade))
 
-		_, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Leaf")
+		_, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Foo")
+		Expect(ok).To(BeFalse())
+	})
+
+	It("should parse the nexus-deletion-restrict-children annotation", func() {
+		policyPkgs := parser.ParseDSLPkg("../../example/test-utils/deletion-policy-datamodel")
+		policyPkg, found := policyPkgs["example.com/deletion-policy-datamodel"]
+		Expect(found).To(BeTrue())
+
+		children, ok := parser.GetNexusDeletionRestrictChildrenAnnotation(policyPkg, "Root")
+		Expect(ok).To(BeTrue())
+		Expect(children).To(Equal([]string{"AISlice"}))
+
+		_, ok = parser.GetNexusDeletionRestrictChildrenAnnotation(policyPkg, "AISlice")
 		Expect(ok).To(BeFalse())
 	})
 })

@@ -12,20 +12,20 @@ import (
 )
 
 // nexus-deletion-policy: restrict
+// nexus-deletion-restrict-children: AISlice
 type Root struct {
 	nexus.Node
 
-	Child Child `nexus:"child"`
+	AISlice AISlice `nexus:"child"`
+	Foo     Foo     `nexus:"child"`
 }
 
 // nexus-deletion-policy: cascade
-type Child struct {
+type AISlice struct {
 	nexus.Node
-
-	Leaf Leaf `nexus:"child"`
 }
 
-// Leaf has no deletion policy annotation (defaults to cascade).
-type Leaf struct {
+// Foo has no deletion policy annotation (defaults to cascade).
+type Foo struct {
 	nexus.Node
 }

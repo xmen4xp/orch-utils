@@ -65,7 +65,7 @@ func (r *CustomResourceDefinitionReconciler) ProcessAnnotation(crdType string,
 	model.ConstructMapURIToURIInfo(eventType, urisMap)
 	model.ConstructMapURIToCRDType(eventType, crdType, n.NexusRestAPIGen.Uris)
 	model.ConstructMapCRDTypeToNode(eventType, crdType, n.Name, n.Hierarchy,
-		children, links, n.IsSingleton, n.Description, n.DeferredDelete, n.DeletionPolicy,
+		children, links, n.IsSingleton, n.Description, n.DeferredDelete, n.DeletionPolicy, n.RestrictChildren,
 	)
 	model.ConstructMapCRDTypeToRestUris(eventType, crdType, n.NexusRestAPIGen)
 

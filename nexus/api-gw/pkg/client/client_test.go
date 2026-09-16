@@ -7,6 +7,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -29,6 +30,7 @@ const (
 	testAISliceType  = "aislices.aislice.test.io"
 	testWorkloadType = "workloads.workload.test.io"
 	testAppType      = "apps.app.test.io"
+	testFooType      = "foos.foo.test.io"
 )
 
 var testSpaceGVR = schema.GroupVersionResource{
@@ -256,6 +258,82 @@ func TestDeleteObjectRestrictAllowsWhenNoChildren(t *testing.T) {
 	require.True(t, spaceDeleted, "parent should be deleted when restrict finds no children")
 }
 
+func TestDeleteObjectRestrictGatesOnlyListedChild(t *testing.T) {
+	// Space restricts only on AISlice; Foo is a sibling child that must NOT gate.
+	info := recursiveNodeInfo()
+	info.Children = map[string]model.NodeHelperChild{
+		testAISliceType: {},
+		testFooType:     {},
+	}
+	info.DeletionPolicy = model.DeletionPolicyRestrict
+	info.RestrictChildren = []string{testAISliceType}
+
+	t.Run("rejects when the gated child (AISlice) exists", func(t *testing.T) {
+		fakeClient := setupDeleteTest(t, spaceLabels(), info)
+		fakeClient.PrependReactor("list", "*", listReactor(map[string]int{testAISliceType: 1}))
+		deleteCollectionCalled := false
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			deleteCollectionCalled = true
+			return true, nil, nil
+		})
+
+		err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+		require.True(t, apierrors.IsConflict(err), "expected Conflict, got: %v", err)
+		require.False(t, deleteCollectionCalled, "nothing should be deleted when a gated child exists")
+	})
+
+	t.Run("allows when only a non-gated sibling (Foo) exists", func(t *testing.T) {
+		fakeClient := setupDeleteTest(t, spaceLabels(), info)
+		fakeClient.PrependReactor("list", "*", listReactor(map[string]int{testFooType: 1}))
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, nil
+		})
+
+		err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+		require.NoError(t, err)
+		spaceDeleted := false
+		for _, action := range fakeClient.Actions() {
+			if action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR {
+				spaceDeleted = true
+			}
+		}
+		require.True(t, spaceDeleted, "a non-gated sibling must not block deletion")
+	})
+}
+
+func spaceLabels() map[string]string {
+	return map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}
+}
+
+// listReactor returns a fake LIST reaction that yields the requested number of
+// items (with matching hierarchy labels) per child crd type.
+func listReactor(countsByCrdType map[string]int) k8stesting.ReactionFunc {
+	byResource := map[string]int{}
+	for crdType, n := range countsByCrdType {
+		byResource[gvrForCrdType(crdType).Resource] = n
+	}
+	return func(action k8stesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{}
+		for i := 0; i < byResource[action.GetResource().Resource]; i++ {
+			list.Items = append(list.Items, unstructured.Unstructured{Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": fmt.Sprintf("child-%d", i),
+					"labels": stringMapToInterfaceMap(map[string]string{
+						testOrgType:     "org-a",
+						testProjectType: "project-a",
+						testSpaceType:   "demo-space",
+					}),
+				},
+			}})
+		}
+		return true, list, nil
+	}
+}
+
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {
 	t.Helper()
 
@@ -279,6 +357,7 @@ func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo mode
 			},
 		},
 		testAppType: {},
+		testFooType: {},
 	}
 
 	object := &unstructured.Unstructured{Object: map[string]interface{}{
@@ -296,6 +375,7 @@ func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo mode
 		gvrForCrdType(testAISliceType):  "AISliceList",
 		gvrForCrdType(testWorkloadType): "WorkloadList",
 		gvrForCrdType(testAppType):      "AppList",
+		gvrForCrdType(testFooType):      "FooList",
 	}
 	fakeClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, object)
 	Client = fakeClient
