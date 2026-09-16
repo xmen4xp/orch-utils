@@ -354,6 +354,21 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	if result == nil {
 		return err
 	}
+	{{ if $node.RestrictDelete }}
+	// deletion-policy: restrict - reject deletion while gated children still exist.
+	{{ range $key, $link := .Children }}
+	{{ if $link.Restrict }}
+	if existingChildren := GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}"); len(existingChildren) > 0 {
+		logger.Errorf("[Delete{{$node.BaseNodeName}}ByName] Rejecting deletion of %s: deletion-policy is restrict and %d {{$link.BaseNodeName}} child(ren) still exist", hashedName, len(existingChildren))
+		return errors.NewConflict(
+			schema.GroupResource{Group: "{{$node.Group}}", Resource: strings.ToLower("{{$node.GroupResourceNameTitle}}")},
+			hashedName,
+			fmt.Errorf("cannot delete %q: deletion-policy is restrict and %d {{$link.BaseNodeName}} child(ren) still exist", hashedName, len(existingChildren)),
+		)
+	}
+	{{ end }}
+	{{ end }}
+	{{ end }}
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
 		err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child)

@@ -400,14 +400,16 @@ type crdBaseVars struct {
 }
 
 type NexusAnnotation struct {
-	Name            string                            `json:"name,omitempty"`
-	Hierarchy       []string                          `json:"hierarchy,omitempty"`
-	Children        map[string]parser.NodeHelperChild `json:"children,omitempty"`
-	Links           map[string]parser.NodeHelperChild `json:"links,omitempty"`
-	IsSingleton     bool                              `json:"is_singleton"`
-	NexusRestAPIGen nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
-	Description     string                            `json:"description,omitempty"`
-	DeferredDelete  bool                              `json:"deferred-delete,omitempty"`
+	Name             string                            `json:"name,omitempty"`
+	Hierarchy        []string                          `json:"hierarchy,omitempty"`
+	Children         map[string]parser.NodeHelperChild `json:"children,omitempty"`
+	Links            map[string]parser.NodeHelperChild `json:"links,omitempty"`
+	IsSingleton      bool                              `json:"is_singleton"`
+	NexusRestAPIGen  nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
+	Description      string                            `json:"description,omitempty"`
+	DeferredDelete   bool                              `json:"deferred-delete,omitempty"`
+	DeletionPolicy   string                            `json:"deletion-policy,omitempty"`
+	RestrictChildren []string                          `json:"deletion-restrict-children,omitempty"`
 }
 
 type CrdBaseFile struct {
@@ -492,6 +494,30 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 				return nil, err
 			}
 			nexusAnnotation.DeferredDelete = annotationInBool
+		}
+		if annotation, ok := parser.GetNexusDeletionPolicyAnnotation(pkg, typeName); ok {
+			nexusAnnotation.DeletionPolicy = strings.ToLower(strings.TrimSpace(annotation))
+		}
+		if nexusAnnotation.DeletionPolicy == parser.DeletionPolicyRestrict {
+			if kinds, ok := parser.GetNexusDeletionRestrictChildrenAnnotation(pkg, typeName); ok {
+				var gated []string
+				for _, kind := range kinds {
+					plural := strings.ToLower(util.ToPlural(strings.TrimSpace(kind)))
+					matched := false
+					for childCrd := range nexusAnnotation.Children {
+						if strings.SplitN(childCrd, ".", 2)[0] == plural {
+							gated = append(gated, childCrd)
+							matched = true
+						}
+					}
+					if !matched {
+						return nil, fmt.Errorf(
+							"nexus-deletion-restrict-children on %s references child kind %q that is not a child of it",
+							typeName, kind)
+					}
+				}
+				nexusAnnotation.RestrictChildren = gated
+			}
 		}
 
 		nexusAnnotationStr, err := json.Marshal(nexusAnnotation)

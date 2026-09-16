@@ -16,6 +16,7 @@ import (
 	"nexus-api-gw/pkg/model"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
@@ -147,6 +148,16 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		if err != nil {
 			return err
 		}
+
+		// deletion-policy: restrict - reject the delete while any children still
+		// exist, before any child is removed. This runs first so a restricted
+		// parent's subtree is never partially deleted.
+		if strings.EqualFold(crdInfo.DeletionPolicy, model.DeletionPolicyRestrict) {
+			if err = rejectIfChildrenExist(crdInfo, gvr, hashedName, listOpts); err != nil {
+				return err
+			}
+		}
+
 		// Delete all children
 		for k := range crdInfo.Children {
 			if err = DeleteChildren(k, listOpts); err != nil {
@@ -161,6 +172,46 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 	}
 
 	return nil
+}
+
+// rejectIfChildrenExist returns a Conflict error if the object identified by
+// parentGvr/hashedName still has a gated child. When crdInfo.RestrictChildren
+// is set, only those child types gate deletion; otherwise all children do. It
+// performs an authoritative List against the API server using the cascade
+// selector so the result is not dependent on any in-process cache being warm.
+func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersionResource,
+	hashedName string, listOpts metav1.ListOptions,
+) error {
+	gatedChildTypes := crdInfo.RestrictChildren
+	if len(gatedChildTypes) == 0 {
+		gatedChildTypes = make([]string, 0, len(crdInfo.Children))
+		for childType := range crdInfo.Children {
+			gatedChildTypes = append(gatedChildTypes, childType)
+		}
+	}
+	for _, childType := range gatedChildTypes {
+		childGvr := gvrFromCrdType(childType)
+		list, err := Client.Resource(childGvr).List(context.TODO(), listOpts)
+		if err != nil {
+			return err
+		}
+		if len(list.Items) > 0 {
+			return apierrors.NewConflict(parentGvr.GroupResource(), hashedName,
+				fmt.Errorf("cannot delete %q: deletion-policy is restrict and %d dependent %s still exist",
+					hashedName, len(list.Items), childType))
+		}
+	}
+	return nil
+}
+
+// gvrFromCrdType converts a nexus CRD type ("<plural>.<group>") to its GVR.
+func gvrFromCrdType(crdType string) schema.GroupVersionResource {
+	parts := strings.Split(crdType, ".")
+	return schema.GroupVersionResource{
+		Group:    strings.Join(parts[1:], "."),
+		Version:  "v1",
+		Resource: parts[0],
+	}
 }
 
 func cascadeListOptions(objectLabels map[string]string, crdType string, parentHierarchy []string) (metav1.ListOptions, error) {
@@ -191,12 +242,7 @@ func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 		}
 	}
 
-	parts := strings.Split(crdType, ".")
-	gvr := schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
+	gvr := gvrFromCrdType(crdType)
 	err := Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
 	if err != nil {
 		return err

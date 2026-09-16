@@ -18,6 +18,14 @@ const (
 	Delete EventType = "Delete"
 )
 
+// nexus-deletion-policy values.
+const (
+	// DeletionPolicyCascade (default) deletes all children before the node itself.
+	DeletionPolicyCascade = "cascade"
+	// DeletionPolicyRestrict rejects deletion of a node while it still has children.
+	DeletionPolicyRestrict = "restrict"
+)
+
 //nolint:tagliatelle // This struct has dependency on nexus's field name.
 type NexusAnnotation struct {
 	Name                 string                     `json:"name,omitempty"`
@@ -29,6 +37,8 @@ type NexusAnnotation struct {
 	IsSingleton          bool                       `json:"is_singleton,omitempty"`
 	Description          string                     `json:"description,omitempty"`
 	DeferredDelete       bool                       `json:"deferred-delete,omitempty"`
+	DeletionPolicy       string                     `json:"deletion-policy,omitempty"`
+	RestrictChildren     []string                   `json:"deletion-restrict-children,omitempty"`
 }
 
 type NodeHelperChild struct {
@@ -38,13 +48,15 @@ type NodeHelperChild struct {
 }
 
 type NodeInfo struct {
-	Name            string
-	ParentHierarchy []string
-	Children        map[string]NodeHelperChild
-	Links           map[string]NodeHelperChild
-	IsSingleton     bool
-	Description     string
-	DeferredDelete  bool
+	Name             string
+	ParentHierarchy  []string
+	Children         map[string]NodeHelperChild
+	Links            map[string]NodeHelperChild
+	IsSingleton      bool
+	Description      string
+	DeferredDelete   bool
+	DeletionPolicy   string
+	RestrictChildren []string
 }
 
 type RestURIInfo struct {
