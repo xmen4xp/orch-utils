@@ -101,6 +101,17 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	if _, ok := parser.GetNexusDeferredDeleteAnnotation(pkg, parser.GetTypeName(node)); ok {
 		clientGroupVars.DeferredDelete = true
 	}
+	if policy, ok := parser.GetNexusDeletionPolicyAnnotation(pkg, parser.GetTypeName(node)); ok {
+		switch strings.ToLower(strings.TrimSpace(policy)) {
+		case parser.DeletionPolicyRestrict:
+			clientGroupVars.RestrictDelete = true
+		case parser.DeletionPolicyCascade:
+			// Default behavior (delete children first); nothing to toggle.
+		default:
+			log.Fatalf("invalid nexus-deletion-policy %q on node %s (allowed values: %q, %q)",
+				policy, parser.GetTypeName(node), parser.DeletionPolicyCascade, parser.DeletionPolicyRestrict)
+		}
+	}
 
 	//Get user defined status field if present
 	statusField := parser.GetStatusField(node)
@@ -297,6 +308,7 @@ type apiGroupsClientVars struct {
 	BaseNodeName           string
 	CrdName                string
 	DeferredDelete         bool
+	RestrictDelete         bool
 	IsSingleton            bool
 	HasChildren            bool
 	HasStatus              bool

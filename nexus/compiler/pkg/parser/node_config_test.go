@@ -27,4 +27,21 @@ var _ = Describe("Node config tests", func() {
 		Expect(ok).To(BeTrue())
 		Expect(annotation).To(Equal("GNSRestAPISpec"))
 	})
+
+	It("should parse the nexus-deletion-policy annotation", func() {
+		policyPkgs := parser.ParseDSLPkg("../../example/test-utils/deletion-policy-datamodel")
+		policyPkg, found := policyPkgs["example.com/deletion-policy-datamodel"]
+		Expect(found).To(BeTrue())
+
+		policy, ok := parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Root")
+		Expect(ok).To(BeTrue())
+		Expect(policy).To(Equal(parser.DeletionPolicyRestrict))
+
+		policy, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Child")
+		Expect(ok).To(BeTrue())
+		Expect(policy).To(Equal(parser.DeletionPolicyCascade))
+
+		_, ok = parser.GetNexusDeletionPolicyAnnotation(policyPkg, "Leaf")
+		Expect(ok).To(BeFalse())
+	})
 })

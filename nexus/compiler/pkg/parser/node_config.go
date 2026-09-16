@@ -19,6 +19,17 @@ const (
 	NexusSecretSpecAnnotation       = "nexus-secret-spec"
 	NexusGraphqlSpecAnnotation      = "nexus-graphql-spec"
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
+	NexusDeletionPolicyAnnotation   = "nexus-deletion-policy"
+)
+
+// Supported values for the nexus-deletion-policy annotation.
+const (
+	// DeletionPolicyCascade is the default policy: all children are deleted
+	// before the node itself is deleted. This matches the historical behavior
+	// and is assumed when the annotation is absent.
+	DeletionPolicyCascade = "cascade"
+	// DeletionPolicyRestrict rejects deletion of a node while it still has children.
+	DeletionPolicyRestrict = "restrict"
 )
 
 func GetNexusSecretSpecAnnotation(pkg Package, name string) (string, bool) {
@@ -43,6 +54,10 @@ func GetNexusGraphqlAnnotation(pkg Package, name string) (string, bool) {
 
 func GetNexusDeferredDeleteAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusDeferredDeleteAnnotation)
+}
+
+func GetNexusDeletionPolicyAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusDeletionPolicyAnnotation)
 }
 
 func GetNexusGraphqlSpecAnnotation(pkg Package, name string) (string, bool) {

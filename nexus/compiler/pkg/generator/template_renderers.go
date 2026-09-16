@@ -408,6 +408,7 @@ type NexusAnnotation struct {
 	NexusRestAPIGen nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
 	Description     string                            `json:"description,omitempty"`
 	DeferredDelete  bool                              `json:"deferred-delete,omitempty"`
+	DeletionPolicy  string                            `json:"deletion-policy,omitempty"`
 }
 
 type CrdBaseFile struct {
@@ -492,6 +493,9 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 				return nil, err
 			}
 			nexusAnnotation.DeferredDelete = annotationInBool
+		}
+		if annotation, ok := parser.GetNexusDeletionPolicyAnnotation(pkg, typeName); ok {
+			nexusAnnotation.DeletionPolicy = strings.ToLower(strings.TrimSpace(annotation))
 		}
 
 		nexusAnnotationStr, err := json.Marshal(nexusAnnotation)

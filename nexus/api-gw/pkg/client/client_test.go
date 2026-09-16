@@ -7,11 +7,13 @@ package client
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"nexus-api-gw/pkg/model"
 
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -181,6 +183,79 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 	}
 }
 
+func TestDeleteObjectRestrictRejectsWhenChildrenExist(t *testing.T) {
+	info := recursiveNodeInfo()
+	info.DeletionPolicy = model.DeletionPolicyRestrict
+	fakeClient := setupDeleteTest(t, map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}, info)
+
+	// A child still exists. It carries the hierarchy labels so it matches the
+	// cascade selector the guard lists with.
+	fakeClient.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{}
+		list.Items = []unstructured.Unstructured{{Object: map[string]interface{}{
+			"apiVersion": "aislice.test.io/v1",
+			"kind":       "AISlice",
+			"metadata": map[string]interface{}{
+				"name": "child-1",
+				"labels": stringMapToInterfaceMap(map[string]string{
+					testOrgType:     "org-a",
+					testProjectType: "project-a",
+					testSpaceType:   "demo-space",
+				}),
+			},
+		}}}
+		return true, list, nil
+	})
+
+	deleteCollectionCalled := false
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleteCollectionCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.Error(t, err)
+	require.True(t, apierrors.IsConflict(err), "expected a Conflict error, got: %v", err)
+	require.False(t, deleteCollectionCalled, "no child should be deleted when restrict rejects the request")
+	for _, action := range fakeClient.Actions() {
+		require.False(t, action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR,
+			"parent must not be deleted when restrict rejects the request")
+	}
+}
+
+func TestDeleteObjectRestrictAllowsWhenNoChildren(t *testing.T) {
+	info := recursiveNodeInfo()
+	info.DeletionPolicy = model.DeletionPolicyRestrict
+	fakeClient := setupDeleteTest(t, map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}, info)
+
+	// No children exist.
+	fakeClient.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &unstructured.UnstructuredList{}, nil
+	})
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.NoError(t, err)
+
+	spaceDeleted := false
+	for _, action := range fakeClient.Actions() {
+		if action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR {
+			spaceDeleted = true
+		}
+	}
+	require.True(t, spaceDeleted, "parent should be deleted when restrict finds no children")
+}
+
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {
 	t.Helper()
 
@@ -214,9 +289,26 @@ func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo mode
 			"labels": stringMapToInterfaceMap(objectLabels),
 		},
 	}}
-	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), object)
+	// Register list kinds so the fake client can serve LIST calls (used by the
+	// restrict deletion-policy guard). Harmless for tests that only delete.
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		testSpaceGVR:                    "SpaceList",
+		gvrForCrdType(testAISliceType):  "AISliceList",
+		gvrForCrdType(testWorkloadType): "WorkloadList",
+		gvrForCrdType(testAppType):      "AppList",
+	}
+	fakeClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, object)
 	Client = fakeClient
 	return fakeClient
+}
+
+func gvrForCrdType(crdType string) schema.GroupVersionResource {
+	parts := strings.Split(crdType, ".")
+	return schema.GroupVersionResource{
+		Group:    strings.Join(parts[1:], "."),
+		Version:  "v1",
+		Resource: parts[0],
+	}
 }
 
 func recursiveNodeInfo() model.NodeInfo {
