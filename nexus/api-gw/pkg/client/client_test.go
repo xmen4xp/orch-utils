@@ -370,6 +370,96 @@ func TestDeleteObjectRestrictBlocksWhenChildListFails(t *testing.T) {
 	}
 }
 
+func TestDeleteObjectRestrictBlocksAncestorDelete(t *testing.T) {
+	// Config -> Space -> AISlice, where Space restricts on AISlice. Deleting the
+	// Config (an ancestor) must be blocked while an AISlice exists, because the
+	// cascade would otherwise remove it.
+	const testConfigType = "configs.config.test.io"
+	configGVR := gvrFromCrdType(testConfigType)
+
+	originalClient := Client
+	originalNodeInfo := model.CrdTypeToNodeInfo
+	t.Cleanup(func() {
+		Client = originalClient
+		model.CrdTypeToNodeInfo = originalNodeInfo
+	})
+
+	model.CrdTypeToNodeInfo = map[string]model.NodeInfo{
+		testConfigType: {
+			ParentHierarchy: []string{testOrgType, testProjectType},
+			Children:        map[string]model.NodeHelperChild{testSpaceType: {}},
+		},
+		testSpaceType: {
+			ParentHierarchy:  []string{testOrgType, testProjectType},
+			Children:         map[string]model.NodeHelperChild{testAISliceType: {}},
+			RestrictChildren: []string{testAISliceType},
+		},
+		testAISliceType: {},
+	}
+
+	configObj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": configGVR.GroupVersion().String(),
+		"kind":       "Config",
+		"metadata": map[string]interface{}{
+			"name": "config-hash",
+			"labels": stringMapToInterfaceMap(map[string]string{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				"nexus/display_name": "default",
+			}),
+		},
+	}}
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		configGVR:                       "ConfigList",
+		gvrFromCrdType(testSpaceType):   "SpaceList",
+		gvrFromCrdType(testAISliceType): "AISliceList",
+	}
+
+	t.Run("rejects ancestor delete while a restricted descendant exists", func(t *testing.T) {
+		fakeClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, configObj)
+		Client = fakeClient
+		// The AISlice carries the config-scoped hierarchy labels so it matches the
+		// selector the guard lists with when deleting the Config.
+		fakeClient.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			list := &unstructured.UnstructuredList{}
+			list.Items = []unstructured.Unstructured{{Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "child-1",
+					"labels": stringMapToInterfaceMap(map[string]string{
+						testOrgType:     "org-a",
+						testProjectType: "project-a",
+						testConfigType:  "default",
+					}),
+				},
+			}}}
+			return true, list, nil
+		})
+		deleteCollectionCalled := false
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			deleteCollectionCalled = true
+			return true, nil, nil
+		})
+
+		err := DeleteObject(configGVR, testConfigType, model.CrdTypeToNodeInfo[testConfigType], "config-hash")
+		require.True(t, apierrors.IsConflict(err), "expected Conflict, got: %v", err)
+		require.False(t, deleteCollectionCalled, "ancestor delete must remove nothing while a restricted descendant exists")
+	})
+
+	t.Run("allows ancestor delete when no restricted descendant exists", func(t *testing.T) {
+		fakeClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, configObj)
+		Client = fakeClient
+		fakeClient.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &unstructured.UnstructuredList{}, nil
+		})
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, nil
+		})
+
+		err := DeleteObject(configGVR, testConfigType, model.CrdTypeToNodeInfo[testConfigType], "config-hash")
+		require.NoError(t, err)
+	})
+}
+
 func spaceLabels() map[string]string {
 	return map[string]string{
 		testOrgType:          "org-a",

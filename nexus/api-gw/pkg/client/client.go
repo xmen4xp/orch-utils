@@ -144,16 +144,18 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 	}
 
 	// nexus-on-delete: restrict - reject the delete while any gated child still
-	// exists, before any child is removed. This is intentionally independent of
-	// the cascade block below so the guard cannot be skipped, and so a restricted
-	// parent's subtree is never partially deleted.
-	if len(crdInfo.RestrictChildren) > 0 {
+	// exists, before any child is removed. This scans the whole subtree, so it
+	// covers both a direct delete of the restricted parent and deletion via an
+	// ancestor (whose cascade would otherwise remove the gated children). Running
+	// it first means a restricted subtree is never partially deleted.
+	gatedChildTypes := collectRestrictedChildTypes(crdType)
+	if len(gatedChildTypes) > 0 {
 		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
 		if err != nil {
 			return err
 		}
 		displayName := obj.GetLabels()["nexus/display_name"]
-		if err = rejectIfChildrenExist(crdInfo.RestrictChildren, gvr, displayName, hashedName, listOpts); err != nil {
+		if err = rejectIfChildrenExist(gatedChildTypes, gvr, displayName, hashedName, listOpts); err != nil {
 			return err
 		}
 	}
@@ -205,6 +207,40 @@ func rejectIfChildrenExist(restrictChildren []string, parentGvr schema.GroupVers
 		}
 	}
 	return nil
+}
+
+// collectRestrictedChildTypes returns the CRD types of all children tagged
+// nexus-on-delete:"restrict" anywhere in the subtree rooted at crdType
+// (including crdType's own restricted children). Deleting crdType cascades to
+// these descendants, so their presence must block the delete - whether crdType
+// is the restricted parent itself or an ancestor of it.
+func collectRestrictedChildTypes(crdType string) []string {
+	gated := map[string]struct{}{}
+	visited := map[string]struct{}{}
+	var walk func(string)
+	walk = func(ct string) {
+		if _, seen := visited[ct]; seen {
+			return
+		}
+		visited[ct] = struct{}{}
+		info, ok := model.CrdTypeToNodeInfo[ct]
+		if !ok {
+			return
+		}
+		for _, r := range info.RestrictChildren {
+			gated[r] = struct{}{}
+		}
+		for childType := range info.Children {
+			walk(childType)
+		}
+	}
+	walk(crdType)
+
+	out := make([]string, 0, len(gated))
+	for t := range gated {
+		out = append(out, t)
+	}
+	return out
 }
 
 // gvrFromCrdType converts a nexus CRD type ("<plural>.<group>") to its GVR.
