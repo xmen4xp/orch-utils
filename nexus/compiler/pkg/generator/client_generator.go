@@ -351,7 +351,7 @@ type apiGroupsClientVarsLink struct {
 	GroupResourceNameTitle string
 	GroupResourceType      string
 	CrdName                string
-	// Restrict marks this child as one whose presence blocks deletion of the
-	// parent when the parent uses deletion-policy: restrict.
+	// Restrict marks this child as tagged nexus-on-delete:"restrict": its
+	// presence blocks deletion of the parent.
 	Restrict bool
 }

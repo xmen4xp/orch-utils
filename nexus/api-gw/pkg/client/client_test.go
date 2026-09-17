@@ -8,7 +8,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"nexus-api-gw/pkg/model"
@@ -300,6 +299,77 @@ func TestDeleteObjectRestrictGatesOnlyListedChild(t *testing.T) {
 	})
 }
 
+func TestDeleteObjectRestrictWithMultipleGatedChildren(t *testing.T) {
+	// Space has 4 children; 3 are gated (AISlice, Workload, App), Foo is not.
+	info := recursiveNodeInfo()
+	info.Children = map[string]model.NodeHelperChild{
+		testAISliceType:  {},
+		testWorkloadType: {},
+		testAppType:      {},
+		testFooType:      {},
+	}
+	info.RestrictChildren = []string{testAISliceType, testWorkloadType, testAppType}
+
+	t.Run("rejects when a later gated child exists (checks all gated, not just the first)", func(t *testing.T) {
+		fakeClient := setupDeleteTest(t, spaceLabels(), info)
+		// Only the 3rd gated child (App) exists; the first two are empty.
+		fakeClient.PrependReactor("list", "*", listReactor(map[string]int{testAppType: 1}))
+		deleteCollectionCalled := false
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			deleteCollectionCalled = true
+			return true, nil, nil
+		})
+
+		err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+		require.True(t, apierrors.IsConflict(err), "expected Conflict, got: %v", err)
+		require.False(t, deleteCollectionCalled, "nothing should be deleted when any gated child exists")
+	})
+
+	t.Run("allows when all gated children are absent even if a non-gated sibling exists", func(t *testing.T) {
+		fakeClient := setupDeleteTest(t, spaceLabels(), info)
+		// Only the non-gated Foo exists.
+		fakeClient.PrependReactor("list", "*", listReactor(map[string]int{testFooType: 1}))
+		fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, nil
+		})
+
+		err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+		require.NoError(t, err)
+		spaceDeleted := false
+		for _, action := range fakeClient.Actions() {
+			if action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR {
+				spaceDeleted = true
+			}
+		}
+		require.True(t, spaceDeleted, "non-gated siblings must not block deletion")
+	})
+}
+
+func TestDeleteObjectRestrictBlocksWhenChildListFails(t *testing.T) {
+	info := recursiveNodeInfo()
+	info.RestrictChildren = []string{testAISliceType}
+	fakeClient := setupDeleteTest(t, spaceLabels(), info)
+
+	listErr := errors.New("api server unavailable")
+	fakeClient.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, listErr
+	})
+	deleteCollectionCalled := false
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleteCollectionCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.Error(t, err)
+	require.False(t, apierrors.IsConflict(err), "a List failure must surface as an error, not Conflict")
+	require.False(t, deleteCollectionCalled, "nothing should be deleted when the restrict check cannot be evaluated")
+	for _, action := range fakeClient.Actions() {
+		require.False(t, action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR,
+			"parent must not be deleted when the restrict check errors")
+	}
+}
+
 func spaceLabels() map[string]string {
 	return map[string]string{
 		testOrgType:          "org-a",
@@ -313,7 +383,7 @@ func spaceLabels() map[string]string {
 func listReactor(countsByCrdType map[string]int) k8stesting.ReactionFunc {
 	byResource := map[string]int{}
 	for crdType, n := range countsByCrdType {
-		byResource[gvrForCrdType(crdType).Resource] = n
+		byResource[gvrFromCrdType(crdType).Resource] = n
 	}
 	return func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list := &unstructured.UnstructuredList{}
@@ -370,24 +440,15 @@ func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo mode
 	// Register list kinds so the fake client can serve LIST calls (used by the
 	// restrict deletion-policy guard). Harmless for tests that only delete.
 	gvrToListKind := map[schema.GroupVersionResource]string{
-		testSpaceGVR:                    "SpaceList",
-		gvrForCrdType(testAISliceType):  "AISliceList",
-		gvrForCrdType(testWorkloadType): "WorkloadList",
-		gvrForCrdType(testAppType):      "AppList",
-		gvrForCrdType(testFooType):      "FooList",
+		testSpaceGVR:                     "SpaceList",
+		gvrFromCrdType(testAISliceType):  "AISliceList",
+		gvrFromCrdType(testWorkloadType): "WorkloadList",
+		gvrFromCrdType(testAppType):      "AppList",
+		gvrFromCrdType(testFooType):      "FooList",
 	}
 	fakeClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, object)
 	Client = fakeClient
 	return fakeClient
-}
-
-func gvrForCrdType(crdType string) schema.GroupVersionResource {
-	parts := strings.Split(crdType, ".")
-	return schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
 }
 
 func recursiveNodeInfo() model.NodeInfo {

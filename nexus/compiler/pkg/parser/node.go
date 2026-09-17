@@ -47,8 +47,11 @@ type NodeHelperChild struct {
 	FieldNameGvk   string `json:"fieldNameGvk"`
 	GoFieldNameGvk string `json:"goFieldNameGvk"`
 	IsNamed        bool   `json:"isNamed"`
-	// OnDeletePolicy mirrors Node.OnDeletePolicy for this child edge.
-	OnDeletePolicy string `json:"onDeletePolicy,omitempty"`
+	// OnDeletePolicy mirrors Node.OnDeletePolicy for this child edge. It is
+	// compiler-internal (json:"-"): the api-gw enforces via the precomputed
+	// deletion-restrict-children list on the CRD, not per-child policy, so this
+	// is deliberately kept out of the serialized CRD annotation.
+	OnDeletePolicy string `json:"-"`
 }
 
 type NonNexusTypes struct {

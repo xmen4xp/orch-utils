@@ -143,21 +143,26 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		return err
 	}
 
+	// nexus-on-delete: restrict - reject the delete while any gated child still
+	// exists, before any child is removed. This is intentionally independent of
+	// the cascade block below so the guard cannot be skipped, and so a restricted
+	// parent's subtree is never partially deleted.
+	if len(crdInfo.RestrictChildren) > 0 {
+		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
+		if err != nil {
+			return err
+		}
+		displayName := obj.GetLabels()["nexus/display_name"]
+		if err = rejectIfChildrenExist(crdInfo.RestrictChildren, gvr, displayName, hashedName, listOpts); err != nil {
+			return err
+		}
+	}
+
 	if len(crdInfo.Children) > 0 {
 		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
 		if err != nil {
 			return err
 		}
-
-		// nexus-on-delete: restrict - reject the delete while any gated child
-		// still exists, before any child is removed. This runs first so a
-		// restricted parent's subtree is never partially deleted.
-		if len(crdInfo.RestrictChildren) > 0 {
-			if err = rejectIfChildrenExist(crdInfo, gvr, hashedName, listOpts); err != nil {
-				return err
-			}
-		}
-
 		// Delete all children
 		for k := range crdInfo.Children {
 			if err = DeleteChildren(k, listOpts); err != nil {
@@ -175,14 +180,19 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 }
 
 // rejectIfChildrenExist returns a Conflict error if the object identified by
-// parentGvr/hashedName still has any child tagged nexus-on-delete:"restrict"
-// (crdInfo.RestrictChildren). It performs an authoritative List against the API
-// server using the cascade selector so the result does not depend on any
-// in-process cache being warm.
-func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersionResource,
-	hashedName string, listOpts metav1.ListOptions,
+// parentGvr/hashedName still has any child listed in restrictChildren (the
+// children tagged nexus-on-delete:"restrict"). It performs an authoritative
+// List against the API server using the cascade selector so the result does not
+// depend on any in-process cache being warm. displayName is used for the
+// human-readable error (falling back to hashedName when unset).
+func rejectIfChildrenExist(restrictChildren []string, parentGvr schema.GroupVersionResource,
+	displayName, hashedName string, listOpts metav1.ListOptions,
 ) error {
-	for _, childType := range crdInfo.RestrictChildren {
+	name := displayName
+	if name == "" {
+		name = hashedName
+	}
+	for _, childType := range restrictChildren {
 		childGvr := gvrFromCrdType(childType)
 		list, err := Client.Resource(childGvr).List(context.TODO(), listOpts)
 		if err != nil {
@@ -191,7 +201,7 @@ func rejectIfChildrenExist(crdInfo model.NodeInfo, parentGvr schema.GroupVersion
 		if len(list.Items) > 0 {
 			return apierrors.NewConflict(parentGvr.GroupResource(), hashedName,
 				fmt.Errorf("cannot delete %q: %d dependent %s still exist (nexus-on-delete: restrict)",
-					hashedName, len(list.Items), childType))
+					name, len(list.Items), childType))
 		}
 	}
 	return nil
