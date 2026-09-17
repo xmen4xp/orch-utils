@@ -16,6 +16,7 @@ import (
 	"nexus-api-gw/pkg/model"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
@@ -142,6 +143,23 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		return err
 	}
 
+	// nexus-on-delete: restrict - reject the delete while any gated child still
+	// exists, before any child is removed. This scans the whole subtree, so it
+	// covers both a direct delete of the restricted parent and deletion via an
+	// ancestor (whose cascade would otherwise remove the gated children). Running
+	// it first means a restricted subtree is never partially deleted.
+	gatedChildTypes := collectRestrictedChildTypes(crdType)
+	if len(gatedChildTypes) > 0 {
+		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
+		if err != nil {
+			return err
+		}
+		displayName := obj.GetLabels()["nexus/display_name"]
+		if err = rejectIfChildrenExist(gatedChildTypes, gvr, displayName, hashedName, listOpts); err != nil {
+			return err
+		}
+	}
+
 	if len(crdInfo.Children) > 0 {
 		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
 		if err != nil {
@@ -161,6 +179,78 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 	}
 
 	return nil
+}
+
+// rejectIfChildrenExist returns a Conflict error if the object identified by
+// parentGvr/hashedName still has any child listed in restrictChildren (the
+// children tagged nexus-on-delete:"restrict"). It performs an authoritative
+// List against the API server using the cascade selector so the result does not
+// depend on any in-process cache being warm. displayName is used for the
+// human-readable error (falling back to hashedName when unset).
+func rejectIfChildrenExist(restrictChildren []string, parentGvr schema.GroupVersionResource,
+	displayName, hashedName string, listOpts metav1.ListOptions,
+) error {
+	name := displayName
+	if name == "" {
+		name = hashedName
+	}
+	for _, childType := range restrictChildren {
+		childGvr := gvrFromCrdType(childType)
+		list, err := Client.Resource(childGvr).List(context.TODO(), listOpts)
+		if err != nil {
+			return err
+		}
+		if len(list.Items) > 0 {
+			return apierrors.NewConflict(parentGvr.GroupResource(), hashedName,
+				fmt.Errorf("cannot delete %q: %d dependent %s still exist (nexus-on-delete: restrict)",
+					name, len(list.Items), childType))
+		}
+	}
+	return nil
+}
+
+// collectRestrictedChildTypes returns the CRD types of all children tagged
+// nexus-on-delete:"restrict" anywhere in the subtree rooted at crdType
+// (including crdType's own restricted children). Deleting crdType cascades to
+// these descendants, so their presence must block the delete - whether crdType
+// is the restricted parent itself or an ancestor of it.
+func collectRestrictedChildTypes(crdType string) []string {
+	gated := map[string]struct{}{}
+	visited := map[string]struct{}{}
+	var walk func(string)
+	walk = func(ct string) {
+		if _, seen := visited[ct]; seen {
+			return
+		}
+		visited[ct] = struct{}{}
+		info, ok := model.CrdTypeToNodeInfo[ct]
+		if !ok {
+			return
+		}
+		for _, r := range info.RestrictChildren {
+			gated[r] = struct{}{}
+		}
+		for childType := range info.Children {
+			walk(childType)
+		}
+	}
+	walk(crdType)
+
+	out := make([]string, 0, len(gated))
+	for t := range gated {
+		out = append(out, t)
+	}
+	return out
+}
+
+// gvrFromCrdType converts a nexus CRD type ("<plural>.<group>") to its GVR.
+func gvrFromCrdType(crdType string) schema.GroupVersionResource {
+	parts := strings.Split(crdType, ".")
+	return schema.GroupVersionResource{
+		Group:    strings.Join(parts[1:], "."),
+		Version:  "v1",
+		Resource: parts[0],
+	}
 }
 
 func cascadeListOptions(objectLabels map[string]string, crdType string, parentHierarchy []string) (metav1.ListOptions, error) {
@@ -191,12 +281,7 @@ func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 		}
 	}
 
-	parts := strings.Split(crdType, ".")
-	gvr := schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
+	gvr := gvrFromCrdType(crdType)
 	err := Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
 	if err != nil {
 		return err

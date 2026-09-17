@@ -152,6 +152,12 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 		if parser.IsLinkField(link) {
 			clientGroupVars.Links = append(clientGroupVars.Links, clientVarsLink)
 		} else {
+			// nexus-on-delete:"restrict" on this child field blocks parent deletion
+			// while the child exists. Default (absent / "cascade") deletes it.
+			if policy, ok := parser.GetChildOnDeletePolicy(link); ok && policy == parser.DeletionPolicyRestrict {
+				clientVarsLink.Restrict = true
+				clientGroupVars.RestrictDelete = true
+			}
 			clientGroupVars.Children = append(clientGroupVars.Children, clientVarsLink)
 		}
 		clientGroupVars.LinksAndChildren = append(clientGroupVars.LinksAndChildren, clientVarsLink)
@@ -297,6 +303,7 @@ type apiGroupsClientVars struct {
 	BaseNodeName           string
 	CrdName                string
 	DeferredDelete         bool
+	RestrictDelete         bool
 	IsSingleton            bool
 	HasChildren            bool
 	HasStatus              bool
@@ -344,4 +351,7 @@ type apiGroupsClientVarsLink struct {
 	GroupResourceNameTitle string
 	GroupResourceType      string
 	CrdName                string
+	// Restrict marks this child as tagged nexus-on-delete:"restrict": its
+	// presence blocks deletion of the parent.
+	Restrict bool
 }

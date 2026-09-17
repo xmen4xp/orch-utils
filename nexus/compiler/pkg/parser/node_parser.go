@@ -227,6 +227,7 @@ func CreateParentsMap(graph map[string]Node) map[string]NodeHelper {
 					FieldName:      key,
 					FieldNameGvk:   util.GetGvkFieldTagName(key),
 					GoFieldNameGvk: key + "Gvk",
+					OnDeletePolicy: child.OnDeletePolicy,
 				}
 			}
 
@@ -239,6 +240,7 @@ func CreateParentsMap(graph map[string]Node) map[string]NodeHelper {
 					FieldName:      key,
 					FieldNameGvk:   util.GetGvkFieldTagName(key),
 					GoFieldNameGvk: key + "Gvk",
+					OnDeletePolicy: child.OnDeletePolicy,
 				}
 			}
 			links := make(map[string]NodeHelperChild)
@@ -326,6 +328,16 @@ func processNode(node *Node, nodes map[string]Node, baseGroupName string) {
 
 			n.Parents = append(p, node.CrdName)
 			processNode(&n, nodes, baseGroupName)
+
+			if policy, ok := GetChildOnDeletePolicy(f); ok {
+				switch policy {
+				case DeletionPolicyRestrict, DeletionPolicyCascade:
+					n.OnDeletePolicy = policy
+				default:
+					log.Fatalf("invalid %s value %q on field %s in node %s (allowed values: %q, %q)",
+						NexusOnDeleteTag, policy, fieldName, node.Name, DeletionPolicyCascade, DeletionPolicyRestrict)
+				}
+			}
 
 			if isNamed {
 				node.MultipleChildren[fieldName] = n

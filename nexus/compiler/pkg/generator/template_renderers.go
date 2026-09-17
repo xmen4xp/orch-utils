@@ -400,14 +400,15 @@ type crdBaseVars struct {
 }
 
 type NexusAnnotation struct {
-	Name            string                            `json:"name,omitempty"`
-	Hierarchy       []string                          `json:"hierarchy,omitempty"`
-	Children        map[string]parser.NodeHelperChild `json:"children,omitempty"`
-	Links           map[string]parser.NodeHelperChild `json:"links,omitempty"`
-	IsSingleton     bool                              `json:"is_singleton"`
-	NexusRestAPIGen nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
-	Description     string                            `json:"description,omitempty"`
-	DeferredDelete  bool                              `json:"deferred-delete,omitempty"`
+	Name             string                            `json:"name,omitempty"`
+	Hierarchy        []string                          `json:"hierarchy,omitempty"`
+	Children         map[string]parser.NodeHelperChild `json:"children,omitempty"`
+	Links            map[string]parser.NodeHelperChild `json:"links,omitempty"`
+	IsSingleton      bool                              `json:"is_singleton"`
+	NexusRestAPIGen  nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
+	Description      string                            `json:"description,omitempty"`
+	DeferredDelete   bool                              `json:"deferred-delete,omitempty"`
+	RestrictChildren []string                          `json:"deletion-restrict-children,omitempty"`
 }
 
 type CrdBaseFile struct {
@@ -493,6 +494,15 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			}
 			nexusAnnotation.DeferredDelete = annotationInBool
 		}
+		// Collect children whose nexus-on-delete tag is "restrict"; these block
+		// deletion of this node while they exist.
+		var restrictChildren []string
+		for childCrd, child := range nexusAnnotation.Children {
+			if child.OnDeletePolicy == parser.DeletionPolicyRestrict {
+				restrictChildren = append(restrictChildren, childCrd)
+			}
+		}
+		nexusAnnotation.RestrictChildren = restrictChildren
 
 		nexusAnnotationStr, err := json.Marshal(nexusAnnotation)
 		if err != nil {

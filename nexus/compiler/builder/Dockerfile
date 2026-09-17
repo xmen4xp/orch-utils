@@ -31,7 +31,7 @@ RUN git config --global --add safe.directory '*' \
     && chmod +x /usr/local/bin/jq \
     && go install github.com/onsi/ginkgo/ginkgo@v1.16.0 \
     && go install github.com/onsi/gomega/...@v1.18.0 \
-    && go install golang.org/x/tools/cmd/goimports@latest \
+    && go install golang.org/x/tools/cmd/goimports@v0.31.0 \
     && go install github.com/mikefarah/yq/v4@v4.45.1 \
     && go install -buildvcs=false k8s.io/kube-openapi/cmd/openapi-gen@v0.0.0-20251125145642-4e65d59e963e \
     && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.6 \

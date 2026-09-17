@@ -27,4 +27,28 @@ var _ = Describe("Node config tests", func() {
 		Expect(ok).To(BeTrue())
 		Expect(annotation).To(Equal("GNSRestAPISpec"))
 	})
+
+	It("should parse the nexus-on-delete child tag", func() {
+		policyPkgs := parser.ParseDSLPkg("../../example/test-utils/deletion-policy-datamodel")
+		policyPkg, found := policyPkgs["example.com/deletion-policy-datamodel"]
+		Expect(found).To(BeTrue())
+
+		var rootFound bool
+		var restrictCount int
+		for _, n := range policyPkg.GetNexusNodes() {
+			if parser.GetTypeName(n) != "Root" {
+				continue
+			}
+			rootFound = true
+			for _, f := range parser.GetChildFields(n) {
+				if policy, present := parser.GetChildOnDeletePolicy(f); present {
+					Expect(policy).To(Equal(parser.DeletionPolicyRestrict))
+					restrictCount++
+				}
+			}
+		}
+		Expect(rootFound).To(BeTrue())
+		// Exactly one child (AISlice) is tagged restrict; Foo has no tag.
+		Expect(restrictCount).To(Equal(1))
+	})
 })

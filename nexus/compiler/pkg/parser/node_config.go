@@ -21,6 +21,21 @@ const (
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
 )
 
+// NexusOnDeleteTag is the per-child struct tag that controls what happens to a
+// child when its parent is deleted, e.g.:
+//
+//	AISlices aislice.AISlice `nexus:"child" nexus-on-delete:"restrict"`
+const NexusOnDeleteTag = "nexus-on-delete"
+
+// Supported values for the nexus-on-delete tag.
+const (
+	// DeletionPolicyCascade is the default: the child is deleted along with its
+	// parent. Assumed when the tag is absent.
+	DeletionPolicyCascade = "cascade"
+	// DeletionPolicyRestrict rejects deletion of the parent while this child exists.
+	DeletionPolicyRestrict = "restrict"
+)
+
 func GetNexusSecretSpecAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusSecretSpecAnnotation)
 }
