@@ -139,16 +139,12 @@ var _ = ginkgo.Describe("OpenAPI tests", ginkgo.Ordered, func() {
 		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Patch).To(gomega.Not(gomega.BeNil()))
 	})
 
-	ginkgo.It("should add GET, PUT and PATCH status endpoints", func() {
+	ginkgo.It("should add GET-only status endpoint (status sub-resources are read-only)", func() {
 		statusURI := "/leader/status"
 		restURI := nexus.RestURIs{
 			Uri: statusURI,
 			Methods: nexus.HTTPMethodsResponses{
 				http.MethodGet: nexus.DefaultHTTPGETResponses,
-				http.MethodPut: nexus.DefaultHTTPPUTResponses,
-				http.MethodPatch: nexus.HTTPCodesResponse{
-					http.StatusOK: nexus.HTTPResponse{Description: http.StatusText(http.StatusOK)},
-				},
 			},
 		}
 
@@ -173,8 +169,8 @@ var _ = ginkgo.Describe("OpenAPI tests", ginkgo.Ordered, func() {
 		api.New("vmware.org")
 		api.AddPath(restURI, "vmware.org")
 		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Get).To(gomega.Not(gomega.BeNil()))
-		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Put).To(gomega.Not(gomega.BeNil()))
-		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Patch).To(gomega.Not(gomega.BeNil()))
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Put).To(gomega.BeNil())
+		gomega.Expect(api.Schemas["vmware.org"].Paths.Value(restURI.Uri).Patch).To(gomega.BeNil())
 	})
 
 	ginkgo.It("should test Recreate func", func() {

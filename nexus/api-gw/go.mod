@@ -4,7 +4,7 @@
 
 module nexus-api-gw
 
-go 1.24.6
+go 1.25.3
 
 require (
 	github.com/getkin/kin-openapi v0.131.0
@@ -138,13 +138,15 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
-	nexus/admin/api v0.0.0-00010101000000-000000000000
+	nexus/admin/api/build v0.0.0-00010101000000-000000000000
 	nexus/openapi-builder v0.0.0-00010101000000-000000000000
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )
 
 replace nexus/admin/api => ../api
+
+replace nexus/admin/api/build => ../api/build
 
 replace github.com/vmware-tanzu/graph-framework-for-microservices/nexus => ../nexus
 
