@@ -6035,54 +6035,6 @@ func (group *GnsTsmV1) DeleteGnsByName(ctx context.Context, hashedName string) (
 		return err
 	}
 
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "svcgroups.servicegroup.tsm.tanzu.vmware.com") {
-		err := group.client.Servicegroup().DeleteSvcGroupByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "svcgroups.servicegroup.tsm.tanzu.vmware.com", child)
-	}
-
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "accesscontrolpolicies.policypkg.tsm.tanzu.vmware.com") {
-		err := group.client.Policypkg().DeleteAccessControlPolicyByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "accesscontrolpolicies.policypkg.tsm.tanzu.vmware.com", child)
-	}
-
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "barchilds.gns.tsm.tanzu.vmware.com") {
-		err := group.client.Gns().DeleteBarChildByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "barchilds.gns.tsm.tanzu.vmware.com", child)
-	}
-
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "ignorechilds.gns.tsm.tanzu.vmware.com") {
-		err := group.client.Gns().DeleteIgnoreChildByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "ignorechilds.gns.tsm.tanzu.vmware.com", child)
-	}
-
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "foos.gns.tsm.tanzu.vmware.com") {
-		err := group.client.Gns().DeleteFooByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "foos.gns.tsm.tanzu.vmware.com", child)
-	}
-
-	for _, child := range GetChildren("gnses.gns.tsm.tanzu.vmware.com", hashedName, "optionalparentpathparams.optionalparentpathparam.tsm.tanzu.vmware.com") {
-		err := group.client.Optionalparentpathparam().DeleteOptionalParentPathParamByName(ctx, child)
-		if err != nil && errors.IsNotFound(err) == false {
-			return err
-		}
-		RemoveChild("gnses.gns.tsm.tanzu.vmware.com", hashedName, "optionalparentpathparams.optionalparentpathparam.tsm.tanzu.vmware.com", child)
-	}
-
 	retryCount = 0
 	for {
 		err = group.client.baseClient.

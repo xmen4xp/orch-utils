@@ -354,6 +354,8 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	if result == nil {
 		return err
 	}
+	{{/* Deferred-delete nodes skip the client-side cascade: the parent DELETE below sets a deletionTimestamp (the finalizer added at create time holds the object), and the owning controller performs teardown. Cascading here would delete children before the parent's DELETE reaches admission and would race the controller's teardown. */}}
+	{{ if not $node.DeferredDelete }}
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
 		err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child)
@@ -362,6 +364,7 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 		}
 		RemoveChild("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}", child)
 	}
+	{{ end }}
 	{{ end }}
 
 	retryCount = 0
