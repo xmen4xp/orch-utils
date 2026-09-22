@@ -123,6 +123,11 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getGns.GetName()).To(Equal(gns.GetName()))
 
+			// Gns is deferred-delete, so Config cannot be removed until the Gns is deleted first
+			// (bottom-up). Delete the Gns, then the Config delete succeeds.
+			err = cfg.DeleteGNS(context.TODO())
+			Expect(err).NotTo(HaveOccurred())
+
 			err = root.DeleteConfig(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -273,7 +278,7 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should remove all children when parent is removed", func() {
+		It("should refuse to remove a parent while a deferred-delete descendant exists", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -299,19 +304,22 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(gns.DisplayName()).To(Equal("gnsName"))
 
+			// Gns is deferred-delete, so deleting an ancestor (root) is refused until the Gns is
+			// deleted first (bottom-up deletion); the tree is left intact.
 			err = root.Delete(context.TODO())
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must be deleted first"))
 
 			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(cfg).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
 
 			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(gns).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gns).NotTo(BeNil())
 		})
 
-		It("should delete all named children when parent is removed", func() {
+		It("should not cascade to children when a deferred-delete parent is removed", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -352,13 +360,15 @@ var _ = Describe("Nexus clients tests", func() {
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
 			Expect(err).NotTo(HaveOccurred())
 
+			// Gns is annotated `nexus-deferred-delete`, so deleting it must NOT cascade to its
+			// SvcGroup children — teardown is deferred to the finalizer and the owning controller.
 			err = cfg.DeleteGNS(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg1.GetName())
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
