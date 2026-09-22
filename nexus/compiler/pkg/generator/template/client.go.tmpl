@@ -184,6 +184,40 @@ func new{{$group.GroupTypeName}}(client *Clientset) *{{$group.GroupTypeName}} {
 }
 {{end}}
 
+// deferredDeleteCRDs holds CRD types whose deletion is deferred: the finalizer added at create
+// time plus the owning controller perform teardown, instead of an eager children-first cascade.
+var deferredDeleteCRDs = map[string]bool{
+{{- range $key, $node := .Nodes }}
+{{- if $node.DeferredDelete }}
+	"{{$node.CrdName}}": true,
+{{- end }}
+{{- end }}
+}
+
+// childCRDs maps a CRD type to its immediate child CRD types (used to walk the hierarchy).
+var childCRDs = map[string][]string{
+{{- range $key, $node := .Nodes }}
+	"{{$node.CrdName}}": { {{- range $k, $link := $node.Children }}"{{$link.CrdName}}",{{ end -}} },
+{{- end }}
+}
+
+// firstDeferredDescendant returns "<crd>/<name>" for the first deferred-delete descendant of
+// (crdName, name) still present in the children cache, or "" if none. It enforces bottom-up
+// deletion: a node cannot be deleted while a deferred-delete descendant remains.
+func firstDeferredDescendant(crdName, name string) string {
+	for _, childCRD := range childCRDs[crdName] {
+		for _, child := range GetChildren(crdName, name, childCRD) {
+			if deferredDeleteCRDs[childCRD] {
+				return childCRD + "/" + child
+			}
+			if blocker := firstDeferredDescendant(childCRD, child); blocker != "" {
+				return blocker
+			}
+		}
+	}
+	return ""
+}
+
 
 {{ range $key, $node := .Nodes }}
 
@@ -353,6 +387,12 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 
 	if result == nil {
 		return err
+	}
+
+	// Enforce bottom-up deletion: refuse to delete this node while a deferred-delete descendant
+	// still exists; such descendants must be deleted explicitly first.
+	if blocker := firstDeferredDescendant("{{$node.CrdName}}", hashedName); blocker != "" {
+		return fmt.Errorf("cannot delete %s: deferred-delete descendant %q must be deleted first", "{{$node.CrdName}}", blocker)
 	}
 	{{/* Deferred-delete nodes skip the client-side cascade: the parent DELETE below sets a deletionTimestamp (the finalizer added at create time holds the object), and the owning controller performs teardown. Cascading here would delete children before the parent's DELETE reaches admission and would race the controller's teardown. */}}
 	{{ if not $node.DeferredDelete }}
