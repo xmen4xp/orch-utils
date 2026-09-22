@@ -181,6 +181,57 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 	}
 }
 
+func TestDeleteObjectSkipsCascadeForDeferredDelete(t *testing.T) {
+	// A deferred-delete node must not cascade: DeleteObject issues only the parent DELETE
+	// (which the finalizer turns into a Terminating state) and leaves teardown to the
+	// owning controller — even though the node has children.
+	info := recursiveNodeInfo()
+	info.DeferredDelete = true
+	fakeClient := setupDeleteTest(t, map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}, info)
+
+	cascadeCalls := 0
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		cascadeCalls++
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.NoError(t, err)
+	require.Zero(t, cascadeCalls, "deferred-delete node must not cascade to children")
+
+	// Only the parent object's get + delete, no cascade.
+	require.Len(t, fakeClient.Actions(), 2)
+	require.Equal(t, "get", fakeClient.Actions()[0].GetVerb())
+	require.Equal(t, "delete", fakeClient.Actions()[1].GetVerb())
+	require.Equal(t, testSpaceGVR, fakeClient.Actions()[1].GetResource())
+}
+
+func TestDeleteObjectDeferredDeleteIgnoresMissingHierarchyLabels(t *testing.T) {
+	// A non-deferred node errors on missing hierarchy labels (cannot safely cascade); a
+	// deferred-delete node skips cascade entirely, so the parent delete must still succeed
+	// even when those labels are absent.
+	info := recursiveNodeInfo()
+	info.DeferredDelete = true
+	fakeClient := setupDeleteTest(t, nil, info)
+
+	cascadeCalls := 0
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		cascadeCalls++
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.NoError(t, err)
+	require.Zero(t, cascadeCalls)
+	require.Len(t, fakeClient.Actions(), 2)
+	require.Equal(t, "get", fakeClient.Actions()[0].GetVerb())
+	require.Equal(t, "delete", fakeClient.Actions()[1].GetVerb())
+}
+
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {
 	t.Helper()
 

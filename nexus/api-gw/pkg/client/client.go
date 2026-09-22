@@ -142,7 +142,11 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		return err
 	}
 
-	if len(crdInfo.Children) > 0 {
+	// Deferred-delete nodes are not cascaded here: the Delete below sets a deletionTimestamp
+	// (the finalizer added at create time holds the object in Terminating) and the owning
+	// controller performs teardown. Cascading would remove children before the parent's DELETE
+	// reaches admission and would race the controller's teardown.
+	if !crdInfo.DeferredDelete && len(crdInfo.Children) > 0 {
 		listOpts, err := cascadeListOptions(obj.GetLabels(), crdType, crdInfo.ParentHierarchy)
 		if err != nil {
 			return err
