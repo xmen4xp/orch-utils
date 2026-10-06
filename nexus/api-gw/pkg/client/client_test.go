@@ -181,6 +181,91 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 	}
 }
 
+func TestDeleteObjectSkipsCascadeForDeferredDelete(t *testing.T) {
+	// A deferred-delete node must not cascade: DeleteObject issues only the parent DELETE
+	// (which the finalizer turns into a Terminating state) and leaves teardown to the
+	// owning controller — even though the node has children.
+	info := recursiveNodeInfo()
+	info.DeferredDelete = true
+	fakeClient := setupDeleteTest(t, map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}, info)
+
+	cascadeCalls := 0
+	fakeClient.PrependReactor("delete-collection", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		cascadeCalls++
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.NoError(t, err)
+	require.Zero(t, cascadeCalls, "deferred-delete node must not cascade to children")
+
+	// Only the parent object's get + delete, no cascade.
+	require.Len(t, fakeClient.Actions(), 2)
+	require.Equal(t, "get", fakeClient.Actions()[0].GetVerb())
+	require.Equal(t, "delete", fakeClient.Actions()[1].GetVerb())
+	require.Equal(t, testSpaceGVR, fakeClient.Actions()[1].GetResource())
+}
+
+func TestDeleteObjectBlockedByDeferredDescendant(t *testing.T) {
+	// space (non-deferred) has an aislice descendant that is deferred-delete. With a live
+	// aislice present, deleting the space must be refused until the aislice is deleted first
+	// (bottom-up deletion), and the space itself must not be deleted.
+	originalClient := Client
+	originalNodeInfo := model.CrdTypeToNodeInfo
+	t.Cleanup(func() {
+		Client = originalClient
+		model.CrdTypeToNodeInfo = originalNodeInfo
+	})
+
+	model.CrdTypeToNodeInfo = map[string]model.NodeInfo{
+		testSpaceType: {
+			ParentHierarchy: []string{testOrgType, testProjectType},
+			Children:        map[string]model.NodeHelperChild{testAISliceType: {}},
+		},
+		testAISliceType: {DeferredDelete: true},
+	}
+
+	space := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": testSpaceGVR.GroupVersion().String(),
+		"kind":       "Space",
+		"metadata": map[string]interface{}{
+			"name": "space-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				"nexus/display_name": "demo-space",
+			},
+		},
+	}}
+	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), space)
+	Client = fakeClient
+
+	// The deferred-descendant scan lists aislices; return one live instance.
+	fakeClient.PrependReactor("list", "aislices", func(k8stesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{{Object: map[string]interface{}{
+			"apiVersion": "aislice.test.io/v1",
+			"kind":       "AISlice",
+			"metadata":   map[string]interface{}{"name": "slice-1"},
+		}}}}
+		return true, list, nil
+	})
+	deleteCalled := false
+	fakeClient.PrependReactor("delete", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleteCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "must be deleted first")
+	require.ErrorContains(t, err, testAISliceType)
+	require.False(t, deleteCalled, "space must not be deleted while a deferred-delete descendant exists")
+}
+
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {
 	t.Helper()
 
