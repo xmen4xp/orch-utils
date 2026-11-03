@@ -194,6 +194,12 @@ func (s *EchoServer) RegisterNexusRoutes() {
 
 	// Swagger-UI, datamodel is edge-orchestrator.intel.com
 	s.Echo.GET("/:datamodel/docs", SwaggerUI)
+
+	// CRD conversion webhook endpoint for multi-version Kinds. See
+	// ConvertHandler for details; CRDs point their
+	// spec.conversion.webhook.clientConfig.service.path at this route (see
+	// the compiler's crd_base.yaml.tmpl).
+	s.Echo.POST("/convert", ConvertHandler)
 }
 
 // ReplayNexusCRDRoutes re-registers all known Nexus CRD-derived routes on the current echo server.

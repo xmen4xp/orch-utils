@@ -18,6 +18,15 @@ type Config struct {
 	CrdModulePath           string   `yaml:"crdModulePath"`
 	IgnoredDirs             []string `yaml:"ignoredDirs"`
 	IgnoredParentPathParams []string `yaml:"ignoredParentPathParams"`
+
+	// ConversionWebhookServiceName/Namespace identify the Service fronting
+	// the conversion webhook (see nexus-api-gw's /convert handler) that CRDs
+	// with more than one version (see pkg/parser/node_version.go) point
+	// their spec.conversion.webhook.clientConfig at. Defaults to
+	// "nexus-api-gw" in whatever namespace the datamodel is installed into
+	// when unset.
+	ConversionWebhookServiceName      string `yaml:"conversionWebhookServiceName"`
+	ConversionWebhookServiceNamespace string `yaml:"conversionWebhookServiceNamespace"`
 }
 
 func LoadConfig(configFile string) (*Config, error) {

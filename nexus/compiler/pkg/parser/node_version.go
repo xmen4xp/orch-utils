@@ -6,6 +6,7 @@ package parser
 import (
 	"go/ast"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -64,6 +65,73 @@ func resolveNodeIdentity(pkg Package, structName string) (kind, version string, 
 	}
 
 	return kind, version, isStorageVersion
+}
+
+// KindVersion is one version of one Kind within a single Go DSL package, as
+// resolved by ResolveNodeIdentity. It's the shared unit the CRD/openapi/
+// client generators use to know which struct backs which (Kind, version)
+// pair within a package.
+type KindVersion struct {
+	Kind             string
+	Version          string
+	IsStorageVersion bool
+	StructName       string // the actual Go struct name, e.g. "OrgV2"
+	TypeSpec         *ast.TypeSpec
+}
+
+// GroupNodesByKind walks every nexus node struct in pkg and groups them by
+// resolved Kind, preserving first-seen order so generated output is
+// deterministic. Each Kind maps to one KindVersion per version struct
+// declared for it (e.g. Kind "Org" -> [{Version: "v1", StructName: "Org"},
+// {Version: "v2", StructName: "OrgV2"}]).
+func GroupNodesByKind(pkg Package) (order []string, groups map[string][]KindVersion) {
+	groups = map[string][]KindVersion{}
+	for _, node := range pkg.GetNexusNodes() {
+		structName := GetTypeName(node)
+		kind, version, isStorageVersion := ResolveNodeIdentity(pkg, structName)
+		if _, seen := groups[kind]; !seen {
+			order = append(order, kind)
+		}
+		groups[kind] = append(groups[kind], KindVersion{
+			Kind:             kind,
+			Version:          version,
+			IsStorageVersion: isStorageVersion,
+			StructName:       structName,
+			TypeSpec:         node,
+		})
+	}
+	return order, groups
+}
+
+// StorageVersion returns the KindVersion marked as the storage version among
+// versions, or nil if none is (ParseDSLNodes/validateNodeVersions should
+// already have fataled on that case before generators ever see it).
+func StorageVersion(versions []KindVersion) *KindVersion {
+	for i := range versions {
+		if versions[i].IsStorageVersion {
+			return &versions[i]
+		}
+	}
+	return nil
+}
+
+// PackageVersions returns every distinct API version declared by any Kind in
+// pkg, in first-seen order (e.g. ["v1", "v2"]). A package with no versioned
+// types still returns ["v1"], matching today's single-version behavior.
+func PackageVersions(pkg Package) []string {
+	var versions []string
+	seen := map[string]bool{}
+	_, groups := GroupNodesByKind(pkg)
+	for _, kindVersions := range groups {
+		for _, kv := range kindVersions {
+			if !seen[kv.Version] {
+				seen[kv.Version] = true
+				versions = append(versions, kv.Version)
+			}
+		}
+	}
+	sort.Strings(versions)
+	return versions
 }
 
 // scanConversionImplementors walks every file in a Go AST package and returns

@@ -420,43 +420,37 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 }
 
 func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResourceDefinition) error {
-	// Use the storage version's Go type to look up the schema. Every version
-	// of a multi-version Kind (see pkg/parser/node_version.go) is given the
-	// same schema below until per-version schema generation lands (tracked
-	// as a follow-up); that's safe today because all versions are only ever
-	// emitted as additive aliases of the storage version's shape.
-	storageVersionName := crd.Spec.Versions[0].Name
-	for _, v := range crd.Spec.Versions {
-		if v.Storage {
-			storageVersionName = v.Name
-			break
-		}
-	}
-
-	name := g.createName(crd.Spec.Group, storageVersionName, crd.Spec.Names.Kind)
-	schemaProps := g.getDefinition(name).schema
-	toReplace := []string{}
-	for _, propName := range schemaProps.Required {
-		// We want only "spec" and "data" fields required in schemas. "status" and all
-		// others should remain optional.
-		if propName == "spec" || propName == "data" {
-			toReplace = append(toReplace, propName)
-		}
-	}
-	schemaProps.Required = toReplace
-	// We need to ensure that crd.spec.versions[*].schema.openapiV3Schema["metadata"]
-	// does not contain any fields except for `type: object`. This is required by K8s
-	// API and we added x-kubernetes-preserve-unknown-fields: true` here in `getDefinition`,
-	// so we are fixing our wrongly added flag.
-	if len(schemaProps.Properties) == 0 {
-		schemaProps.Properties = map[string]extensionsv1.JSONSchemaProps{}
-	}
-	schemaProps.Properties["metadata"] = extensionsv1.JSONSchemaProps{
-		Type: "object",
-	}
-
 	crd.Spec.PreserveUnknownFields = false
+	// Each version now has its own generated Go type (apis/<group>/<version>
+	// package - see pkg/generator/types_generator.go and
+	// RenderTypesTemplate), so each gets its own schema instead of sharing
+	// the storage version's. getDefinition() falls back to a generic
+	// "default" schema (with a warning) if a version's openapi-gen output
+	// can't be found, so this is safe even for datamodels whose build
+	// pipeline doesn't run openapi-gen against every version's package yet.
 	for i := range crd.Spec.Versions {
+		name := g.createName(crd.Spec.Group, crd.Spec.Versions[i].Name, crd.Spec.Names.Kind)
+		schemaProps := g.getDefinition(name).schema
+		toReplace := []string{}
+		for _, propName := range schemaProps.Required {
+			// We want only "spec" and "data" fields required in schemas. "status" and all
+			// others should remain optional.
+			if propName == "spec" || propName == "data" {
+				toReplace = append(toReplace, propName)
+			}
+		}
+		schemaProps.Required = toReplace
+		// We need to ensure that crd.spec.versions[*].schema.openapiV3Schema["metadata"]
+		// does not contain any fields except for `type: object`. This is required by K8s
+		// API and we added x-kubernetes-preserve-unknown-fields: true` here in `getDefinition`,
+		// so we are fixing our wrongly added flag.
+		if len(schemaProps.Properties) == 0 {
+			schemaProps.Properties = map[string]extensionsv1.JSONSchemaProps{}
+		}
+		schemaProps.Properties["metadata"] = extensionsv1.JSONSchemaProps{
+			Type: "object",
+		}
+
 		crd.Spec.Versions[i].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemaProps}
 	}
 	return nil

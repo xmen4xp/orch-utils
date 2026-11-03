@@ -69,7 +69,7 @@ var _ = Describe("Template renderers tests", func() {
 	})
 
 	It("should parse doc template", func() {
-		docBytes, err := generator.RenderDocTemplate(baseGroupName, pkg)
+		docBytes, err := generator.RenderDocTemplate(baseGroupName, pkg, "v1")
 		Expect(err).NotTo(HaveOccurred())
 		formatted, err := format.Source(docBytes.Bytes())
 		Expect(err).NotTo(HaveOccurred())
@@ -93,7 +93,7 @@ var _ = Describe("Template renderers tests", func() {
 	})
 
 	It("should parse register CRD template", func() {
-		regBytes, err := generator.RenderRegisterCRDTemplate(crdModulePath, baseGroupName, pkg)
+		regBytes, err := generator.RenderRegisterCRDTemplate(crdModulePath, baseGroupName, pkg, "v1")
 		Expect(err).NotTo(HaveOccurred())
 		formatted, err := format.Source(regBytes.Bytes())
 		Expect(err).NotTo(HaveOccurred())
@@ -133,7 +133,7 @@ var _ = Describe("Template renderers tests", func() {
 	})
 
 	It("should parse types template", func() {
-		typesBytes, err := generator.RenderTypesTemplate(crdModulePath, pkg)
+		typesBytes, err := generator.RenderTypesTemplate(crdModulePath, pkg, "v1")
 		Expect(err).NotTo(HaveOccurred())
 
 		formatted, err := format.Source(typesBytes.Bytes())
