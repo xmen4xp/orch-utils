@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"go/ast"
 	"go/format"
 	"go/printer"
 	"go/token"
@@ -395,8 +396,18 @@ type crdBaseVars struct {
 	Plural          string
 	Kind            string
 	KindList        string
-	ResourceVersion string
+	Versions        []crdVersionVars
 	NexusAnnotation string
+}
+
+// crdVersionVars describes one entry of a CRD's spec.versions[] list. A Kind
+// with more than one version (see pkg/parser/node_version.go) gets one entry
+// per version here instead of the single implicit "v1" every Kind used to
+// get.
+type crdVersionVars struct {
+	Name    string
+	Served  bool
+	Storage bool
 }
 
 type NexusAnnotation struct {
@@ -429,8 +440,15 @@ type ClusterRoleVars struct {
 func constructClusterRoleRules(baseGroupName string, pkg parser.Package, ruleMap map[string][]string) {
 	for _, node := range pkg.GetNexusNodes() {
 		typeName := parser.GetTypeName(node)
+		kind, _, isStorageVersion := parser.ResolveNodeIdentity(pkg, typeName)
+		if !isStorageVersion {
+			// Non-storage versions (e.g. OrgV2) share a single CRD/resource
+			// with their storage version (Org) - don't add a second,
+			// non-existent "orgv2s" resource to the RBAC rules.
+			continue
+		}
 		groupName := pkg.Name + "." + baseGroupName
-		resourceName := strings.ToLower(util.ToPlural(typeName))
+		resourceName := strings.ToLower(util.ToPlural(kind))
 		ruleMap[groupName] = append(ruleMap[groupName], resourceName)
 	}
 }
@@ -454,23 +472,64 @@ func RenderClusterRoleTemplate(baseGroupName string, ruleMap map[string][]string
 	return tmpl, nil
 }
 
+// versionedStruct is one Go struct (one version) belonging to a Kind, as
+// resolved by parser.ResolveNodeIdentity.
+type versionedStruct struct {
+	typeName         string
+	version          string
+	isStorageVersion bool
+}
+
 func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap map[string]parser.NodeHelper,
 	httpMethods map[string]nexus.HTTPMethodsResponses, httpCodes map[string]nexus.HTTPCodesResponse) ([]CrdBaseFile, error) {
 	var crds []CrdBaseFile
 
 	restAPISpecMap := rest.GetRestApiSpecs(pkg, httpMethods, httpCodes, parentsMap)
+
+	// Group every nexus node struct in this package by its resolved Kind, so
+	// that e.g. Org and OrgV2 (same Kind, different versions - see
+	// pkg/parser/node_version.go) produce a single CRD YAML file with
+	// multiple spec.versions[] entries, instead of one file each.
+	var kindOrder []string
+	kindGroups := map[string][]versionedStruct{}
 	for _, node := range pkg.GetNexusNodes() {
 		typeName := parser.GetTypeName(node)
+		kind, version, isStorageVersion := parser.ResolveNodeIdentity(pkg, typeName)
+		if _, seen := kindGroups[kind]; !seen {
+			kindOrder = append(kindOrder, kind)
+		}
+		kindGroups[kind] = append(kindGroups[kind], versionedStruct{
+			typeName:         typeName,
+			version:          version,
+			isStorageVersion: isStorageVersion,
+		})
+	}
+
+	for _, kind := range kindOrder {
+		versions := kindGroups[kind]
+
+		var storage *versionedStruct
+		for i := range versions {
+			if versions[i].isStorageVersion {
+				storage = &versions[i]
+			}
+		}
+		if storage == nil {
+			// parser.ParseDSLNodes already fatals on this case during
+			// ParseDSLNodes/validateNodeVersions; guard here too in case
+			// RenderCRDBaseTemplate is ever invoked independently (e.g. tests).
+			return nil, fmt.Errorf("kind %q in package %q has no storage version", kind, pkg.Name)
+		}
+
 		groupName := pkg.Name + "." + baseGroupName
-		singular := strings.ToLower(typeName)
-		kind := cases.Title(language.Und, cases.NoLower).String(typeName)
-		plural := strings.ToLower(util.ToPlural(typeName))
+		singular := strings.ToLower(kind)
+		titleKind := cases.Title(language.Und, cases.NoLower).String(kind)
+		plural := strings.ToLower(util.ToPlural(kind))
 		crdName := fmt.Sprintf("%s.%s", plural, groupName)
 
 		nexusAnnotation := &NexusAnnotation{}
-		nexusAnnotation.IsSingleton = parser.IsSingletonNode(node)
+		nexusAnnotation.IsSingleton = parser.IsSingletonNode(mustGetNode(pkg, storage.typeName))
 
-		var err error
 		parents, ok := parentsMap[crdName]
 		if ok {
 			nexusAnnotation.Hierarchy = parents.Parents
@@ -479,14 +538,27 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			nexusAnnotation.Name = parents.RestName
 		}
 
-		if annotation, ok := parser.GetNexusRestAPIGenAnnotation(pkg, typeName); ok {
-			nexusAnnotation.NexusRestAPIGen = restAPISpecMap[annotation]
-			rest.ValidateRestApiSpec(restAPISpecMap[annotation], parentsMap, crdName)
+		// Every version of the Kind may declare its own RestAPISpec (e.g.
+		// OrgRestAPISpec for v1, OrgV2RestAPISpec for v2); combine their URIs
+		// into a single nexus-rest-api-gen annotation on the one CRD.
+		crdVersions := make([]crdVersionVars, 0, len(versions))
+		for _, v := range versions {
+			crdVersions = append(crdVersions, crdVersionVars{
+				Name:    v.version,
+				Served:  true,
+				Storage: v.isStorageVersion,
+			})
+			if annotation, ok := parser.GetNexusRestAPIGenAnnotation(pkg, v.typeName); ok {
+				apiSpec := restAPISpecMap[annotation]
+				rest.ValidateRestApiSpec(apiSpec, parentsMap, crdName)
+				nexusAnnotation.NexusRestAPIGen.Uris = append(nexusAnnotation.NexusRestAPIGen.Uris, apiSpec.Uris...)
+			}
 		}
-		if annotation, ok := parser.GetNexusDescriptionAnnotation(pkg, typeName); ok {
+
+		if annotation, ok := parser.GetNexusDescriptionAnnotation(pkg, storage.typeName); ok {
 			nexusAnnotation.Description = annotation
 		}
-		if annotation, ok := parser.GetNexusDeferredDeleteAnnotation(pkg, typeName); ok {
+		if annotation, ok := parser.GetNexusDeferredDeleteAnnotation(pkg, storage.typeName); ok {
 			annotationInBool, err := strconv.ParseBool(annotation)
 			if err != nil {
 				return nil, err
@@ -504,11 +576,10 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			GroupName:       groupName,
 			Singular:        singular,
 			Plural:          plural,
-			Kind:            kind,
-			KindList:        fmt.Sprintf("%sList", kind),
+			Kind:            titleKind,
+			KindList:        fmt.Sprintf("%sList", titleKind),
+			Versions:        crdVersions,
 			NexusAnnotation: string(nexusAnnotationStr),
-			// TODO make configurable by some variable in package
-			ResourceVersion: "v1",
 		}
 
 		if vars.GroupName == "" ||
@@ -516,7 +587,7 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			vars.Plural == "" ||
 			vars.Kind == "" ||
 			vars.KindList == "" ||
-			vars.ResourceVersion == "" {
+			len(vars.Versions) == 0 {
 			return nil, fmt.Errorf("failed to determine required registerCRDVars")
 		}
 		registerCrdTemplate, err := readTemplateFile(crdBaseTemplateFile)
@@ -534,6 +605,20 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 		crds = append(crds, crd)
 	}
 	return crds, nil
+}
+
+// mustGetNode returns the *ast.TypeSpec for a struct name in pkg. Callers
+// only ever pass a typeName already known to exist in pkg (resolved a few
+// lines earlier via pkg.GetNexusNodes()), so a missing result indicates an
+// internal compiler bug rather than bad input.
+func mustGetNode(pkg parser.Package, typeName string) *ast.TypeSpec {
+	for _, node := range pkg.GetNexusNodes() {
+		if parser.GetTypeName(node) == typeName {
+			return node
+		}
+	}
+	log.Fatalf("Internal compiler failure: couldn't find nexus node %q in package %q", typeName, pkg.Name)
+	return nil
 }
 
 func createApiNamesFile(apiList []string, outputDir string) error {

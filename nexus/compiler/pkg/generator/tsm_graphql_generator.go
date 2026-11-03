@@ -446,6 +446,16 @@ func GenerateTsmGraphqlSchemaVars(baseGroupName, crdModulePath string, pkgs pars
 				gqlspec = gqlSpecMap[fmt.Sprintf("%s.%s", pkg.Name, val)]
 			}
 
+			if parser.IsNexusNode(node) {
+				if _, _, isStorageVersion := parser.ResolveNodeIdentity(pkg, typeName); !isStorageVersion {
+					// Non-storage versions (e.g. OrgV2) ride along with their
+					// storage version's CRD and aren't independent graph
+					// nodes yet - see pkg/parser/node_version.go.
+					log.Debugf("Ignoring non-storage version node %s for GraphQL generation", typeName)
+					continue
+				}
+			}
+
 			nodeProp := &NodeProperty{}
 			// populate node properties
 			nodeProp.PkgName = simpleGroupTypeName

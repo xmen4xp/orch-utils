@@ -24,6 +24,13 @@ type Node struct {
 	MultipleLink     map[string]Node
 	GraphqlQuerySpec nexus.GraphQLQuerySpec
 	GraphqlSpec      nexus.GraphQLSpec
+
+	// Versioning (k8s-style multi-version CRD support, see node_version.go).
+	Kind                  string // Resolved Kind, shared by every version of a resource. Defaults to Name.
+	Version               string // API version this struct represents (e.g. "v1", "v2"). Defaults to "v1".
+	IsStorageVersion      bool   // Whether this version is the CRD's storage version.
+	ConversionImplemented bool   // Whether this struct implements ConvertTo/ConvertFrom to the storage version.
+	OtherVersions         []Node // Non-canonical versions of the same Kind. Only ever populated on the storage-version Node.
 }
 
 type NodeHelper struct {

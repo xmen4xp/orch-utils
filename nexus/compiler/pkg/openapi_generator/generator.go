@@ -364,14 +364,21 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 			if err != nil {
 				return fmt.Errorf("unmarshalling: %v", err)
 			}
-			// TODO we assume here that we have only one version, which is correct
-			// at the time of writing this, but may not be in the future.
-			if len(crd.Spec.Versions) != 1 {
-				return fmt.Errorf("crd %v has no, or more than 1 versions", crd.Name)
+			if len(crd.Spec.Versions) == 0 {
+				return fmt.Errorf("crd %v has no versions", crd.Name)
 			}
 			// TODO another hack. I don't know how to prevent Status field being
 			// generated in YAML file, so we add StoredVersions by hand
-			crd.Status.StoredVersions = []string{crd.Spec.Versions[0].Name}
+			var storedVersions []string
+			for _, v := range crd.Spec.Versions {
+				if v.Storage {
+					storedVersions = append(storedVersions, v.Name)
+				}
+			}
+			if len(storedVersions) != 1 {
+				return fmt.Errorf("crd %v must have exactly one storage version, found %d", crd.Name, len(storedVersions))
+			}
+			crd.Status.StoredVersions = storedVersions
 			err = g.addCustomResourceValidation(&crd)
 			if err != nil {
 				return err
@@ -413,7 +420,20 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 }
 
 func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResourceDefinition) error {
-	name := g.createName(crd.Spec.Group, crd.Spec.Versions[0].Name, crd.Spec.Names.Kind)
+	// Use the storage version's Go type to look up the schema. Every version
+	// of a multi-version Kind (see pkg/parser/node_version.go) is given the
+	// same schema below until per-version schema generation lands (tracked
+	// as a follow-up); that's safe today because all versions are only ever
+	// emitted as additive aliases of the storage version's shape.
+	storageVersionName := crd.Spec.Versions[0].Name
+	for _, v := range crd.Spec.Versions {
+		if v.Storage {
+			storageVersionName = v.Name
+			break
+		}
+	}
+
+	name := g.createName(crd.Spec.Group, storageVersionName, crd.Spec.Names.Kind)
 	schemaProps := g.getDefinition(name).schema
 	toReplace := []string{}
 	for _, propName := range schemaProps.Required {
@@ -436,7 +456,9 @@ func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResource
 	}
 
 	crd.Spec.PreserveUnknownFields = false
-	crd.Spec.Versions[0].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemaProps}
+	for i := range crd.Spec.Versions {
+		crd.Spec.Versions[i].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemaProps}
+	}
 	return nil
 }
 

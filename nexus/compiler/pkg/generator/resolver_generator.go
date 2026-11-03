@@ -401,6 +401,17 @@ func GenerateGraphqlResolverVars(baseGroupName, crdModulePath string, pkgs parse
 				continue
 			}
 
+			if parser.IsNexusNode(node) {
+				if _, _, isStorageVersion := parser.ResolveNodeIdentity(pkg, typeName); !isStorageVersion {
+					// Non-storage versions (e.g. OrgV2) aren't independent
+					// graph nodes - they ride along with their storage
+					// version's CRD. GraphQL schema generation for
+					// non-storage versions is tracked as a follow-up.
+					log.Debugf("Ignoring non-storage version node %s for GraphQL generation", typeName)
+					continue
+				}
+			}
+
 			nodeProp := &NodeProperty{}
 			// populate node properties
 			nodeProp.PkgName = simpleGroupTypeName

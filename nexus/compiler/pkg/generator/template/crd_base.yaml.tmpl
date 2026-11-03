@@ -11,6 +11,12 @@ metadata:
     nexus: |
       {{.NexusAnnotation}}
 spec:
+  # NOTE: all versions below currently share the storage version's OpenAPI
+  # schema (see RenderCRDBaseTemplate / addCustomResourceValidation), so
+  # `strategy: None` is safe even with multiple served versions - there is no
+  # shape to convert between yet. Once per-version schemas + the conversion
+  # webhook land (tracked as a follow-up), this must become `Webhook` for any
+  # Kind with more than one version.
   conversion:
     strategy: None
   group: {{.GroupName}}
@@ -23,15 +29,21 @@ spec:
     singular: {{.Singular}}
   scope: Cluster
   versions:
-    - name: {{.ResourceVersion}}
-      served: true
-      storage: true
+{{- range .Versions}}
+    - name: {{.Name}}
+      served: {{.Served}}
+      storage: {{.Storage}}
       subresources:
         status: {}
+{{- end}}
 status:
   acceptedNames:
     kind: ""
     plural: ""
   conditions: null
   storedVersions:
-    - {{.ResourceVersion}}
+{{- range .Versions}}
+{{- if .Storage}}
+    - {{.Name}}
+{{- end}}
+{{- end}}

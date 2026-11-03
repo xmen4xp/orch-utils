@@ -19,7 +19,29 @@ const (
 	NexusSecretSpecAnnotation       = "nexus-secret-spec"
 	NexusGraphqlSpecAnnotation      = "nexus-graphql-spec"
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
+	NexusVersionAnnotation          = "nexus-version"
+	NexusKindAnnotation             = "nexus-kind"
+	NexusStorageVersionAnnotation   = "nexus-storage-version"
 )
+
+// GetNexusVersionAnnotation returns the API version a node struct declares via
+// `// nexus-version: v2`. Defaults to "v1" when absent (see resolveNodeIdentity).
+func GetNexusVersionAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusVersionAnnotation)
+}
+
+// GetNexusKindAnnotation returns the Kind a node struct declares via
+// `// nexus-kind: Org`, used to group multiple version structs (e.g. Org,
+// OrgV2) under a single Kind/CRD.
+func GetNexusKindAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusKindAnnotation)
+}
+
+// GetNexusStorageVersionAnnotation returns the raw `// nexus-storage-version: true|false`
+// value for a node struct, if declared.
+func GetNexusStorageVersionAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusStorageVersionAnnotation)
+}
 
 func GetNexusSecretSpecAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusSecretSpecAnnotation)

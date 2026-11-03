@@ -66,6 +66,13 @@ func generateNexusClientVars(baseGroupName, crdModulePath string, pkgs parser.Pa
 			groupVars.GroupTypeName = groupTypeName
 
 			for _, node := range pkg.GetNexusNodes() {
+				if _, _, isStorageVersion := parser.ResolveNodeIdentity(pkg, node.Name.String()); !isStorageVersion {
+					// Non-storage versions (e.g. OrgV2) don't yet get their own
+					// generated typed client - they ride along with their
+					// storage version's CRD. Generating a distinct per-version
+					// client is tracked as a follow-up.
+					continue
+				}
 				var clientGroupVars apiGroupsClientVars
 				clientGroupVars.ApiGroupsVars = groupVars
 				clientGroupVars.GroupTypeName = groupTypeName
