@@ -157,7 +157,15 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 							}
 						}
 
-						if _, ok := decl.(*ast.FuncDecl); ok {
+						// Only collect standalone helper functions here (e.g.
+						// IsValidClusterMode(name ClusterModeName) bool), not
+						// methods with a receiver (e.g. ConvertTo/ConvertFrom
+						// on a versioned node - see node_version.go). Methods
+						// belong to their own type's package; dumping them
+						// into this shared non-nexus file would reference
+						// types (and the receiver type itself) that aren't in
+						// scope there, breaking that file's compilation.
+						if funcDecl, ok := decl.(*ast.FuncDecl); ok && funcDecl.Recv == nil {
 							out, err := util.RenderDecl(decl, fileset)
 							if err != nil {
 								return err
