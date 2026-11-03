@@ -98,11 +98,17 @@ func getNexusAnnotation(pkg Package, name string, annotationName string) (string
 	var annotationValue string
 
 	d := doc.New(&pkg.Pkg, pkg.Name, 4)
+	// Anchor to the start of a line (multiline mode) so an annotation name
+	// mentioned in passing within a type's prose doc comment (e.g. "...tagged
+	// with nexus-version/nexus-kind so the compiler groups it...") doesn't
+	// get mistaken for the actual `// nexus-version: v2` annotation line that
+	// follows it. Every real annotation is always written as its own full
+	// comment line, so requiring a line-start match is safe.
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(annotationName) + `.*`)
 	for _, t := range d.Types {
 		if t.Name == name {
-			if strings.Contains(t.Doc, annotationName) {
-				re := regexp.MustCompile(annotationName + ".*")
-				annotationValue = re.FindString(t.Doc)
+			if match := re.FindString(t.Doc); match != "" {
+				annotationValue = match
 			}
 		}
 	}

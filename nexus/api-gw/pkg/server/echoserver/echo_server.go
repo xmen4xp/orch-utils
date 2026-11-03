@@ -175,6 +175,10 @@ type NexusContext struct {
 	echo.Context
 	NexusURI string
 	Codes    nexus.HTTPCodesResponse
+	// Version is the API version (e.g. "v1", "v2") the matched RestURIs
+	// declared (see pkg/parser/node_version.go in the compiler). Defaults to
+	// "v1" when empty, for CRDs generated before this field existed.
+	Version string
 
 	// Kube
 	CrdType   string
@@ -336,12 +340,17 @@ func (s *EchoServer) registerDeleteRoute(urlPattern string, nexusContext func(ne
 func (s *EchoServer) GetNexusContext(restURI nexus.RestURIs,
 	codes nexus.HTTPCodesResponse,
 ) func(next echo.HandlerFunc) echo.HandlerFunc {
+	version := restURI.Version
+	if version == "" {
+		version = "v1"
+	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			nc := &NexusContext{
 				Context:  c,
 				NexusURI: restURI.Uri,
 				Codes:    codes,
+				Version:  version,
 			}
 			return next(nc)
 		}

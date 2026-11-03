@@ -548,7 +548,18 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			if annotation, ok := parser.GetNexusRestAPIGenAnnotation(pkg, v.StructName); ok {
 				apiSpec := restAPISpecMap[annotation]
 				rest.ValidateRestApiSpec(apiSpec, parentsMap, crdName)
-				nexusAnnotation.NexusRestAPIGen.Uris = append(nexusAnnotation.NexusRestAPIGen.Uris, apiSpec.Uris...)
+				// Stamp which API version each URI belongs to so consumers
+				// (e.g. nexus-api-gw) can resolve the correct
+				// GroupVersionResource per-URI instead of assuming "v1"
+				// for everything. The DSL author doesn't declare this
+				// themselves - it's derived from which version's
+				// RestAPISpec the URI came from.
+				uris := make([]nexus.RestURIs, len(apiSpec.Uris))
+				copy(uris, apiSpec.Uris)
+				for i := range uris {
+					uris[i].Version = v.Version
+				}
+				nexusAnnotation.NexusRestAPIGen.Uris = append(nexusAnnotation.NexusRestAPIGen.Uris, uris...)
 			}
 		}
 

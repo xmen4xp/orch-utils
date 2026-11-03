@@ -76,7 +76,7 @@ func (s *EchoServer) GetHandler(c echo.Context) error {
 	}
 
 	log.Debug().Msg("CRD Info And Name fetched successfully")
-	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
+	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc.Version, nc)
 	obj, err := client.Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Msgf("Failed to create gvr resources error: %s, gvr:%s, crdname:%s, crdInfoPH:%s,hashedName:%s",
@@ -148,16 +148,27 @@ func GetHeaderValue(req *http.Request, name string) string {
 	return req.Header.Get(name)
 }
 
+// getHashedNameAndGVR resolves the GVR for crdName at the given version.
+// Callers resolving the *current request's own* resource should pass
+// nc.Version (the version the matched RestURIs declared - see
+// GetNexusContext). Callers resolving a *parent* (see isParentFound below)
+// must always pass "v1": children/links/parents are always wired through a
+// Kind's storage version (see the compiler's pkg/parser/node_version.go),
+// regardless of which version of the child is being requested.
 func getHashedNameAndGVR(crdName string, crdInfo model.NodeInfo,
-	name string, nc *NexusContext,
+	name, version string, nc *NexusContext,
 ) (string, schema.GroupVersionResource) {
 	labels := parseLabels(nc, crdInfo.ParentHierarchy)
 	hashedName := nexus.GetHashedName(crdName, crdInfo.ParentHierarchy, labels, name)
 
+	if version == "" {
+		version = "v1"
+	}
+
 	parts := strings.Split(crdName, ".")
 	gvr := schema.GroupVersionResource{
 		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
+		Version:  version,
 		Resource: parts[0],
 	}
 
@@ -372,7 +383,7 @@ func (s *EchoServer) ListHandler(c echo.Context) error {
 	}
 
 	crdName, crdInfo, labels := getCRDInfoAndLabels(nc)
-	gvr := constructGVR(crdName)
+	gvr := constructGVR(crdName, nc.Version)
 	opts := constructListOptions(c, labels)
 
 	var allowedNames map[string]bool
@@ -403,11 +414,14 @@ func getCRDInfoAndLabels(nc *NexusContext) (string, model.NodeInfo, k8sLabels.Se
 	return crdName, crdInfo, labels
 }
 
-func constructGVR(crdName string) schema.GroupVersionResource {
+func constructGVR(crdName, version string) schema.GroupVersionResource {
+	if version == "" {
+		version = "v1"
+	}
 	parts := strings.Split(crdName, ".")
 	gvr := schema.GroupVersionResource{
 		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
+		Version:  version,
 		Resource: parts[0],
 	}
 	return gvr
@@ -503,7 +517,7 @@ func (s *EchoServer) PutHandler(c echo.Context) error {
 
 	lastUpdatedBy := GetHeaderValue(nc.Request(), rbacLastUpdatedByHeader)
 
-	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
+	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc.Version, nc)
 	obj, err := client.Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -529,7 +543,7 @@ func isParentFound(nc *NexusContext, crdInfo model.NodeInfo, labels map[string]s
 	for _, parent := range crdInfo.ParentHierarchy {
 		// Get crdInfo from crdName.
 		crdInfo := model.CrdTypeToNodeInfo[parent]
-		hashedName, gvr := getHashedNameAndGVR(parent, crdInfo, labels[parent], nc)
+		hashedName, gvr := getHashedNameAndGVR(parent, crdInfo, labels[parent], "v1", nc)
 		_, err := client.Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -596,7 +610,7 @@ func (s *EchoServer) PatchHandler(c echo.Context) error {
 		return err
 	}
 
-	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
+	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc.Version, nc)
 	body, err := parseRequestBody(nc)
 	if err != nil {
 		log.Error().Msgf("Failed to parseRequestBody, err: %s", err.Error())
@@ -712,7 +726,7 @@ func (s *EchoServer) deleteHandler(c echo.Context) error {
 		return err
 	}
 
-	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
+	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc.Version, nc)
 	err = client.DeleteObject(gvr, crdName, crdInfo, hashedName)
 	if err != nil {
 		log.Error().Msgf("Failed to DeleteObject, err: %s", err.Error())
