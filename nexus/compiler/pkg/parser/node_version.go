@@ -116,8 +116,12 @@ func StorageVersion(versions []KindVersion) *KindVersion {
 }
 
 // PackageVersions returns every distinct API version declared by any Kind in
-// pkg, in first-seen order (e.g. ["v1", "v2"]). A package with no versioned
-// types still returns ["v1"], matching today's single-version behavior.
+// pkg, in first-seen order (e.g. ["v1", "v2"]). A package with no nexus
+// nodes at all (e.g. a pure shared-types package like "common") or with no
+// versioned types still returns ["v1"] - every DSL package always gets a
+// "v1" output directory, matching today's (pre-versioning) behavior, since
+// other packages may import non-nexus types from it regardless of whether
+// it declares any CRDs itself.
 func PackageVersions(pkg Package) []string {
 	var versions []string
 	seen := map[string]bool{}
@@ -129,6 +133,9 @@ func PackageVersions(pkg Package) []string {
 				versions = append(versions, kv.Version)
 			}
 		}
+	}
+	if len(versions) == 0 {
+		return []string{"v1"}
 	}
 	sort.Strings(versions)
 	return versions
