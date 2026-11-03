@@ -78,6 +78,14 @@ type EchoServer struct {
 	mu          sync.Mutex
 	restartMu   sync.Mutex // Mutex to protect restart counter
 	recorder    record.EventRecorder
+
+	// webhookServer is the CRD conversion webhook's TLS listener (see
+	// StartWebhookTLSServer). Tracked separately from s.Echo so
+	// StopServer can shut it down too - without this, a restart (echo
+	// servers get torn down and recreated on every CRD change, see
+	// NodeUpdateNotifications) would leak the old listener and the new
+	// one would fail with "address already in use".
+	webhookServer *http.Server
 }
 
 type KubernetesClient interface {
@@ -192,7 +200,11 @@ func (s *EchoServer) StartWebhookTLSServer() {
 	}
 	addr := ":" + s.Config.Server.WebhookPort
 	log.Info().Msgf("Starting webhook TLS server on %s", addr)
-	if err := http.ListenAndServeTLS(addr, s.Config.Server.WebhookCertPath, s.Config.Server.WebhookKeyPath, s.Echo); err != nil &&
+	srv := &http.Server{Addr: addr, Handler: s.Echo}
+	s.mu.Lock()
+	s.webhookServer = srv
+	s.mu.Unlock()
+	if err := srv.ListenAndServeTLS(s.Config.Server.WebhookCertPath, s.Config.Server.WebhookKeyPath); err != nil &&
 		!errors.Is(err, http.ErrServerClosed) {
 		log.Error().Msgf("Webhook TLS server error: %v", err)
 	}
@@ -650,6 +662,17 @@ func (s *EchoServer) StopServer() {
 	log.Debug().Msg("StopServer invoked")
 	ctx, cancel := context.WithTimeout(context.Background(), stopServerCtxTimeout)
 	defer cancel()
+
+	s.mu.Lock()
+	webhookSrv := s.webhookServer
+	s.webhookServer = nil
+	s.mu.Unlock()
+	if webhookSrv != nil {
+		if err := webhookSrv.Shutdown(ctx); err != nil {
+			log.InfraErr(err).Msg("Webhook TLS server shutdown error")
+		}
+	}
+
 	if err := s.Echo.Shutdown(ctx); err != nil {
 		log.InfraErr(err).Msg("Shutdown signal received")
 		return
