@@ -593,6 +593,19 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 				webhookServiceName = "nexus-api-gw"
 			}
 			webhookServiceNamespace = config.ConfigInstance.ConversionWebhookServiceNamespace
+			if webhookServiceNamespace == "" {
+				// Service.namespace is a required, non-empty field in a CRD's
+				// spec.conversion.webhook.clientConfig - leaving it "" makes
+				// the whole CRD fail Kubernetes API server validation (and
+				// since datamodel_installer.sh applies all CRDs from /crds
+				// in one `kubectl apply -f ... --recursive` under `set -e`,
+				// that one invalid CRD aborts the install for every
+				// not-yet-applied CRD after it). nexus-runtime's helm chart
+				// doesn't set a namespace itself, so it lands in the
+				// installing user's current/default namespace; match that
+				// here when the config file doesn't override it.
+				webhookServiceNamespace = "default"
+			}
 		}
 
 		vars := crdBaseVars{
