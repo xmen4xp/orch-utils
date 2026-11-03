@@ -495,6 +495,26 @@ func RenderClusterRoleTemplate(baseGroupName string, ruleMap map[string][]string
 	return tmpl, nil
 }
 
+// A multi-version Kind's CRD must name a concrete Service in
+// spec.conversion.webhook.clientConfig.service - Kubernetes doesn't let a
+// webhook clientConfig target a label selector. But the Service's actual
+// name is Helm-release-dependent (e.g. "nexus-runtime-nexus-api-gw" for a
+// local `helm install nexus-runtime`, "hdai-nexus-api-gw" in production),
+// so it can't be known at compile time without baking in one specific
+// deployment's naming, which would break every other one.
+//
+// Instead, emit these placeholder tokens (deliberately not valid Service
+// names/namespaces themselves, so a would-be author forgetting to resolve
+// them gets a clear CRD-apply rejection rather than a silently-wrong
+// webhook target) and let datamodel_installer.sh substitute the real
+// values at install time, resolved via the stable label selector every
+// nexus-api-gw Service carries regardless of release name:
+// `app.kubernetes.io/component=nexus-api-gw`.
+const (
+	ConversionWebhookServiceNamePlaceholder      = "__NEXUS_API_GW_SERVICE_NAME__"
+	ConversionWebhookServiceNamespacePlaceholder = "__NEXUS_API_GW_SERVICE_NAMESPACE__"
+)
+
 func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap map[string]parser.NodeHelper,
 	httpMethods map[string]nexus.HTTPMethodsResponses, httpCodes map[string]nexus.HTTPCodesResponse) ([]CrdBaseFile, error) {
 	var crds []CrdBaseFile
@@ -588,23 +608,19 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 		webhookServiceNamespace := ""
 		if len(crdVersions) > 1 {
 			conversionStrategy = "Webhook"
+			// nexus.yaml can still pin an explicit name/namespace for
+			// unusual setups (e.g. a shared nexus-api-gw outside the
+			// datamodel's own namespace/selector reach); otherwise fall
+			// back to the placeholders datamodel_installer.sh resolves at
+			// install time via the nexus-api-gw Service's stable label
+			// selector (see ConversionWebhookServiceName{,Namespace}Placeholder).
 			webhookServiceName = config.ConfigInstance.ConversionWebhookServiceName
 			if webhookServiceName == "" {
-				webhookServiceName = "nexus-api-gw"
+				webhookServiceName = ConversionWebhookServiceNamePlaceholder
 			}
 			webhookServiceNamespace = config.ConfigInstance.ConversionWebhookServiceNamespace
 			if webhookServiceNamespace == "" {
-				// Service.namespace is a required, non-empty field in a CRD's
-				// spec.conversion.webhook.clientConfig - leaving it "" makes
-				// the whole CRD fail Kubernetes API server validation (and
-				// since datamodel_installer.sh applies all CRDs from /crds
-				// in one `kubectl apply -f ... --recursive` under `set -e`,
-				// that one invalid CRD aborts the install for every
-				// not-yet-applied CRD after it). nexus-runtime's helm chart
-				// doesn't set a namespace itself, so it lands in the
-				// installing user's current/default namespace; match that
-				// here when the config file doesn't override it.
-				webhookServiceNamespace = "default"
+				webhookServiceNamespace = ConversionWebhookServiceNamespacePlaceholder
 			}
 		}
 

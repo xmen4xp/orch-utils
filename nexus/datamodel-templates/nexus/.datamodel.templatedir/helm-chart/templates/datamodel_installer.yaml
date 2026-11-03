@@ -55,6 +55,15 @@ spec:
         env:
           - name: NAME
             value: {{ .Values.global.datamodelName }}
+          # Used by datamodel_installer.sh to resolve multi-version CRDs'
+          # conversion webhook target: nexus-runtime is typically a sibling
+          # subchart under this same release in production, so on a first
+          # install its Service (named "<release>-nexus-api-gw" by Helm's
+          # chart-name templating) won't exist yet for a label-selector
+          # lookup to find - this release name lets the installer guess the
+          # same name nexus-runtime's own chart will produce.
+          - name: HELM_RELEASE_NAME
+            value: {{ .Release.Name | quote }}
         {{- if .Values.imagePull }}
         imagePullPolicy: Always
         {{- else }}

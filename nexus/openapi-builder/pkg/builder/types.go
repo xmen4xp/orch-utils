@@ -77,6 +77,15 @@ type NodeInfo struct {
 	// components are emitted and only generic responses are referenced
 	// from the operations.
 	Schema *apiextensionsv1.JSONSchemaProps
+
+	// StorageVersion is the CRD's storage version name (e.g. "v1") when
+	// the Kind has more than one version (see orch-utils nexus/compiler
+	// pkg/parser/node_version.go); empty for single-version Kinds. Used
+	// by GetOperationID to decide which version's operations keep their
+	// pre-existing, unqualified operationId (the storage version, for
+	// backward compatibility) versus which get a version suffix to avoid
+	// colliding with it (e.g. "getOrg" vs "getOrgV2").
+	StorageVersion string
 }
 
 // RestURIs is one URI declared on a node, with the HTTP methods exposed on
@@ -100,6 +109,11 @@ type RestURIs struct {
 	// the datamodel author. Distinct from `Options.HeaderAliases` which
 	// promotes hierarchy parents into header parameters.
 	Headers []string
+
+	// Version is the API version (e.g. "v1", "v2") this URI serves, for
+	// Kinds with more than one version (see NodeInfo.StorageVersion).
+	// Empty for single-version Kinds.
+	Version string
 }
 
 // ExtensionSpec describes a declarative ExtensionRestAPI URI (one entry

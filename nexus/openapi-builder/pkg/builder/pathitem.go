@@ -24,7 +24,7 @@ func buildPathItem(uri RestURIs, info NodeInfo, params []*openapi3.ParameterRef,
 	tag := qualifiedKind(nameParts, counts)
 
 	for method := range uri.Methods {
-		opID := GetOperationID(method, uri.URI, info, uri.TypeOfURI, counts)
+		opID := GetOperationID(method, uri.URI, info, uri.TypeOfURI, counts, uri.Version)
 		switch method {
 		case "LIST":
 			pathItem.Get = newListOperation(opID, tag, params, info)
