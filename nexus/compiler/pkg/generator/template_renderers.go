@@ -421,6 +421,7 @@ type crdBaseVars struct {
 	ConversionStrategy                string
 	ConversionWebhookServiceName      string
 	ConversionWebhookServiceNamespace string
+	ConversionWebhookCAInjectFrom     string
 }
 
 // crdVersionVars describes one entry of a CRD's spec.versions[] list. A Kind
@@ -513,6 +514,17 @@ func RenderClusterRoleTemplate(baseGroupName string, ruleMap map[string][]string
 const (
 	ConversionWebhookServiceNamePlaceholder      = "__NEXUS_API_GW_SERVICE_NAME__"
 	ConversionWebhookServiceNamespacePlaceholder = "__NEXUS_API_GW_SERVICE_NAMESPACE__"
+
+	// ConversionWebhookCAInjectFromPlaceholder stands in for the
+	// `<namespace>/<certificate-name>` value of the CRD's
+	// cert-manager.io/inject-ca-from annotation, which tells cert-manager's
+	// cainjector which Certificate's CA to populate into
+	// spec.conversion.webhook.clientConfig.caBundle. Both the namespace and
+	// the Certificate name (nexus-api-gw's helm chart names it
+	// "<release>-nexus-api-gw-webhook", the same release-dependent prefix
+	// as the Service placeholders above) are only known at install time,
+	// so this is resolved by datamodel_installer.sh alongside them.
+	ConversionWebhookCAInjectFromPlaceholder = "__NEXUS_API_GW_CA_INJECT_FROM__"
 )
 
 func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap map[string]parser.NodeHelper,
@@ -606,6 +618,7 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 		conversionStrategy := "None"
 		webhookServiceName := ""
 		webhookServiceNamespace := ""
+		webhookCAInjectFrom := ""
 		if len(crdVersions) > 1 {
 			conversionStrategy = "Webhook"
 			// nexus.yaml can still pin an explicit name/namespace for
@@ -622,6 +635,7 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			if webhookServiceNamespace == "" {
 				webhookServiceNamespace = ConversionWebhookServiceNamespacePlaceholder
 			}
+			webhookCAInjectFrom = ConversionWebhookCAInjectFromPlaceholder
 		}
 
 		vars := crdBaseVars{
@@ -636,6 +650,7 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 			ConversionStrategy:                conversionStrategy,
 			ConversionWebhookServiceName:      webhookServiceName,
 			ConversionWebhookServiceNamespace: webhookServiceNamespace,
+			ConversionWebhookCAInjectFrom:     webhookCAInjectFrom,
 		}
 
 		if vars.GroupName == "" ||

@@ -168,7 +168,34 @@ func (s *EchoServer) Start(stopCh chan struct{}) {
 				s.StartHTTPServer()
 			}
 		}()
+
+		// Serve the CRD conversion webhook over its own TLS listener,
+		// independent of whichever of the two paths above the main API
+		// server took - Kubernetes requires the conversion webhook target
+		// to be HTTPS regardless of how the REST API itself is served.
+		go s.StartWebhookTLSServer()
 	}()
+}
+
+// StartWebhookTLSServer serves the CRD conversion webhook endpoint (POST
+// /convert, registered on s.Echo by RegisterNexusRoutes) over TLS on its
+// own port, separate from the main API server above. No-ops when
+// Server.WebhookPort/WebhookCertPath/WebhookKeyPath aren't all configured,
+// so deployments with no multi-version Kinds (the common case) are
+// unaffected.
+func (s *EchoServer) StartWebhookTLSServer() {
+	if s.Config.Server.WebhookPort == "" ||
+		!utils.IsFileExists(s.Config.Server.WebhookCertPath) ||
+		!utils.IsFileExists(s.Config.Server.WebhookKeyPath) {
+		log.Info().Msg("Webhook TLS not configured; CRD conversion webhook endpoint will not be served")
+		return
+	}
+	addr := ":" + s.Config.Server.WebhookPort
+	log.Info().Msgf("Starting webhook TLS server on %s", addr)
+	if err := http.ListenAndServeTLS(addr, s.Config.Server.WebhookCertPath, s.Config.Server.WebhookKeyPath, s.Echo); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) {
+		log.Error().Msgf("Webhook TLS server error: %v", err)
+	}
 }
 
 type NexusContext struct {

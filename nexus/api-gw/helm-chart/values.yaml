@@ -24,11 +24,32 @@ nexusK8sProxy:
 config:
   server:
     httpPort: "8082"
+    # Only consulted by nexus-api-gw when webhook.enabled mounts the
+    # matching cert/key at these paths (see nexus-api-gw-deployment.yaml) -
+    # otherwise StartWebhookTLSServer no-ops, so these are harmless to leave
+    # set even when webhook.enabled is false.
+    webhookPort: "9443"
+    webhookCertPath: "/etc/webhook/tls/tls.crt"
+    webhookKeyPath: "/etc/webhook/tls/tls.key"
   enableNexusRuntime: true
   proxyInsecureSkipVerify: true
   headerAliases:
     "orgs.Org": "x-org-id"
     "projects.Project": "x-project-id"
+
+# webhook controls the CRD conversion webhook listener needed by
+# multi-version Kinds (see orch-utils nexus/compiler pkg/parser/node_version.go).
+# Disabled by default since it requires cert-manager to be installed in the
+# cluster (for the selfsigned Issuer/Certificate below) - most deployments
+# have no multi-version Kinds and shouldn't be made to depend on it.
+webhook:
+  enabled: false
+  # Port cert-manager.io/v1 Issuer kind to use for the self-signed
+  # Certificate backing the webhook's TLS listener. "Issuer" (namespaced) is
+  # scoped to this release's own namespace, so no cluster-wide naming
+  # assumptions are needed; set to "ClusterIssuer" (and issuerName to an
+  # existing one) to reuse a shared issuer instead.
+  issuerKind: Issuer
 
 nexusK8sProxyKubeconfig:
   create: true

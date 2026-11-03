@@ -34,6 +34,19 @@ type ServerConfig struct {
 	Address             string `json:"address" yaml:"address"`
 	CertPath            string `json:"certPath" yaml:"certPath"`
 	KeyPath             string `json:"keyPath" yaml:"keyPath"`
+
+	// WebhookPort/WebhookCertPath/WebhookKeyPath configure a second,
+	// independent TLS listener serving only the CRD conversion webhook
+	// (POST /convert - see echoserver.RegisterNexusRoutes). Kubernetes CRD
+	// conversion webhooks are unconditionally HTTPS, but the main API
+	// server above is typically plain HTTP (CertPath/KeyPath empty), so
+	// this listener is kept separate rather than forcing the whole REST
+	// API onto TLS. All three are optional: when unset (the common case -
+	// a deployment with no multi-version Kinds), no webhook listener is
+	// started.
+	WebhookPort     string `json:"webhookPort" yaml:"webhookPort,omitempty"`
+	WebhookCertPath string `json:"webhookCertPath" yaml:"webhookCertPath,omitempty"`
+	WebhookKeyPath  string `json:"webhookKeyPath" yaml:"webhookKeyPath,omitempty"`
 }
 
 var Cfg *Config

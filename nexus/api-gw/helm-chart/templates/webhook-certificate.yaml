@@ -1,0 +1,39 @@
+{{- if .Values.webhook.enabled }}
+{{- if not .Values.webhook.issuerName }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-nexus-api-gw-selfsigned
+  labels:
+    app.kubernetes.io/name: nexus-api-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selfSigned: {}
+---
+{{- end }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  # Named "<release>-nexus-api-gw-webhook" - datamodel_installer.sh derives
+  # this same name from the nexus-api-gw Service name it discovers
+  # (<release>-nexus-api-gw) when resolving the
+  # cert-manager.io/inject-ca-from annotation's target, so don't change this
+  # pattern without updating that script too.
+  name: {{ .Release.Name }}-nexus-api-gw-webhook
+  labels:
+    app.kubernetes.io/name: nexus-api-gw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  secretName: {{ .Release.Name }}-nexus-api-gw-webhook-tls
+  dnsNames:
+    - {{ .Release.Name }}-nexus-api-gw
+    - {{ .Release.Name }}-nexus-api-gw.{{ .Release.Namespace }}
+    - {{ .Release.Name }}-nexus-api-gw.{{ .Release.Namespace }}.svc
+    - {{ .Release.Name }}-nexus-api-gw.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    name: {{ .Values.webhook.issuerName | default (printf "%s-nexus-api-gw-selfsigned" .Release.Name) }}
+    kind: {{ .Values.webhook.issuerKind }}
+    group: cert-manager.io
+{{- end }}

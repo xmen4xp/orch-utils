@@ -118,7 +118,15 @@ if [ "$SKIP_CRD_INSTALLATION" = "false" ]; then
             fi
             API_GW_SVC="${HELM_RELEASE_NAME}-nexus-api-gw"
         fi
-        sed -i "s/__NEXUS_API_GW_SERVICE_NAME__/${API_GW_SVC}/g; s/__NEXUS_API_GW_SERVICE_NAMESPACE__/${INSTALL_NS}/g" /crds/*.yaml
+        # cert-manager's cainjector populates
+        # spec.conversion.webhook.clientConfig.caBundle itself from whatever
+        # Certificate the CRD's cert-manager.io/inject-ca-from annotation
+        # points at. nexus-runtime's helm chart always names that
+        # Certificate "<release>-nexus-api-gw-webhook" - the same
+        # "<release>-nexus-api-gw" prefix as the Service we just resolved,
+        # so reuse it rather than re-deriving the release name.
+        CA_INJECT_FROM="${INSTALL_NS}/${API_GW_SVC}-webhook"
+        sed -i "s/__NEXUS_API_GW_SERVICE_NAME__/${API_GW_SVC}/g; s/__NEXUS_API_GW_SERVICE_NAMESPACE__/${INSTALL_NS}/g; s#__NEXUS_API_GW_CA_INJECT_FROM__#${CA_INJECT_FROM}#g" /crds/*.yaml
     fi
     kubectl apply -f /crds --recursive
     [ "$GRAPHQL_PATH" != "NA" ] && GRAPHQL_ENABLED=true
