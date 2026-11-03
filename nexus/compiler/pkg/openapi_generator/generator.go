@@ -428,6 +428,8 @@ func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResource
 	// "default" schema (with a warning) if a version's openapi-gen output
 	// can't be found, so this is safe even for datamodels whose build
 	// pipeline doesn't run openapi-gen against every version's package yet.
+	schemas := make([]*extensionsv1.JSONSchemaProps, len(crd.Spec.Versions))
+	storageIdx := -1
 	for i := range crd.Spec.Versions {
 		name := g.createName(crd.Spec.Group, crd.Spec.Versions[i].Name, crd.Spec.Names.Kind)
 		schemaProps := g.getDefinition(name).schema
@@ -451,9 +453,63 @@ func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResource
 			Type: "object",
 		}
 
-		crd.Spec.Versions[i].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemaProps}
+		schemas[i] = schemaProps
+		if crd.Spec.Versions[i].Storage {
+			storageIdx = i
+		}
+	}
+
+	// A multi-version Kind's conversion webhook (see
+	// orch-utils/nexus/api-gw/pkg/server/echoserver/conversion_handler.go)
+	// is a generic JSON pass-through - it doesn't know this datamodel's
+	// field semantics, so it can't re-map a field that exists only in a
+	// non-storage version into the storage version's shape. That wouldn't
+	// matter if the pass-through's output only needed to round-trip through
+	// *validation*, but the API server also *prunes* any field not declared
+	// in the storage version's schema before persisting - independent of
+	// and after whatever the webhook returns. So a field declared only on
+	// v2 (say) gets silently dropped the moment it's written, even though
+	// the webhook faithfully passed it through. Union every version's
+	// declared fields into the storage version's schema so none of them
+	// get pruned; every non-storage version keeps its own (narrower, only
+	// for documentation/validation purposes) schema unchanged.
+	if storageIdx >= 0 && len(schemas) > 1 {
+		for i, schemaProps := range schemas {
+			if i == storageIdx {
+				continue
+			}
+			unionSchemaProperties(schemas[storageIdx], schemaProps)
+		}
+	}
+
+	for i := range crd.Spec.Versions {
+		crd.Spec.Versions[i].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemas[i]}
 	}
 	return nil
+}
+
+// unionSchemaProperties recursively merges src's declared properties into
+// dst wherever dst doesn't already declare them, so dst (the storage
+// version's schema) ends up a superset of every version's fields. On a
+// name collision, dst's own property definition wins (its version's type
+// is assumed authoritative for that field) but is still merged one level
+// deeper in case nested sub-properties differ.
+func unionSchemaProperties(dst, src *extensionsv1.JSONSchemaProps) {
+	if dst == nil || src == nil || len(src.Properties) == 0 {
+		return
+	}
+	if dst.Properties == nil {
+		dst.Properties = map[string]extensionsv1.JSONSchemaProps{}
+	}
+	for name, srcProp := range src.Properties {
+		dstProp, ok := dst.Properties[name]
+		if !ok {
+			dst.Properties[name] = srcProp
+			continue
+		}
+		unionSchemaProperties(&dstProp, &srcProp)
+		dst.Properties[name] = dstProp
+	}
 }
 
 func (g *Generator) createName(group, apiVersion, name string) string {
