@@ -43,9 +43,41 @@ func TestGetOperationID(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := GetOperationID(c.method, c.uri, c.info, c.uriType, counts); got != c.want {
+			if got := GetOperationID(c.method, c.uri, c.info, c.uriType, counts, ""); got != c.want {
 				t.Errorf("GetOperationID(%q, %q, %q, %v) = %q, want %q",
 					c.method, c.uri, c.info.Name, c.uriType, got, c.want)
+			}
+		})
+	}
+}
+
+// TestGetOperationID_MultiVersion asserts that a multi-version Kind's
+// storage version keeps its plain operationId (backward compatibility)
+// while every other version gets a version suffix, so they never collide.
+func TestGetOperationID_MultiVersion(t *testing.T) {
+	counts := kindCountsFromNodes([]NodeInfo{{Name: "orgs.Org"}})
+	org := NodeInfo{Name: "orgs.Org", StorageVersion: "v1"}
+
+	cases := []struct {
+		name    string
+		method  string
+		uri     string
+		uriType URIType
+		version string
+		want    string
+	}{
+		{"get v1 (storage) stays plain", "GET", "/v1/organizations/{orgs.Org}", DefaultURI, "v1", "getOrg"},
+		{"get v2 gets suffixed", "GET", "/v2/organizations/{orgs.Org}", DefaultURI, "v2", "getOrgV2"},
+		{"list v1 (storage) stays plain", "LIST", "/v1/organizations", DefaultURI, "v1", "listOrgs"},
+		{"list v2 gets suffixed", "LIST", "/v2/organizations", DefaultURI, "v2", "listOrgV2s"},
+		{"delete v2 gets suffixed", "DELETE", "/v2/organizations/{orgs.Org}", DefaultURI, "v2", "deleteOrgV2"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := GetOperationID(c.method, c.uri, org, c.uriType, counts, c.version); got != c.want {
+				t.Errorf("GetOperationID(%q, %q, %v, %q) = %q, want %q",
+					c.method, c.uri, c.uriType, c.version, got, c.want)
 			}
 		})
 	}
@@ -80,7 +112,7 @@ func TestGetOperationID_WithCollision(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := GetOperationID(c.method, c.uri, c.info, c.uriType, counts); got != c.want {
+			if got := GetOperationID(c.method, c.uri, c.info, c.uriType, counts, ""); got != c.want {
 				t.Errorf("GetOperationID(%q, %q, %q, %v) = %q, want %q",
 					c.method, c.uri, c.info.Name, c.uriType, got, c.want)
 			}

@@ -364,14 +364,21 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 			if err != nil {
 				return fmt.Errorf("unmarshalling: %v", err)
 			}
-			// TODO we assume here that we have only one version, which is correct
-			// at the time of writing this, but may not be in the future.
-			if len(crd.Spec.Versions) != 1 {
-				return fmt.Errorf("crd %v has no, or more than 1 versions", crd.Name)
+			if len(crd.Spec.Versions) == 0 {
+				return fmt.Errorf("crd %v has no versions", crd.Name)
 			}
 			// TODO another hack. I don't know how to prevent Status field being
 			// generated in YAML file, so we add StoredVersions by hand
-			crd.Status.StoredVersions = []string{crd.Spec.Versions[0].Name}
+			var storedVersions []string
+			for _, v := range crd.Spec.Versions {
+				if v.Storage {
+					storedVersions = append(storedVersions, v.Name)
+				}
+			}
+			if len(storedVersions) != 1 {
+				return fmt.Errorf("crd %v must have exactly one storage version, found %d", crd.Name, len(storedVersions))
+			}
+			crd.Status.StoredVersions = storedVersions
 			err = g.addCustomResourceValidation(&crd)
 			if err != nil {
 				return err
@@ -413,31 +420,110 @@ func (g *Generator) UpdateYAMLs(yamlsPath string) error {
 }
 
 func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResourceDefinition) error {
-	name := g.createName(crd.Spec.Group, crd.Spec.Versions[0].Name, crd.Spec.Names.Kind)
-	schemaProps := g.getDefinition(name).schema
-	toReplace := []string{}
-	for _, propName := range schemaProps.Required {
-		// We want only "spec" and "data" fields required in schemas. "status" and all
-		// others should remain optional.
-		if propName == "spec" || propName == "data" {
-			toReplace = append(toReplace, propName)
+	crd.Spec.PreserveUnknownFields = false
+	// Each version now has its own generated Go type (apis/<group>/<version>
+	// package - see pkg/generator/types_generator.go and
+	// RenderTypesTemplate), so each gets its own schema instead of sharing
+	// the storage version's. getDefinition() falls back to a generic
+	// "default" schema (with a warning) if a version's openapi-gen output
+	// can't be found, so this is safe even for datamodels whose build
+	// pipeline doesn't run openapi-gen against every version's package yet.
+	schemas := make([]*extensionsv1.JSONSchemaProps, len(crd.Spec.Versions))
+	storageIdx := -1
+	for i := range crd.Spec.Versions {
+		name := g.createName(crd.Spec.Group, crd.Spec.Versions[i].Name, crd.Spec.Names.Kind)
+		schemaProps := g.getDefinition(name).schema
+		toReplace := []string{}
+		for _, propName := range schemaProps.Required {
+			// We want only "spec" and "data" fields required in schemas. "status" and all
+			// others should remain optional.
+			if propName == "spec" || propName == "data" {
+				toReplace = append(toReplace, propName)
+			}
+		}
+		schemaProps.Required = toReplace
+		// We need to ensure that crd.spec.versions[*].schema.openapiV3Schema["metadata"]
+		// does not contain any fields except for `type: object`. This is required by K8s
+		// API and we added x-kubernetes-preserve-unknown-fields: true` here in `getDefinition`,
+		// so we are fixing our wrongly added flag.
+		if len(schemaProps.Properties) == 0 {
+			schemaProps.Properties = map[string]extensionsv1.JSONSchemaProps{}
+		}
+		schemaProps.Properties["metadata"] = extensionsv1.JSONSchemaProps{
+			Type: "object",
+		}
+
+		schemas[i] = schemaProps
+		if crd.Spec.Versions[i].Storage {
+			storageIdx = i
 		}
 	}
-	schemaProps.Required = toReplace
-	// We need to ensure that crd.spec.versions[*].schema.openapiV3Schema["metadata"]
-	// does not contain any fields except for `type: object`. This is required by K8s
-	// API and we added x-kubernetes-preserve-unknown-fields: true` here in `getDefinition`,
-	// so we are fixing our wrongly added flag.
-	if len(schemaProps.Properties) == 0 {
-		schemaProps.Properties = map[string]extensionsv1.JSONSchemaProps{}
-	}
-	schemaProps.Properties["metadata"] = extensionsv1.JSONSchemaProps{
-		Type: "object",
+
+	// A multi-version Kind's conversion webhook (see
+	// orch-utils/nexus/api-gw/pkg/server/echoserver/conversion_handler.go)
+	// is a generic JSON pass-through - it doesn't know this datamodel's
+	// field semantics, so it can't re-map a field that exists only in a
+	// non-storage version into the storage version's shape. That wouldn't
+	// matter if the pass-through's output only needed to round-trip through
+	// *validation*, but the API server also *prunes* any field not declared
+	// in the storage version's schema before persisting - independent of
+	// and after whatever the webhook returns. So a field declared only on
+	// v2 (say) gets silently dropped the moment it's written, even though
+	// the webhook faithfully passed it through. Union every version's
+	// declared fields into the storage version's schema so none of them
+	// get pruned; every non-storage version keeps its own (narrower, only
+	// for documentation/validation purposes) schema unchanged.
+	if storageIdx >= 0 && len(schemas) > 1 {
+		for i, schemaProps := range schemas {
+			if i == storageIdx {
+				continue
+			}
+			unionSchemaProperties(schemas[storageIdx], schemaProps)
+		}
 	}
 
-	crd.Spec.PreserveUnknownFields = false
-	crd.Spec.Versions[0].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemaProps}
+	for i := range crd.Spec.Versions {
+		crd.Spec.Versions[i].Schema = &extensionsv1.CustomResourceValidation{OpenAPIV3Schema: schemas[i]}
+	}
 	return nil
+}
+
+// unionSchemaProperties recursively merges src's declared properties into
+// dst wherever dst doesn't already declare them, so dst (the storage
+// version's schema) ends up a superset of every version's fields. On a
+// name collision, dst's own property definition wins (its version's type
+// is assumed authoritative for that field) but is still merged one level
+// deeper in case nested sub-properties differ. Also descends into array
+// items (schema.Items.Schema): a renamed/added field nested inside a list
+// (e.g. AISlice's scheduling_groups[].gpu_groups) lives there, not in
+// schema.Properties, and would otherwise never get merged - silently
+// pruned at write time exactly like a top-level field would be.
+func unionSchemaProperties(dst, src *extensionsv1.JSONSchemaProps) {
+	if dst == nil || src == nil {
+		return
+	}
+	if src.Items != nil && src.Items.Schema != nil {
+		if dst.Items == nil {
+			dst.Items = src.Items
+		} else if dst.Items.Schema != nil {
+			unionSchemaProperties(dst.Items.Schema, src.Items.Schema)
+		}
+	}
+	if len(src.Properties) == 0 {
+		return
+	}
+	if dst.Properties == nil {
+		dst.Properties = map[string]extensionsv1.JSONSchemaProps{}
+	}
+	for name, srcProp := range src.Properties {
+		dstProp, ok := dst.Properties[name]
+		if !ok {
+			dst.Properties[name] = srcProp
+			continue
+		}
+		unionSchemaProperties(&dstProp, &srcProp)
+		dst.Properties[name] = dstProp
+	}
 }
 
 func (g *Generator) createName(group, apiVersion, name string) string {

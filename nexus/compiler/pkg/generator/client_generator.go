@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/parser"
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/util"
@@ -34,10 +36,19 @@ func generateNexusClientVars(baseGroupName, crdModulePath string, pkgs parser.Pa
 	}
 
 	for _, pkg := range sortedPackages {
-		if len(pkg.GetNexusNodes()) > 0 {
+		kindOrder, kindGroups := parser.GroupNodesByKind(pkg)
+		if len(kindOrder) == 0 {
+			continue
+		}
+
+		// Every version declared by any Kind in this package gets its own
+		// typed client group (e.g. client.Root() for v1, client.RootV2() for
+		// v2), mirroring k8s client-go's per-(group,version) clientsets. The
+		// v1 accessor keeps its original unqualified name (e.g. "Root", not
+		// "RootV1") so every existing caller of a single-version group's
+		// client keeps compiling and working unchanged.
+		for _, version := range parser.PackageVersions(pkg) {
 			var groupVars ApiGroupsVars
-			// TODO make version configurable
-			version := "v1"
 
 			importPath := util.GetImportPath(pkg.Name, baseGroupName, version)
 			baseImportName := util.GetBaseImportName(pkg.Name, baseGroupName, version)
@@ -48,29 +59,45 @@ func generateNexusClientVars(baseGroupName, crdModulePath string, pkgs parser.Pa
 				"\n" // eg informerroothelloworldv1 "helloworld/nexus/generated/client/informers/externalversions/root.helloworld.com/v1"
 			groupVarName := util.GetGroupVarName(pkg.Name, baseGroupName, version)
 			groupTypeName := util.GetGroupTypeName(pkg.Name, baseGroupName, version)
-			simpleGroupTypeName := util.GetSimpleGroupTypeName(pkg.Name)
-			groupVars.SimpleGroupTypeName = simpleGroupTypeName
+			accessorName := util.GetSimpleGroupTypeName(pkg.Name)
+			if version != "v1" {
+				accessorName += cases.Title(language.Und, cases.NoLower).String(version) // eg RootV2
+			}
+			groupVars.SimpleGroupTypeName = accessorName
 			groupVars.ClientsetApiGroups = groupVarName + " *" + groupTypeName + "\n" // eg rootHelloworldV1 *RootHelloworldV1
 
 			initClient := "client." + groupVarName + " = new" + groupTypeName +
 				"(client)\n" // eg client.rootHelloworldV1 = newRootHelloworldV1(client)
 			groupVars.InitApiGroups = initClient
 
-			clientsetMethod := "func (c *Clientset) " + simpleGroupTypeName + "() *" + groupTypeName + " {\n" + "return c." +
+			clientsetMethod := "func (c *Clientset) " + accessorName + "() *" + groupTypeName + " {\n" + "return c." +
 				groupVarName + "\n}\n" // eg
-			// func (c *Clientset) Root() *ootHelloworldV1 {
+			// func (c *Clientset) Root() *RootHelloworldV1 {
 			//	return c.rootHelloworldV1
 			// }
 
 			groupVars.ClientsetsApiGroupMethods = clientsetMethod
 			groupVars.GroupTypeName = groupTypeName
 
-			for _, node := range pkg.GetNexusNodes() {
+			for _, kind := range kindOrder {
+				var kv *parser.KindVersion
+				for i := range kindGroups[kind] {
+					if kindGroups[kind][i].Version == version {
+						kv = &kindGroups[kind][i]
+						break
+					}
+				}
+				if kv == nil {
+					// This Kind doesn't have a struct for this version - it
+					// isn't served at this version.
+					continue
+				}
+
 				var clientGroupVars apiGroupsClientVars
 				clientGroupVars.ApiGroupsVars = groupVars
 				clientGroupVars.GroupTypeName = groupTypeName
-				clientGroupVars.CrdName = util.GetCrdName(node.Name.String(), pkg.Name, baseGroupName)
-				err := resolveNode(baseImportName, informerImportName, pkg, pkgs, baseGroupName, version, &clientGroupVars, node, parentsMap)
+				clientGroupVars.CrdName = util.GetCrdName(kind, pkg.Name, baseGroupName)
+				err := resolveNode(baseImportName, informerImportName, pkg, pkgs, baseGroupName, version, &clientGroupVars, kind, kv.TypeSpec, kv.IsStorageVersion, parentsMap)
 				if err != nil {
 					return clientVars{}, err
 				}
@@ -78,16 +105,15 @@ func generateNexusClientVars(baseGroupName, crdModulePath string, pkgs parser.Pa
 			}
 
 			vars.ApiGroups = append(vars.ApiGroups, groupVars)
-
 		}
 	}
 	return vars, nil
 }
 
 func resolveNode(baseImportName, informerImportName string, pkg parser.Package, allPkgs parser.Packages, baseGroupName, version string,
-	clientGroupVars *apiGroupsClientVars, node *ast.TypeSpec, parentsMap map[string]parser.NodeHelper) error {
+	clientGroupVars *apiGroupsClientVars, kind string, node *ast.TypeSpec, isStorageVersion bool, parentsMap map[string]parser.NodeHelper) error {
 	pkgName := pkg.Name
-	baseNodeName := node.Name.Name // eg Root
+	baseNodeName := kind // eg Root
 	groupResourceNameTitle := util.GetGroupResourceNameTitle(baseNodeName)
 	groupResourceType := util.GetGroupResourceType(baseNodeName, pkgName, baseGroupName, version)
 
@@ -121,40 +147,55 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	}
 
 	// TODO support resolution of links which are not nexus nodes https://jira.eng.vmware.com/browse/NPT-112
-	children := parser.GetChildFields(node)
-	childrenAndLinks := children
-	childrenAndLinks = append(childrenAndLinks, parser.GetLinkFields(node)...)
+	//
+	// Children/links are graph edges, and the graph (pkg/parser/node_parser.go
+	// processNode) only ever walks them from a Kind's storage-version struct -
+	// a non-storage version's own child/link field declarations (if any) are
+	// not wired into parentsMap, so don't generate navigation methods for them
+	// here either; only the storage version's client exposes child/link
+	// navigation. Non-storage versions still get Get/Update/Delete on the
+	// resource itself via the fields loop below.
+	if isStorageVersion {
+		children := parser.GetChildFields(node)
+		childrenAndLinks := children
+		childrenAndLinks = append(childrenAndLinks, parser.GetLinkFields(node)...)
 
-	if len(children) > 0 {
-		clientGroupVars.HasChildren = true
-	}
-	for _, link := range childrenAndLinks {
-		linkInfo := getFieldInfo(pkg, allPkgs, link)
-		clientVarsLink := apiGroupsClientVarsLink{
-			FieldName:              linkInfo.fieldName,
-			FieldNameGvk:           util.GetGvkFieldTagName(linkInfo.fieldName),
-			Group:                  util.GetGroupName(linkInfo.pkgName, baseGroupName),
-			Kind:                   linkInfo.fieldType,
-			GroupBaseImport:        util.GetBaseImportName(linkInfo.pkgName, baseGroupName, version) + "." + linkInfo.fieldType,
-			GroupResourceNameTitle: util.GetGroupResourceNameTitle(linkInfo.fieldType),
-			GroupTypeName:          util.GetGroupTypeName(linkInfo.pkgName, baseGroupName, version),
-			SimpleGroupTypeName:    util.GetSimpleGroupTypeName(linkInfo.pkgName),
-			BaseNodeName:           linkInfo.fieldType,
-			GroupResourceType:      util.GetGroupResourceType(linkInfo.fieldType, linkInfo.pkgName, baseGroupName, version),
-			CrdName:                util.GetCrdName(linkInfo.fieldType, linkInfo.pkgName, baseGroupName),
-			IsSingleton:            isChildSingleton(pkg, allPkgs, link),
+		if len(children) > 0 {
+			clientGroupVars.HasChildren = true
 		}
-		if parser.IsNamedChildOrLink(link) {
-			clientVarsLink.IsNamed = true
-		} else {
-			clientVarsLink.IsNamed = false
+		for _, link := range childrenAndLinks {
+			linkInfo := getFieldInfo(pkg, allPkgs, link)
+			// Children/links always point at the referenced Kind's storage
+			// version - that's the only version guaranteed to exist for
+			// every Kind, including ones that were never given their own
+			// extra versions.
+			childVersion := storageVersionForKind(allPkgs, linkInfo.pkgName, linkInfo.fieldType)
+			clientVarsLink := apiGroupsClientVarsLink{
+				FieldName:              linkInfo.fieldName,
+				FieldNameGvk:           util.GetGvkFieldTagName(linkInfo.fieldName),
+				Group:                  util.GetGroupName(linkInfo.pkgName, baseGroupName),
+				Kind:                   linkInfo.fieldType,
+				GroupBaseImport:        util.GetBaseImportName(linkInfo.pkgName, baseGroupName, childVersion) + "." + linkInfo.fieldType,
+				GroupResourceNameTitle: util.GetGroupResourceNameTitle(linkInfo.fieldType),
+				GroupTypeName:          util.GetGroupTypeName(linkInfo.pkgName, baseGroupName, childVersion),
+				SimpleGroupTypeName:    util.GetSimpleGroupTypeName(linkInfo.pkgName),
+				BaseNodeName:           linkInfo.fieldType,
+				GroupResourceType:      util.GetGroupResourceType(linkInfo.fieldType, linkInfo.pkgName, baseGroupName, childVersion),
+				CrdName:                util.GetCrdName(linkInfo.fieldType, linkInfo.pkgName, baseGroupName),
+				IsSingleton:            isChildSingleton(pkg, allPkgs, link),
+			}
+			if parser.IsNamedChildOrLink(link) {
+				clientVarsLink.IsNamed = true
+			} else {
+				clientVarsLink.IsNamed = false
+			}
+			if parser.IsLinkField(link) {
+				clientGroupVars.Links = append(clientGroupVars.Links, clientVarsLink)
+			} else {
+				clientGroupVars.Children = append(clientGroupVars.Children, clientVarsLink)
+			}
+			clientGroupVars.LinksAndChildren = append(clientGroupVars.LinksAndChildren, clientVarsLink)
 		}
-		if parser.IsLinkField(link) {
-			clientGroupVars.Links = append(clientGroupVars.Links, clientVarsLink)
-		} else {
-			clientGroupVars.Children = append(clientGroupVars.Children, clientVarsLink)
-		}
-		clientGroupVars.LinksAndChildren = append(clientGroupVars.LinksAndChildren, clientVarsLink)
 	}
 
 	for _, f := range parser.GetSpecFields(node) {
@@ -177,12 +218,17 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 		parentCrdName := nodeHelper.Parents[len(nodeHelper.Parents)-1]
 		parentHelper := parentsMap[parentCrdName]
 
+		parentPkgName := util.GetPackageNameFromCrdName(parentCrdName)
+		// The parent is always referenced via its own Kind's storage
+		// version - same reasoning as the children/links case above.
+		parentVersion := storageVersionForKind(allPkgs, parentPkgName, parentHelper.Name)
+
 		clientGroupVars.Parent.HasParent = true
 		clientGroupVars.Parent.IsNamed = parentHelper.Children[clientGroupVars.CrdName].IsNamed
 		clientGroupVars.Parent.CrdName = parentCrdName
 		clientGroupVars.Parent.GroupTypeName = util.GetGroupTypeName(
-			util.GetPackageNameFromCrdName(parentCrdName), baseGroupName, version)
-		clientGroupVars.Parent.SimpleGroupTypeName = util.GetSimpleGroupTypeName(util.GetPackageNameFromCrdName(parentCrdName))
+			parentPkgName, baseGroupName, parentVersion)
+		clientGroupVars.Parent.SimpleGroupTypeName = util.GetSimpleGroupTypeName(parentPkgName)
 		clientGroupVars.Parent.GroupResourceNameTitle = util.GetGroupResourceNameTitle(parentHelper.Name)
 		clientGroupVars.Parent.GvkFieldName = parentHelper.Children[clientGroupVars.CrdName].FieldNameGvk
 		clientGroupVars.Parent.GoGvkFieldName = parentHelper.Children[clientGroupVars.CrdName].GoFieldNameGvk
@@ -190,6 +236,29 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	}
 
 	return nil
+}
+
+// storageVersionForKind returns the version of pkgName's storage-version
+// struct for kind. Children, links, and parents are always referenced via
+// the other Kind's storage version (the one guaranteed to exist for every
+// Kind, versioned or not) - never via whichever version of the *current*
+// Kind happens to be getting generated. Defaults to "v1" if pkgName/kind
+// can't be resolved, matching today's single-version behavior.
+func storageVersionForKind(allPkgs parser.Packages, pkgName, kind string) string {
+	for _, p := range allPkgs {
+		if p.Name != pkgName {
+			continue
+		}
+		_, groups := parser.GroupNodesByKind(p)
+		versions, ok := groups[kind]
+		if !ok {
+			continue
+		}
+		if sv := parser.StorageVersion(versions); sv != nil {
+			return sv.Version
+		}
+	}
+	return "v1"
 }
 
 type fieldInfo struct {

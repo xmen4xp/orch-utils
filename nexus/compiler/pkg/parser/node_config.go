@@ -19,7 +19,29 @@ const (
 	NexusSecretSpecAnnotation       = "nexus-secret-spec"
 	NexusGraphqlSpecAnnotation      = "nexus-graphql-spec"
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
+	NexusVersionAnnotation          = "nexus-version"
+	NexusKindAnnotation             = "nexus-kind"
+	NexusStorageVersionAnnotation   = "nexus-storage-version"
 )
+
+// GetNexusVersionAnnotation returns the API version a node struct declares via
+// `// nexus-version: v2`. Defaults to "v1" when absent (see resolveNodeIdentity).
+func GetNexusVersionAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusVersionAnnotation)
+}
+
+// GetNexusKindAnnotation returns the Kind a node struct declares via
+// `// nexus-kind: Org`, used to group multiple version structs (e.g. Org,
+// OrgV2) under a single Kind/CRD.
+func GetNexusKindAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusKindAnnotation)
+}
+
+// GetNexusStorageVersionAnnotation returns the raw `// nexus-storage-version: true|false`
+// value for a node struct, if declared.
+func GetNexusStorageVersionAnnotation(pkg Package, name string) (string, bool) {
+	return getNexusAnnotation(pkg, name, NexusStorageVersionAnnotation)
+}
 
 func GetNexusSecretSpecAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusSecretSpecAnnotation)
@@ -76,11 +98,17 @@ func getNexusAnnotation(pkg Package, name string, annotationName string) (string
 	var annotationValue string
 
 	d := doc.New(&pkg.Pkg, pkg.Name, 4)
+	// Anchor to the start of a line (multiline mode) so an annotation name
+	// mentioned in passing within a type's prose doc comment (e.g. "...tagged
+	// with nexus-version/nexus-kind so the compiler groups it...") doesn't
+	// get mistaken for the actual `// nexus-version: v2` annotation line that
+	// follows it. Every real annotation is always written as its own full
+	// comment line, so requiring a line-start match is safe.
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(annotationName) + `.*`)
 	for _, t := range d.Types {
 		if t.Name == name {
-			if strings.Contains(t.Doc, annotationName) {
-				re := regexp.MustCompile(annotationName + ".*")
-				annotationValue = re.FindString(t.Doc)
+			if match := re.FindString(t.Doc); match != "" {
+				annotationValue = match
 			}
 		}
 	}

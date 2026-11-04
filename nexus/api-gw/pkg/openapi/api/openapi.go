@@ -214,6 +214,7 @@ func toBuilderNodeInfo(info model.NodeInfo, spec *apiextensionsv1.CustomResource
 		IsSingleton:     info.IsSingleton,
 		Description:     info.Description,
 		DeferredDelete:  info.DeferredDelete,
+		StorageVersion:  storageVersion(spec),
 	}
 	if info.Children != nil {
 		out.Children = make(map[string]builder.NodeHelperChild, len(info.Children))
@@ -267,9 +268,27 @@ func toBuilderURIs(uris []nexus.RestURIs) []builder.RestURIs {
 			TypeOfURI:  typeOfURI,
 			PathParams: u.PathParams,
 			Headers:    u.Headers,
+			Version:    u.Version,
 		})
 	}
 	return out
+}
+
+// storageVersion returns the CRD's storage version name when it declares
+// more than one version, or "" for single-version CRDs (the common case -
+// leaving StorageVersion unset there means GetOperationID never attempts
+// version qualification for them, matching pre-existing operationIds
+// exactly).
+func storageVersion(spec *apiextensionsv1.CustomResourceDefinitionSpec) string {
+	if spec == nil || len(spec.Versions) < 2 {
+		return ""
+	}
+	for _, v := range spec.Versions {
+		if v.Storage {
+			return v.Name
+		}
+	}
+	return ""
 }
 
 func toBuilderExtension(spec model.ExtensionRestAPISpec) builder.ExtensionSpec {

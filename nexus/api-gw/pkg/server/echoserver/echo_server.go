@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"nexus-api-gw/pkg/client"
@@ -168,13 +169,57 @@ func (s *EchoServer) Start(stopCh chan struct{}) {
 				s.StartHTTPServer()
 			}
 		}()
+
+		// Serve the CRD conversion webhook over its own TLS listener,
+		// independent of whichever of the two paths above the main API
+		// server took - Kubernetes requires the conversion webhook target
+		// to be HTTPS regardless of how the REST API itself is served.
+		go s.StartWebhookTLSServer()
 	}()
+}
+
+// webhookListenerOnce ensures the webhook TLS listener below is bound
+// exactly once for the process's lifetime, regardless of how many times
+// StartWebhookTLSServer is called (once per EchoServer restart - see
+// NodeUpdateNotifications). Binding it fresh on every restart raced with
+// the previous listener's teardown and routinely failed with "address
+// already in use"; routing through activeEcho/webhookHandler instead means
+// the one long-lived listener never needs to be recreated at all.
+var webhookListenerOnce sync.Once
+
+// StartWebhookTLSServer serves the CRD conversion webhook endpoint (POST
+// /convert, registered by RegisterNexusRoutes on whichever echo.Echo
+// instance is current - see activeEcho/webhookHandler) over TLS on its own
+// port, separate from the main API server. No-ops when
+// Server.WebhookPort/WebhookCertPath/WebhookKeyPath aren't all configured,
+// so deployments with no multi-version Kinds (the common case) are
+// unaffected.
+func (s *EchoServer) StartWebhookTLSServer() {
+	if s.Config.Server.WebhookPort == "" ||
+		!utils.IsFileExists(s.Config.Server.WebhookCertPath) ||
+		!utils.IsFileExists(s.Config.Server.WebhookKeyPath) {
+		log.Info().Msg("Webhook TLS not configured; CRD conversion webhook endpoint will not be served")
+		return
+	}
+	webhookListenerOnce.Do(func() {
+		addr := ":" + s.Config.Server.WebhookPort
+		log.Info().Msgf("Starting webhook TLS server on %s", addr)
+		srv := &http.Server{Addr: addr, Handler: webhookHandler{}}
+		if err := srv.ListenAndServeTLS(s.Config.Server.WebhookCertPath, s.Config.Server.WebhookKeyPath); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
+			log.Error().Msgf("Webhook TLS server error: %v", err)
+		}
+	})
 }
 
 type NexusContext struct {
 	echo.Context
 	NexusURI string
 	Codes    nexus.HTTPCodesResponse
+	// Version is the API version (e.g. "v1", "v2") the matched RestURIs
+	// declared (see pkg/parser/node_version.go in the compiler). Defaults to
+	// "v1" when empty, for CRDs generated before this field existed.
+	Version string
 
 	// Kube
 	CrdType   string
@@ -194,6 +239,12 @@ func (s *EchoServer) RegisterNexusRoutes() {
 
 	// Swagger-UI, datamodel is edge-orchestrator.intel.com
 	s.Echo.GET("/:datamodel/docs", SwaggerUI)
+
+	// CRD conversion webhook endpoint for multi-version Kinds. See
+	// ConvertHandler for details; CRDs point their
+	// spec.conversion.webhook.clientConfig.service.path at this route (see
+	// the compiler's crd_base.yaml.tmpl).
+	s.Echo.POST("/convert", ConvertHandler)
 }
 
 // ReplayNexusCRDRoutes re-registers all known Nexus CRD-derived routes on the current echo server.
@@ -330,12 +381,17 @@ func (s *EchoServer) registerDeleteRoute(urlPattern string, nexusContext func(ne
 func (s *EchoServer) GetNexusContext(restURI nexus.RestURIs,
 	codes nexus.HTTPCodesResponse,
 ) func(next echo.HandlerFunc) echo.HandlerFunc {
+	version := restURI.Version
+	if version == "" {
+		version = "v1"
+	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			nc := &NexusContext{
 				Context:  c,
 				NexusURI: restURI.Uri,
 				Codes:    codes,
+				Version:  version,
 			}
 			return next(nc)
 		}
@@ -608,6 +664,11 @@ func (s *EchoServer) StopServer() {
 	log.Debug().Msg("StopServer invoked")
 	ctx, cancel := context.WithTimeout(context.Background(), stopServerCtxTimeout)
 	defer cancel()
+
+	// Note: the webhook TLS listener (see StartWebhookTLSServer) is
+	// intentionally NOT shut down here - it's long-lived for the process,
+	// independent of s.Echo's restarts, and keeps routing to whichever
+	// instance activeEcho currently points at.
 	if err := s.Echo.Shutdown(ctx); err != nil {
 		log.InfraErr(err).Msg("Shutdown signal received")
 		return
@@ -664,6 +725,13 @@ func NewEchoServer(conf *config.Config, client KubernetesClient, nc *nexusClient
 	}))
 	e.Use(auditing.RestEchoMiddleware)
 
+	// Every CRD-triggered restart (see NodeUpdateNotifications) replaces
+	// s.Echo with a brand new instance. The webhook TLS listener is bound
+	// exactly once for the process's lifetime (see StartWebhookTLSServer)
+	// rather than torn down and rebuilt on every restart, so route its
+	// requests through this pointer to whichever instance is current.
+	activeEcho.Store(e)
+
 	return &EchoServer{
 		// create a new echo_server instance
 		Echo:        e,
@@ -672,6 +740,26 @@ func NewEchoServer(conf *config.Config, client KubernetesClient, nc *nexusClient
 		NexusClient: nc,
 		k8sProxy:    k8sProxy,
 	}
+}
+
+// activeEcho always points at the most recently created echo.Echo instance
+// (see NewEchoServer), so the webhook TLS listener below can keep routing
+// to a live handler across server restarts without needing to rebind its
+// port on every one.
+var activeEcho atomic.Pointer[echo.Echo]
+
+// webhookHandler forwards every request to whichever echo.Echo instance is
+// current, so StartWebhookTLSServer's listener doesn't need to be
+// recreated when the main server restarts (see activeEcho).
+type webhookHandler struct{}
+
+func (webhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	e := activeEcho.Load()
+	if e == nil {
+		http.Error(w, "service not ready", http.StatusServiceUnavailable)
+		return
+	}
+	e.ServeHTTP(w, r)
 }
 
 type AssignedInstance struct {

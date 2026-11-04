@@ -54,12 +54,22 @@ spec:
             - name: http
               containerPort: {{ .Values.config.server.httpPort | default 80 }}
               protocol: TCP
+            {{- if .Values.webhook.enabled }}
+            - name: webhook
+              containerPort: {{ .Values.config.server.webhookPort }}
+              protocol: TCP
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: /config/api-gw-config
               subPath: api-gw-config
             - name: kubeconfig
               mountPath: /kubeconfig
+            {{- if .Values.webhook.enabled }}
+            - name: webhook-tls
+              mountPath: /etc/webhook/tls
+              readOnly: true
+            {{- end }}
       volumes:
         - name: config
           configMap:
@@ -67,3 +77,8 @@ spec:
         - name: kubeconfig
           configMap:
             name: {{ .Release.Name }}-nexus-k8s-proxy-kubeconfig
+        {{- if .Values.webhook.enabled }}
+        - name: webhook-tls
+          secret:
+            secretName: {{ .Release.Name }}-nexus-api-gw-webhook-tls
+        {{- end }}

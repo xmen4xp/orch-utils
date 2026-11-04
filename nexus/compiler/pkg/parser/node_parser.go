@@ -60,6 +60,7 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 				if v.Name == "" {
 					log.Fatalf("Failed to get package name for %#v", v)
 				}
+				conversionImplementors := scanConversionImplementors(v)
 				if _, ok := pkgsMap[v.Name]; ok {
 					log.Fatalf("Invalid Package name. Package name <%v> is already defined. Please make sure the package names are not duplicated.", v.Name)
 				}
@@ -74,7 +75,8 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 								if typeSpec, ok := spec.(*ast.TypeSpec); ok {
 									if _, ok := typeSpec.Type.(*ast.StructType); ok {
 										checkIfReserved(typeSpec.Name.Name)
-										crdName := util.GetCrdName(typeSpec.Name.Name, v.Name, baseGroupName)
+										kind, version, isStorageVersion := resolveNodeIdentity(packages[pkgImport], typeSpec.Name.Name)
+										crdName := util.GetCrdName(kind, v.Name, baseGroupName)
 										if IsNexusNode(typeSpec) {
 											// Detect root nodes
 											if path == startPath {
@@ -82,18 +84,22 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 											}
 
 											node := Node{
-												Name:             typeSpec.Name.Name,
-												PkgName:          v.Name,
-												FullName:         pkgImport,
-												CrdName:          crdName,
-												IsSingleton:      IsSingletonNode(typeSpec),
-												Imports:          file.Imports,
-												TypeSpec:         typeSpec,
-												Parents:          make([]string, 0),
-												SingleChildren:   make(map[string]Node),
-												MultipleChildren: make(map[string]Node),
-												SingleLink:       make(map[string]Node),
-												MultipleLink:     make(map[string]Node),
+												Name:                  typeSpec.Name.Name,
+												PkgName:               v.Name,
+												FullName:              pkgImport,
+												CrdName:               crdName,
+												IsSingleton:           IsSingletonNode(typeSpec),
+												Imports:               file.Imports,
+												TypeSpec:              typeSpec,
+												Parents:               make([]string, 0),
+												SingleChildren:        make(map[string]Node),
+												MultipleChildren:      make(map[string]Node),
+												SingleLink:            make(map[string]Node),
+												MultipleLink:          make(map[string]Node),
+												Kind:                  kind,
+												Version:               version,
+												IsStorageVersion:      isStorageVersion,
+												ConversionImplemented: conversionImplementors[typeSpec.Name.Name],
 											}
 											if node.CrdName == "" {
 												log.Fatalf("Internal compiler failure: Failed to determine crd name of node %v", node.Name)
@@ -109,7 +115,12 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 													node.GraphqlQuerySpec = GraphqlQuerySpec
 												}
 											}
-											nodes[crdName] = node
+											if existing, ok := nodes[crdName]; ok {
+												mergeNodeVersion(&existing, node)
+												nodes[crdName] = existing
+											} else {
+												nodes[crdName] = node
+											}
 										} else {
 											if !strings.Contains(types.ExprString(typeSpec.Type), "nexus.") && v.Name == "global" {
 												nonNexusTypes.Types[typeSpec.Name.Name] = decl
@@ -146,7 +157,15 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 							}
 						}
 
-						if _, ok := decl.(*ast.FuncDecl); ok {
+						// Only collect standalone helper functions here (e.g.
+						// IsValidClusterMode(name ClusterModeName) bool), not
+						// methods with a receiver (e.g. ConvertTo/ConvertFrom
+						// on a versioned node - see node_version.go). Methods
+						// belong to their own type's package; dumping them
+						// into this shared non-nexus file would reference
+						// types (and the receiver type itself) that aren't in
+						// scope there, breaking that file's compilation.
+						if funcDecl, ok := decl.(*ast.FuncDecl); ok && funcDecl.Recv == nil {
 							out, err := util.RenderDecl(decl, fileset)
 							if err != nil {
 								return err
@@ -166,6 +185,8 @@ func ParseDSLNodes(startPath string, baseGroupName string, packages Packages,
 	if err != nil {
 		log.Fatalf("Failed to ParseDSLNodes %v", err)
 	}
+
+	validateNodeVersions(nodes)
 
 	// TEMP FIX: Make more optimal way to auto discover root nodes.
 	// https://jira.eng.vmware.com/browse/NPT-340

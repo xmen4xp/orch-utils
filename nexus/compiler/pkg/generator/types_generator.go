@@ -25,25 +25,38 @@ const (
 	clientgen   string = "// +genclient\n// +genclient:noStatus\n// +genclient:nonNamespaced"
 )
 
-func parsePackageCRDs(pkg parser.Package, aliasNameMap map[string]string) string {
+// parsePackageCRDs emits the Go type for every Kind that has a struct for
+// `version` (see pkg/parser/node_version.go). The generated type/spec/status/
+// list identifiers use the Kind's name, not necessarily the DSL struct's own
+// name - e.g. a Kind "Org" whose v2 struct is named "OrgV2" in the DSL still
+// generates `type Org struct {...}` in the v2 package, exactly like how k8s
+// client-go uses the version as the package and the Kind as the type name in
+// every version's package.
+func parsePackageCRDs(pkg parser.Package, aliasNameMap map[string]string, version string) string {
 	var output string
-	for _, node := range pkg.GetNexusNodes() {
-		output += generateType(pkg, node, aliasNameMap)
+	kindOrder, kindGroups := parser.GroupNodesByKind(pkg)
+	for _, kind := range kindOrder {
+		for _, kv := range kindGroups[kind] {
+			if kv.Version == version {
+				output += generateType(pkg, kind, kv.TypeSpec, aliasNameMap)
+				break
+			}
+		}
 	}
 
 	return output
 }
 
-func generateType(pkg parser.Package, node *ast.TypeSpec, aliasNameMap map[string]string) string {
+func generateType(pkg parser.Package, kind string, node *ast.TypeSpec, aliasNameMap map[string]string) string {
 	var output string
-	output += generateCRDStructType(pkg, node)
-	output += generateNodeSpec(node, aliasNameMap)
-	output += generateListDef(node)
+	output += generateCRDStructType(pkg, kind, node)
+	output += generateNodeSpec(kind, node, aliasNameMap)
+	output += generateListDef(kind)
 
 	return output
 }
 
-func generateCRDStructType(pkg parser.Package, node *ast.TypeSpec) string {
+func generateCRDStructType(pkg parser.Package, kind string, node *ast.TypeSpec) string {
 	var s struct {
 		Name                 string
 		StatusType           string
@@ -73,7 +86,7 @@ func generateCRDStructType(pkg parser.Package, node *ast.TypeSpec) string {
 		s.StatusNameFirstLower = util.GetTag(statusName)
 	}
 
-	s.Name = parser.GetTypeName(node)
+	s.Name = kind
 	if s.Name == "" {
 		log.Fatalf("name of type can't be empty")
 	}
@@ -156,7 +169,7 @@ func getTag(f *ast.Field, name string, omitempty bool) string {
 	return fmt.Sprintf("`%s`", tag)
 }
 
-func generateNodeSpec(node *ast.TypeSpec, aliasNameMap map[string]string) string {
+func generateNodeSpec(kind string, node *ast.TypeSpec, aliasNameMap map[string]string) string {
 	var crdTemplate = openapigen + `
 type {{.Name}}Spec struct {
 {{.Fields}}}
@@ -172,7 +185,7 @@ type {{.Name}}Spec struct {
 		Fields string
 	}
 
-	specDef.Name = parser.GetTypeName(node)
+	specDef.Name = kind
 
 	for _, field := range parser.GetSpecFields(node) {
 		var name string
@@ -243,7 +256,7 @@ type {{.Name}}Spec struct {
 
 }
 
-func generateListDef(node *ast.TypeSpec) string {
+func generateListDef(kind string) string {
 	var listTemplate = deepcopygen + `
 type {{.Name}}List struct {
 	metav1.TypeMeta   ` + "`" + `json:",inline" yaml:",inline"` + "`" + `
@@ -255,7 +268,7 @@ type {{.Name}}List struct {
 	var s struct {
 		Name string
 	}
-	s.Name = parser.GetTypeName(node)
+	s.Name = kind
 	if s.Name == "" {
 		log.Fatalf("name of type can't be empty")
 	}

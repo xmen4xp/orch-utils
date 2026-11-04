@@ -9,6 +9,11 @@ USER nobody
 # Now copy the static shell into base image.
 COPY --from=busybox:1.37.0-uclibc /bin/sh /bin/sh
 
+# sed is needed by datamodel_installer.sh to resolve the nexus-api-gw
+# Service's real (Helm-release-dependent) name into multi-version CRDs'
+# conversion.webhook.clientConfig before applying them.
+COPY --from=busybox:1.37.0-uclibc /bin/sed /bin/sed
+
 # Copy kubectl from the downloader stage
 COPY --from=kubectl-downloader /kubectl /usr/local/bin/kubectl
 
@@ -16,7 +21,11 @@ COPY --from=kubectl-downloader /kubectl /usr/local/bin/kubectl
 WORKDIR /app
 
 COPY datamodel_installer.sh /datamodel_installer.sh
-COPY build/crds /crds
+# --chown is required here (unlike the other COPYs below): multi-version
+# Kinds' CRDs need their nexus-api-gw Service placeholders resolved by
+# `sed -i` in datamodel_installer.sh before being applied, which needs
+# write access to /crds as the non-root `nobody` user this image runs as.
+COPY --chown=nobody:nobody build/crds /crds
 COPY build/clusterroles /clusterroles
 
 COPY IMAGE /IMAGE

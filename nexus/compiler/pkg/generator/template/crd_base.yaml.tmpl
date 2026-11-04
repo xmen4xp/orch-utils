@@ -10,9 +10,34 @@ metadata:
   annotations:
     nexus: |
       {{.NexusAnnotation}}
+{{- if eq .ConversionStrategy "Webhook"}}
+    # caBundle (below) is intentionally omitted from clientConfig: cert-manager's
+    # cainjector watches for this annotation and populates
+    # spec.conversion.webhook.clientConfig.caBundle itself, so it doesn't need
+    # to be known (or kept in sync with cert rotation) at compile time. The
+    # placeholder is resolved by datamodel_installer.sh at install time, same
+    # as the Service name/namespace below - see
+    # ConversionWebhookCAInjectFromPlaceholder.
+    cert-manager.io/inject-ca-from: {{.ConversionWebhookCAInjectFrom}}
+{{- end}}
 spec:
   conversion:
-    strategy: None
+    strategy: {{.ConversionStrategy}}
+{{- if eq .ConversionStrategy "Webhook"}}
+    webhook:
+      conversionReviewVersions: ["v1"]
+      clientConfig:
+        service:
+          name: {{.ConversionWebhookServiceName}}
+          namespace: {{.ConversionWebhookServiceNamespace}}
+          path: /convert
+          # Must match the webhook TLS listener's port (see nexus-api-gw's
+          # Server.WebhookPort / StartWebhookTLSServer and its helm chart's
+          # nexus-api-gw-service.yaml) - a stable, product-wide convention,
+          # unlike the Service name/namespace which are Helm-release-specific
+          # and therefore resolved dynamically at install time instead.
+          port: 9443
+{{- end}}
   group: {{.GroupName}}
   names:
     kind: {{.Kind}}
@@ -23,15 +48,21 @@ spec:
     singular: {{.Singular}}
   scope: Cluster
   versions:
-    - name: {{.ResourceVersion}}
-      served: true
-      storage: true
+{{- range .Versions}}
+    - name: {{.Name}}
+      served: {{.Served}}
+      storage: {{.Storage}}
       subresources:
         status: {}
+{{- end}}
 status:
   acceptedNames:
     kind: ""
     plural: ""
   conditions: null
   storedVersions:
-    - {{.ResourceVersion}}
+{{- range .Versions}}
+{{- if .Storage}}
+    - {{.Name}}
+{{- end}}
+{{- end}}

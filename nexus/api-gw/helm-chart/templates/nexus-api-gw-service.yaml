@@ -13,6 +13,17 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: nexus-api-gw
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: {{ .Values.config.server.httpPort | default 80 }}
+    {{- if .Values.webhook.enabled }}
+    - name: webhook
+      protocol: TCP
+      # Must stay 9443 - the compiler hardcodes this exact port in every
+      # multi-version Kind's CRD (see crd_base.yaml.tmpl); it isn't
+      # Helm-release-dependent like the Service name/namespace are, so
+      # there's no install-time resolution for it.
+      port: 9443
+      targetPort: {{ .Values.config.server.webhookPort }}
+    {{- end }}

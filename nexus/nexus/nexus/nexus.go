@@ -51,6 +51,12 @@ type RestURIs struct {
 	QueryParams []string             `json:"query_params,omitempty"`
 	Headers     []string             `json:"headers,omitempty"`
 	Methods     HTTPMethodsResponses `json:"methods"`
+	// Version is the API version (e.g. "v1", "v2") this URI serves, stamped
+	// by the compiler when it merges every version's RestAPISpec onto one
+	// CRD (see orch-utils nexus/compiler RenderCRDBaseTemplate). Consumers
+	// (e.g. nexus-api-gw) should default to "v1" when empty, for
+	// compatibility with CRDs generated before this field existed.
+	Version string `json:"version,omitempty"`
 }
 
 type RestAPISpec struct {
