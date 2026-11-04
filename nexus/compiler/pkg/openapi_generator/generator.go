@@ -493,9 +493,23 @@ func (g *Generator) addCustomResourceValidation(crd *extensionsv1.CustomResource
 // version's schema) ends up a superset of every version's fields. On a
 // name collision, dst's own property definition wins (its version's type
 // is assumed authoritative for that field) but is still merged one level
-// deeper in case nested sub-properties differ.
+// deeper in case nested sub-properties differ. Also descends into array
+// items (schema.Items.Schema): a renamed/added field nested inside a list
+// (e.g. AISlice's scheduling_groups[].gpu_groups) lives there, not in
+// schema.Properties, and would otherwise never get merged - silently
+// pruned at write time exactly like a top-level field would be.
 func unionSchemaProperties(dst, src *extensionsv1.JSONSchemaProps) {
-	if dst == nil || src == nil || len(src.Properties) == 0 {
+	if dst == nil || src == nil {
+		return
+	}
+	if src.Items != nil && src.Items.Schema != nil {
+		if dst.Items == nil {
+			dst.Items = src.Items
+		} else if dst.Items.Schema != nil {
+			unionSchemaProperties(dst.Items.Schema, src.Items.Schema)
+		}
+	}
+	if len(src.Properties) == 0 {
 		return
 	}
 	if dst.Properties == nil {
