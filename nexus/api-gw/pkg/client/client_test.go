@@ -210,10 +210,64 @@ func TestDeleteObjectSkipsCascadeForDeferredDelete(t *testing.T) {
 	require.Equal(t, testSpaceGVR, fakeClient.Actions()[1].GetResource())
 }
 
-func TestDeleteObjectBlockedByDeferredDescendant(t *testing.T) {
-	// space (non-deferred) has an aislice descendant that is deferred-delete. With a live
-	// aislice present, deleting the space must be refused until the aislice is deleted first
-	// (bottom-up deletion), and the space itself must not be deleted.
+func TestDeleteChildrenSkipsCascadeIntoDeferredDeleteDescendant(t *testing.T) {
+	// space (non-deferred) has an aislice descendant that is deferred-delete. Cascading from an
+	// ancestor must not recurse into the aislice's own children (there are none here, but the
+	// point is DeleteChildren must not treat it like any other kind); it must still issue the
+	// DeleteCollection call on aislices directly, so a real admission webhook on that kind still
+	// gets a chance to evaluate the delete.
+	originalClient := Client
+	originalNodeInfo := model.CrdTypeToNodeInfo
+	t.Cleanup(func() {
+		Client = originalClient
+		model.CrdTypeToNodeInfo = originalNodeInfo
+	})
+
+	model.CrdTypeToNodeInfo = map[string]model.NodeInfo{
+		testSpaceType: {
+			ParentHierarchy: []string{testOrgType, testProjectType},
+			Children:        map[string]model.NodeHelperChild{testAISliceType: {}},
+		},
+		testAISliceType: {
+			DeferredDelete: true,
+			Children:       map[string]model.NodeHelperChild{testWorkloadType: {}},
+		},
+		testWorkloadType: {},
+	}
+
+	space := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": testSpaceGVR.GroupVersion().String(),
+		"kind":       "Space",
+		"metadata": map[string]interface{}{
+			"name": "space-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				"nexus/display_name": "demo-space",
+			},
+		},
+	}}
+	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), space)
+	Client = fakeClient
+
+	var deletedCollections []string
+	fakeClient.PrependReactor("delete-collection", "*", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		deletedCollections = append(deletedCollections, action.GetResource().Resource)
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.NoError(t, err)
+	// aislices is deleted directly (so admission still runs on it); workloads under it is never
+	// touched because cascade does not recurse into a deferred-delete kind's children.
+	require.Equal(t, []string{"aislices"}, deletedCollections)
+}
+
+func TestDeleteChildrenPropagatesDenialFromDeferredDeleteDescendant(t *testing.T) {
+	// If the DeleteCollection call on the deferred-delete descendant is denied (e.g. by a
+	// ValidatingWebhookConfiguration rejecting it because it still has children of its own),
+	// the error must propagate up and abort deletion of everything above it in the call chain —
+	// the ancestor itself must not be deleted either.
 	originalClient := Client
 	originalNodeInfo := model.CrdTypeToNodeInfo
 	t.Cleanup(func() {
@@ -244,26 +298,19 @@ func TestDeleteObjectBlockedByDeferredDescendant(t *testing.T) {
 	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), space)
 	Client = fakeClient
 
-	// The deferred-descendant scan lists aislices; return one live instance.
-	fakeClient.PrependReactor("list", "aislices", func(k8stesting.Action) (bool, runtime.Object, error) {
-		list := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{{Object: map[string]interface{}{
-			"apiVersion": "aislice.test.io/v1",
-			"kind":       "AISlice",
-			"metadata":   map[string]interface{}{"name": "slice-1"},
-		}}}}
-		return true, list, nil
+	denyErr := errors.New("admission webhook denied the request: aislices still has children")
+	fakeClient.PrependReactor("delete-collection", "aislices", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, denyErr
 	})
-	deleteCalled := false
-	fakeClient.PrependReactor("delete", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
-		deleteCalled = true
+	spaceDeleteCalled := false
+	fakeClient.PrependReactor("delete", "spaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		spaceDeleteCalled = true
 		return true, nil, nil
 	})
 
 	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "must be deleted first")
-	require.ErrorContains(t, err, testAISliceType)
-	require.False(t, deleteCalled, "space must not be deleted while a deferred-delete descendant exists")
+	require.ErrorIs(t, err, denyErr)
+	require.False(t, spaceDeleteCalled, "space must not be deleted while its deferred-delete descendant's delete was denied")
 }
 
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {

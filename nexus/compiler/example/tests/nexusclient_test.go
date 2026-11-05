@@ -123,8 +123,9 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getGns.GetName()).To(Equal(gns.GetName()))
 
-			// Gns is deferred-delete, so Config cannot be removed until the Gns is deleted first
-			// (bottom-up). Delete the Gns, then the Config delete succeeds.
+			// Gns is deferred-delete. The generated client no longer enforces bottom-up ordering
+			// itself (that's the job of an application-owned admission webhook); this test just
+			// follows the expected caller workflow of deleting the child before the parent.
 			err = cfg.DeleteGNS(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -278,46 +279,10 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should refuse to remove a parent while a deferred-delete descendant exists", func() {
-			cfgName := "configObj"
-			cfgDef := &configv1.Config{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: cfgName,
-				},
-				Spec: configv1.ConfigSpec{
-					MyStr0: &str,
-				},
-			}
-			cfg, err := root.AddConfig(context.TODO(), cfgDef)
-			Expect(err).NotTo(HaveOccurred())
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.DisplayName()).To(Equal(cfgName))
-			gnsDef := &gnsv1.Gns{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "gnsName",
-				},
-			}
-			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
-			Expect(err).NotTo(HaveOccurred())
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(gns.DisplayName()).To(Equal("gnsName"))
-
-			// Gns is deferred-delete, so deleting an ancestor (root) is refused until the Gns is
-			// deleted first (bottom-up deletion); the tree is left intact.
-			err = root.Delete(context.TODO())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be deleted first"))
-
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg).NotTo(BeNil())
-
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(gns).NotTo(BeNil())
-		})
+		// Note: the generated client intentionally does not refuse to delete an ancestor while a
+		// deferred-delete descendant exists. Bottom-up enforcement is the responsibility of an
+		// application-owned ValidatingWebhookConfiguration on the deferred-delete kind, which has
+		// no equivalent in this fake-client test fixture; see nexus-validation-policy arch-spec-new.md.
 
 		It("should not cascade to children when a deferred-delete parent is removed", func() {
 			cfgName := "configObj"

@@ -148,15 +148,6 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 			return err
 		}
 
-		// Enforce bottom-up deletion: refuse to delete this node while a deferred-delete
-		// descendant still exists. Such descendants must be deleted explicitly first so that
-		// their finalizer and owning controller perform teardown.
-		if blocker, err := firstDeferredDescendant(crdType, listOpts); err != nil {
-			return err
-		} else if blocker != "" {
-			return fmt.Errorf("cannot delete %s: deferred-delete descendant %q must be deleted first", crdType, blocker)
-		}
-
 		// Deferred-delete nodes are not cascaded here: the Delete below sets a deletionTimestamp
 		// (the finalizer added at create time holds the object in Terminating) and the owning
 		// controller performs teardown. Cascading would remove children before the parent's
@@ -197,48 +188,20 @@ func cascadeListOptions(objectLabels map[string]string, crdType string, parentHi
 	return metav1.ListOptions{LabelSelector: k8slabels.SelectorFromSet(selectorLabels).String()}, nil
 }
 
-// firstDeferredDescendant walks the descendant kinds of crdType and returns "<kind>/<name>"
-// for the first deferred-delete descendant that still has a live instance scoped by listOpts,
-// or "" if none exist. It only issues a List for kinds marked deferred-delete, so it adds no
-// overhead for hierarchies without any deferred-delete nodes.
-func firstDeferredDescendant(crdType string, listOpts metav1.ListOptions) (string, error) {
-	crdInfo := model.CrdTypeToNodeInfo[crdType]
-	for childType := range crdInfo.Children {
-		if model.CrdTypeToNodeInfo[childType].DeferredDelete {
-			list, err := Client.Resource(gvrForCrdType(childType)).List(context.TODO(), listOpts)
-			if err != nil {
-				return "", err
-			}
-			if len(list.Items) > 0 {
-				return childType + "/" + list.Items[0].GetName(), nil
-			}
-		}
-		blocker, err := firstDeferredDescendant(childType, listOpts)
-		if err != nil {
-			return "", err
-		}
-		if blocker != "" {
-			return blocker, nil
-		}
-	}
-	return "", nil
-}
-
-func gvrForCrdType(crdType string) schema.GroupVersionResource {
-	parts := strings.Split(crdType, ".")
-	return schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
-}
-
 func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
-	for k := range crdInfo.Children {
-		err := DeleteChildren(k, listOpts)
-		if err != nil {
-			return err
+
+	// Deferred-delete kinds are not cascaded into: the DeleteCollection call below still runs
+	// and still goes through normal per-object admission for every matched instance, so a
+	// validating webhook registered on this kind is not bypassed by an ancestor's cascade. A
+	// denial there returns an error here, which aborts deletion of everything above it in this
+	// call chain without a separate subtree scan.
+	if !crdInfo.DeferredDelete {
+		for k := range crdInfo.Children {
+			err := DeleteChildren(k, listOpts)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
