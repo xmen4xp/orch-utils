@@ -123,9 +123,8 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getGns.GetName()).To(Equal(gns.GetName()))
 
-			// Gns is deferred-delete. The generated client no longer enforces bottom-up ordering
-			// itself (that's the job of an application-owned admission webhook); this test just
-			// follows the expected caller workflow of deleting the child before the parent.
+			// Gns is deferred-delete but has no children here, so its own synchronous children
+			// check (no admission webhook involved) passes and the delete succeeds immediately.
 			err = cfg.DeleteGNS(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -279,12 +278,7 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		// Note: the generated client intentionally does not refuse to delete an ancestor while a
-		// deferred-delete descendant exists. Bottom-up enforcement is the responsibility of an
-		// application-owned ValidatingWebhookConfiguration on the deferred-delete kind, which has
-		// no equivalent in this fake-client test fixture; see nexus-validation-policy arch-spec-new.md.
-
-		It("should not cascade to children when a deferred-delete parent is removed", func() {
+		It("should refuse to delete a deferred-delete node while it still has children", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -325,11 +319,15 @@ var _ = Describe("Nexus clients tests", func() {
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Gns is annotated `nexus-deferred-delete`, so deleting it must NOT cascade to its
-			// SvcGroup children — teardown is deferred to the finalizer and the owning controller.
-			err = cfg.DeleteGNS(context.TODO())
-			Expect(err).NotTo(HaveOccurred())
+			// Gns is annotated `nexus-deferred-delete`: deleting it while it still has SvcGroup
+			// children must be refused synchronously (no admission webhook involved) rather than
+			// cascading into them or silently accepting the delete.
+			err = gns.Delete(context.TODO())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("still has children"))
 
+			_, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
+			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg1.GetName())
 			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())

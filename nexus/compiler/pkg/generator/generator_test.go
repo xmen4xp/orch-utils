@@ -172,7 +172,7 @@ var _ = Describe("Template renderers tests", func() {
 			return rest
 		}
 
-		It("should not emit a client-side cascade in Delete<Node>ByName", func() {
+		It("should refuse to delete while children exist instead of cascading in Delete<Node>ByName", func() {
 			clientsBytes, err := generator.RenderClientTemplate(baseGroupName, crdModulePath, pkgs, parentsMap)
 			Expect(err).NotTo(HaveOccurred())
 			formatted, err := format.Source(clientsBytes.Bytes())
@@ -180,13 +180,15 @@ var _ = Describe("Template renderers tests", func() {
 			src := string(formatted)
 
 			// Gns is annotated `nexus-deferred-delete: true` and has children; its delete must
-			// issue only the parent DELETE (finalizer + owning controller own teardown), so it
-			// must not cascade into any child kind.
+			// check for existing children and refuse synchronously (no admission webhook
+			// involved) rather than cascade into them, since cascading would destroy them
+			// before the parent's own delete completes.
 			gnsDelete := funcBody(src, "DeleteGnsByName")
-			Expect(gnsDelete).NotTo(ContainSubstring("GetChildren("))
+			Expect(gnsDelete).To(ContainSubstring("GetChildren("))
+			Expect(gnsDelete).To(ContainSubstring("cannot delete"))
 			Expect(gnsDelete).NotTo(ContainSubstring("DeleteSvcGroupByName"))
 			Expect(gnsDelete).NotTo(ContainSubstring("DeleteAccessControlPolicyByName"))
-			// It must still issue the parent DELETE (skipping cascade, not the delete itself).
+			// It must still issue the parent DELETE once the children check passes.
 			Expect(gnsDelete).To(ContainSubstring("Gnses().Delete(ctx"))
 
 			// A non-deferred parent (Config) must still cascade into its Gns children.

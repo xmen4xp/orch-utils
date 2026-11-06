@@ -354,8 +354,19 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 		return err
 	}
 
-	{{/* Deferred-delete nodes skip the client-side cascade: the parent DELETE below sets a deletionTimestamp (the finalizer added at create time holds the object), and the owning controller performs teardown. Cascading here would delete children before the parent's DELETE reaches admission and would race the controller's teardown. Each child kind's own Delete<Child>ByName applies this same guard for its own children, so this check alone is sufficient at every level of the hierarchy. */}}
-	{{ if not $node.DeferredDelete }}
+	{{/* Deferred-delete nodes are never cascaded: refuse to delete while any child still
+	exists, so the caller must delete bottom-up explicitly. This is a synchronous,
+	framework-owned check (no admission webhook involved) -- the fixed rule "any child
+	blocks delete", applied the same way api-gw applies it. Each child kind's own
+	Delete<Child>ByName applies this same guard for its own children, so this check alone
+	is sufficient at every level of the hierarchy. */}}
+	{{ if $node.DeferredDelete }}
+	{{ range $key, $link := .Children }}
+	if len(GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}")) > 0 {
+		return fmt.Errorf("cannot delete {{$node.CrdName}} %q: it still has children", hashedName)
+	}
+	{{ end }}
+	{{ else }}
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
 		err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child)

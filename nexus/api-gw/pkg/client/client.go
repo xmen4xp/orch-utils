@@ -148,11 +148,18 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 			return err
 		}
 
-		// Deferred-delete nodes are not cascaded here: the Delete below sets a deletionTimestamp
-		// (the finalizer added at create time holds the object in Terminating) and the owning
-		// controller performs teardown. Cascading would remove children before the parent's
-		// DELETE reaches admission and would race the controller's teardown.
-		if !crdInfo.DeferredDelete {
+		if crdInfo.DeferredDelete {
+			// Deferred-delete nodes are never cascaded: refuse to delete this object while
+			// it still has any child, so the caller must delete bottom-up explicitly. This is
+			// a synchronous, framework-owned check (no admission webhook involved) -- the
+			// decision is the fixed rule "any child blocks delete", applied the same way
+			// regardless of which write path (api-gw, generated client) issues the request.
+			if blocked, err := hasChildren(crdType, listOpts); err != nil {
+				return err
+			} else if blocked {
+				return fmt.Errorf("cannot delete %s %q: it still has children", crdType, hashedName)
+			}
+		} else {
 			for k := range crdInfo.Children {
 				if err = DeleteChildren(k, listOpts); err != nil {
 					return err
@@ -167,6 +174,33 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 	}
 
 	return nil
+}
+
+// hasChildren returns true if any instance of any of crdType's declared immediate child
+// kinds currently exists under listOpts (the same selector cascade itself uses to scope a
+// child List/DeleteCollection to one specific parent instance).
+func hasChildren(crdType string, listOpts metav1.ListOptions) (bool, error) {
+	crdInfo := model.CrdTypeToNodeInfo[crdType]
+	for childType := range crdInfo.Children {
+		gvr := gvrForCrdType(childType)
+		list, err := Client.Resource(gvr).List(context.TODO(), listOpts)
+		if err != nil {
+			return false, err
+		}
+		if len(list.Items) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func gvrForCrdType(crdType string) schema.GroupVersionResource {
+	parts := strings.Split(crdType, ".")
+	return schema.GroupVersionResource{
+		Group:    strings.Join(parts[1:], "."),
+		Version:  "v1",
+		Resource: parts[0],
+	}
 }
 
 func cascadeListOptions(objectLabels map[string]string, crdType string, parentHierarchy []string) (metav1.ListOptions, error) {
@@ -190,33 +224,40 @@ func cascadeListOptions(objectLabels map[string]string, crdType string, parentHi
 
 func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
+	gvr := gvrForCrdType(crdType)
 
-	// Deferred-delete kinds are not cascaded into: the DeleteCollection call below still runs
-	// and still goes through normal per-object admission for every matched instance, so a
-	// validating webhook registered on this kind is not bypassed by an ancestor's cascade. A
-	// denial there returns an error here, which aborts deletion of everything above it in this
-	// call chain without a separate subtree scan.
-	if !crdInfo.DeferredDelete {
-		for k := range crdInfo.Children {
-			err := DeleteChildren(k, listOpts)
+	if crdInfo.DeferredDelete {
+		// Deferred-delete kinds are never cascaded into, whether reached directly or via an
+		// ancestor's cascade: list the live instances under this selector and refuse to delete
+		// any of them while they still have children of their own. This is the same
+		// synchronous, framework-owned check as DeleteObject's, applied here so an ancestor's
+		// cascade cannot bypass it by reaching this kind through DeleteCollection instead of a
+		// direct delete.
+		list, err := Client.Resource(gvr).List(context.TODO(), listOpts)
+		if err != nil {
+			return err
+		}
+		for _, item := range list.Items {
+			childListOpts, err := cascadeListOptions(item.GetLabels(), crdType, crdInfo.ParentHierarchy)
 			if err != nil {
 				return err
 			}
+			if blocked, err := hasChildren(crdType, childListOpts); err != nil {
+				return err
+			} else if blocked {
+				return fmt.Errorf("cannot delete %s %q: it still has children", crdType, item.GetName())
+			}
+		}
+		return Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
+	}
+
+	for k := range crdInfo.Children {
+		if err := DeleteChildren(k, listOpts); err != nil {
+			return err
 		}
 	}
 
-	parts := strings.Split(crdType, ".")
-	gvr := schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
-	err := Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
 }
 
 type PatchOp struct {
