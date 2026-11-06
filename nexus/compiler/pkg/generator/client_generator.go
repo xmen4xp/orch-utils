@@ -101,6 +101,9 @@ func resolveNode(baseImportName, informerImportName string, pkg parser.Package, 
 	if _, ok := parser.GetNexusDeferredDeleteAnnotation(pkg, parser.GetTypeName(node)); ok {
 		clientGroupVars.DeferredDelete = true
 	}
+	if _, ok := parser.GetNexusBlockDeleteOnChildrenAnnotation(pkg, parser.GetTypeName(node)); ok {
+		clientGroupVars.BlockDeleteOnChildren = true
+	}
 
 	//Get user defined status field if present
 	statusField := parser.GetStatusField(node)
@@ -297,6 +300,7 @@ type apiGroupsClientVars struct {
 	BaseNodeName           string
 	CrdName                string
 	DeferredDelete         bool
+	BlockDeleteOnChildren  bool
 	IsSingleton            bool
 	HasChildren            bool
 	HasStatus              bool

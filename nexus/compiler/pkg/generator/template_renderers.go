@@ -400,14 +400,15 @@ type crdBaseVars struct {
 }
 
 type NexusAnnotation struct {
-	Name            string                            `json:"name,omitempty"`
-	Hierarchy       []string                          `json:"hierarchy,omitempty"`
-	Children        map[string]parser.NodeHelperChild `json:"children,omitempty"`
-	Links           map[string]parser.NodeHelperChild `json:"links,omitempty"`
-	IsSingleton     bool                              `json:"is_singleton"`
-	NexusRestAPIGen nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
-	Description     string                            `json:"description,omitempty"`
-	DeferredDelete  bool                              `json:"deferred-delete,omitempty"`
+	Name                  string                            `json:"name,omitempty"`
+	Hierarchy             []string                          `json:"hierarchy,omitempty"`
+	Children              map[string]parser.NodeHelperChild `json:"children,omitempty"`
+	Links                 map[string]parser.NodeHelperChild `json:"links,omitempty"`
+	IsSingleton           bool                              `json:"is_singleton"`
+	NexusRestAPIGen       nexus.RestAPISpec                 `json:"nexus-rest-api-gen,omitempty"`
+	Description           string                            `json:"description,omitempty"`
+	DeferredDelete        bool                              `json:"deferred-delete,omitempty"`
+	BlockDeleteOnChildren bool                              `json:"block-delete-on-children,omitempty"`
 }
 
 type CrdBaseFile struct {
@@ -492,6 +493,13 @@ func RenderCRDBaseTemplate(baseGroupName string, pkg parser.Package, parentsMap 
 				return nil, err
 			}
 			nexusAnnotation.DeferredDelete = annotationInBool
+		}
+		if annotation, ok := parser.GetNexusBlockDeleteOnChildrenAnnotation(pkg, typeName); ok {
+			annotationInBool, err := strconv.ParseBool(annotation)
+			if err != nil {
+				return nil, err
+			}
+			nexusAnnotation.BlockDeleteOnChildren = annotationInBool
 		}
 
 		nexusAnnotationStr, err := json.Marshal(nexusAnnotation)

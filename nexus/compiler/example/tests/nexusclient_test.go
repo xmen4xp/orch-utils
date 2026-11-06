@@ -123,6 +123,11 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getGns.GetName()).To(Equal(gns.GetName()))
 
+			// Gns is deferred-delete but has no children here, so its own synchronous children
+			// check (no admission webhook involved) passes and the delete succeeds immediately.
+			err = cfg.DeleteGNS(context.TODO())
+			Expect(err).NotTo(HaveOccurred())
+
 			err = root.DeleteConfig(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -273,45 +278,7 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should remove all children when parent is removed", func() {
-			cfgName := "configObj"
-			cfgDef := &configv1.Config{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: cfgName,
-				},
-				Spec: configv1.ConfigSpec{
-					MyStr0: &str,
-				},
-			}
-			cfg, err := root.AddConfig(context.TODO(), cfgDef)
-			Expect(err).NotTo(HaveOccurred())
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.DisplayName()).To(Equal(cfgName))
-			gnsDef := &gnsv1.Gns{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "gnsName",
-				},
-			}
-			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
-			Expect(err).NotTo(HaveOccurred())
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(gns.DisplayName()).To(Equal("gnsName"))
-
-			err = root.Delete(context.TODO())
-			Expect(err).NotTo(HaveOccurred())
-
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(cfg).To(BeNil())
-
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(gns).To(BeNil())
-		})
-
-		It("should delete all named children when parent is removed", func() {
+		It("should refuse to delete a deferred-delete node while it still has children", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -352,13 +319,19 @@ var _ = Describe("Nexus clients tests", func() {
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
 			Expect(err).NotTo(HaveOccurred())
 
-			err = cfg.DeleteGNS(context.TODO())
-			Expect(err).NotTo(HaveOccurred())
+			// Gns is annotated `nexus-deferred-delete`: deleting it while it still has SvcGroup
+			// children must be refused synchronously (no admission webhook involved) rather than
+			// cascading into them or silently accepting the delete.
+			err = gns.Delete(context.TODO())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("still has children"))
 
+			_, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
+			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg1.GetName())
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
