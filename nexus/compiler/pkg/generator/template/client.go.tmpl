@@ -184,6 +184,55 @@ func new{{$group.GroupTypeName}}(client *Clientset) *{{$group.GroupTypeName}} {
 }
 {{end}}
 
+// deferredDeleteCRDs holds CRD types that are never cascaded into on delete (DeferredDelete or
+// BlockDeleteOnChildren), used by the pre-scan below to identify descendant kinds that must not
+// be cascaded through while they still have children.
+var deferredDeleteCRDs = map[string]bool{
+{{- range $key, $node := .Nodes }}
+{{- if or $node.DeferredDelete $node.BlockDeleteOnChildren }}
+	"{{$node.CrdName}}": true,
+{{- end }}
+{{- end }}
+}
+
+// childCRDs maps a CRD type to its immediate child CRD types (used to walk the hierarchy).
+var childCRDs = map[string][]string{
+{{- range $key, $node := .Nodes }}
+	"{{$node.CrdName}}": { {{- range $k, $link := $node.Children }}"{{$link.CrdName}}",{{ end -}} },
+{{- end }}
+}
+
+// hasOwnChildren returns true if the (crdName, name) instance currently has any child of any of
+// its declared child kinds, per the children cache.
+func hasOwnChildren(crdName, name string) bool {
+	for _, childCRD := range childCRDs[crdName] {
+		if len(GetChildren(crdName, name, childCRD)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// blockingDeferredDescendant recursively walks the descendant kinds of (crdName, name) and
+// returns "<crd>/<name>" for the first deferred-delete descendant instance found that currently
+// has children of its own, or "" if none. It's a read-only, all-or-nothing pre-check -- run once,
+// before any cascade begins -- so a blocking descendant anywhere in the subtree is found before
+// any sibling branch is touched. This makes a non-deferred ancestor's delete atomic: either
+// nothing in the subtree is blocked and the whole cascade proceeds, or nothing is touched at all.
+func blockingDeferredDescendant(crdName, name string) string {
+	for _, childCRD := range childCRDs[crdName] {
+		for _, child := range GetChildren(crdName, name, childCRD) {
+			if deferredDeleteCRDs[childCRD] && hasOwnChildren(childCRD, child) {
+				return childCRD + "/" + child
+			}
+			if blocker := blockingDeferredDescendant(childCRD, child); blocker != "" {
+				return blocker
+			}
+		}
+	}
+	return ""
+}
+
 {{ range $key, $node := .Nodes }}
 
 func (group *{{$node.GroupTypeName}}) Get{{$node.BaseNodeName}}ChildrenMap() (map[string]{{$node.BaseImportName}}.Child) {
@@ -360,13 +409,19 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	blocks delete", applied the same way api-gw applies it. Each child kind's own
 	Delete<Child>ByName applies this same guard for its own children, so this check alone
 	is sufficient at every level of the hierarchy. */}}
-	{{ if $node.DeferredDelete }}
+	{{ if or $node.DeferredDelete $node.BlockDeleteOnChildren }}
 	{{ range $key, $link := .Children }}
 	if len(GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}")) > 0 {
 		return fmt.Errorf("cannot delete {{$node.CrdName}} %q: it still has children", hashedName)
 	}
 	{{ end }}
 	{{ else }}
+	{{/* All-or-nothing pre-check: refuse the whole delete upfront if any deferred-delete
+	descendant anywhere in the subtree currently has children, before touching any sibling
+	branch. This makes the delete atomic instead of depending on map/cache iteration order. */}}
+	if blocker := blockingDeferredDescendant("{{$node.CrdName}}", hashedName); blocker != "" {
+		return fmt.Errorf("cannot delete {{$node.CrdName}} %q: descendant %q still has children", hashedName, blocker)
+	}
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
 		err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child)
@@ -432,6 +487,25 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	RemoveChild("{{$node.Parent.CrdName}}", parentName, "{{$node.CrdName}}", hashedName)
 	{{ end }}
 	return nil
+}
+
+// ForceDelete{{$node.BaseNodeName}}ByName deletes hashedName the same way Delete{{$node.BaseNodeName}}ByName
+// does, except it bypasses any DeferredDelete/BlockDeleteOnChildren guard anywhere in the
+// subtree: every child is cascade-deleted first via its own ForceDelete<Kind>ByName (so force
+// propagates all the way down regardless of which level it's invoked from), then the object
+// itself is removed via Delete{{$node.BaseNodeName}}ByName, whose own guard passes trivially once
+// children are already gone. This is the explicit, caller-opted-in escape hatch for cases where
+// bottom-up deletion isn't practical (e.g. cleaning up a failed/abandoned hierarchy).
+func (group *{{$node.GroupTypeName}}) ForceDelete{{$node.BaseNodeName}}ByName(ctx context.Context, hashedName string) error {
+	{{ range $key, $link := .Children }}
+	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
+		if err := group.client.{{$link.SimpleGroupTypeName}}().ForceDelete{{$link.BaseNodeName}}ByName(ctx, child); err != nil && errors.IsNotFound(err) == false {
+			return err
+		}
+		RemoveChild("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}", child)
+	}
+	{{ end }}
+	return group.Delete{{$node.BaseNodeName}}ByName(ctx, hashedName)
 }
 
 // Create{{$node.BaseNodeName}}ByName creates object in the database without hashing the name.

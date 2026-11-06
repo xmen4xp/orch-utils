@@ -21,13 +21,21 @@ import (
 )
 
 const (
-	testOrgType      = "orgs.org.test.io"
-	testProjectType  = "projects.project.test.io"
-	testSpaceType    = "spaces.space.test.io"
-	testAISliceType  = "aislices.aislice.test.io"
-	testWorkloadType = "workloads.workload.test.io"
-	testAppType      = "apps.app.test.io"
+	testOrgType       = "orgs.org.test.io"
+	testProjectType   = "projects.project.test.io"
+	testSpaceType     = "spaces.space.test.io"
+	testAISliceType   = "aislices.aislice.test.io"
+	testWorkloadType  = "workloads.workload.test.io"
+	testAppType       = "apps.app.test.io"
+	testConfigType    = "configs.config.test.io"
+	testAlertRuleType = "alertrules.alertrule.test.io"
 )
+
+var testConfigGVR = schema.GroupVersionResource{
+	Group:    "config.test.io",
+	Version:  "v1",
+	Resource: "configs",
+}
 
 var testSpaceGVR = schema.GroupVersionResource{
 	Group:    "space.test.io",
@@ -59,7 +67,7 @@ func TestDeleteObjectScopesRecursiveDeletionToRootHierarchy(t *testing.T) {
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.NoError(t, err)
 	require.Len(t, calls, 3)
 	require.Equal(t, []string{"apps", "workloads", "aislices"}, []string{
@@ -116,7 +124,7 @@ func TestDeleteObjectPreservesDefaultHierarchyValues(t *testing.T) {
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.NoError(t, err)
 	require.Equal(t, k8slabels.SelectorFromSet(k8slabels.Set{
 		testOrgType:     "default",
@@ -145,7 +153,7 @@ func TestDeleteObjectFailsBeforeDeletionWhenHierarchyLabelsAreMissing(t *testing
 		t.Run(name, func(t *testing.T) {
 			fakeClient := setupDeleteTest(t, objectLabels, recursiveNodeInfo())
 
-			err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+			err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 			require.ErrorContains(t, err, "cannot safely delete children")
 			require.Len(t, fakeClient.Actions(), 1)
 			require.Equal(t, "get", fakeClient.Actions()[0].GetVerb())
@@ -156,7 +164,7 @@ func TestDeleteObjectFailsBeforeDeletionWhenHierarchyLabelsAreMissing(t *testing
 func TestDeleteObjectDeletesLeafWithoutCascadeLabels(t *testing.T) {
 	fakeClient := setupDeleteTest(t, nil, model.NodeInfo{})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.NoError(t, err)
 	require.Len(t, fakeClient.Actions(), 2)
 	require.Equal(t, "get", fakeClient.Actions()[0].GetVerb())
@@ -174,7 +182,7 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 		return true, nil, deleteErr
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.ErrorIs(t, err, deleteErr)
 	for _, action := range fakeClient.Actions() {
 		require.False(t, action.GetVerb() == "delete" && action.GetResource() == testSpaceGVR)
@@ -200,7 +208,7 @@ func TestDeleteObjectSkipsCascadeForDeferredDelete(t *testing.T) {
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.NoError(t, err)
 	require.Zero(t, cascadeCalls, "deferred-delete node must not cascade to children")
 
@@ -238,10 +246,39 @@ func TestDeleteObjectRefusesToDeleteDeferredDeleteNodeWithChildren(t *testing.T)
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "still has children")
 	require.False(t, deleteCalled, "space must not be deleted while it still has a child")
+}
+
+func TestDeleteObjectForceBypassesBlockOnChildren(t *testing.T) {
+	// A deferred-delete (or block-delete-on-children) node with a live child would normally be
+	// refused, but force=true must bypass that entirely and cascade-delete it the old way --
+	// the explicit, caller-opted-in escape hatch.
+	info := recursiveNodeInfo()
+	info.DeferredDelete = true
+	fakeClient := setupDeleteTest(t, map[string]string{
+		testOrgType:          "org-a",
+		testProjectType:      "project-a",
+		"nexus/display_name": "demo-space",
+	}, info)
+
+	cascadeCalled := false
+	fakeClient.PrependReactor("delete-collection", "aislices", func(k8stesting.Action) (bool, runtime.Object, error) {
+		cascadeCalled = true
+		return true, nil, nil
+	})
+	deleteCalled := false
+	fakeClient.PrependReactor("delete", "spaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleteCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", true)
+	require.NoError(t, err)
+	require.True(t, cascadeCalled, "force must cascade into children instead of refusing")
+	require.True(t, deleteCalled, "force must still delete the object itself once cascaded")
 }
 
 func TestDeleteChildrenSkipsCascadeIntoDeferredDeleteDescendantWithoutChildren(t *testing.T) {
@@ -303,7 +340,7 @@ func TestDeleteChildrenSkipsCascadeIntoDeferredDeleteDescendantWithoutChildren(t
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.NoError(t, err)
 	// aislices is deleted directly (its own children check found none); workloads under it is
 	// never cascaded into, only listed once to confirm it's empty.
@@ -388,11 +425,120 @@ func TestDeleteChildrenRefusesToDeleteDeferredDeleteDescendantWithChildren(t *te
 		return true, nil, nil
 	})
 
-	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash", false)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "still has children")
 	require.False(t, aisliceDeleteCollectionCalled, "aislice must not be deleted while it still has a workload")
 	require.False(t, spaceDeleteCalled, "space must not be deleted while its deferred-delete descendant still has children")
+}
+
+func TestDeleteObjectIsAtomicAcrossSiblingBranches(t *testing.T) {
+	// config (non-deferred) has two independent children: space (deferred-delete, has a live
+	// aislice -- blocking) and alertrule (non-deferred, no children -- otherwise deletable). The
+	// upfront subtree pre-check must find the blocking space branch before cascading into either
+	// branch, so alertrule is never touched regardless of which branch would be processed first.
+	originalClient := Client
+	originalNodeInfo := model.CrdTypeToNodeInfo
+	t.Cleanup(func() {
+		Client = originalClient
+		model.CrdTypeToNodeInfo = originalNodeInfo
+	})
+
+	model.CrdTypeToNodeInfo = map[string]model.NodeInfo{
+		testConfigType: {
+			ParentHierarchy: []string{testOrgType, testProjectType},
+			Children: map[string]model.NodeHelperChild{
+				testSpaceType:     {},
+				testAlertRuleType: {},
+			},
+		},
+		testSpaceType: {
+			DeferredDelete:  true,
+			ParentHierarchy: []string{testOrgType, testProjectType, testConfigType},
+			Children:        map[string]model.NodeHelperChild{testAISliceType: {}},
+		},
+		testAISliceType:   {},
+		testAlertRuleType: {ParentHierarchy: []string{testOrgType, testProjectType, testConfigType}},
+	}
+
+	config := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": testConfigGVR.GroupVersion().String(),
+		"kind":       "Config",
+		"metadata": map[string]interface{}{
+			"name": "config-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				"nexus/display_name": "demo-config",
+			},
+		},
+	}}
+	space := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "space.test.io/v1",
+		"kind":       "Space",
+		"metadata": map[string]interface{}{
+			"name": "space-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				testConfigType:       "demo-config",
+				"nexus/display_name": "demo-space",
+			},
+		},
+	}}
+	aislice := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "aislice.test.io/v1",
+		"kind":       "AISlice",
+		"metadata": map[string]interface{}{
+			"name": "aislice-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				testConfigType:       "demo-config",
+				testSpaceType:        "demo-space",
+				"nexus/display_name": "demo-aislice",
+			},
+		},
+	}}
+	alertRule := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "alertrule.test.io/v1",
+		"kind":       "AlertRule",
+		"metadata": map[string]interface{}{
+			"name": "alertrule-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				testConfigType:       "demo-config",
+				"nexus/display_name": "demo-alertrule",
+			},
+		},
+	}}
+
+	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), config, space, aislice, alertRule)
+	Client = fakeClient
+
+	alertRuleDeleteCollectionCalled := false
+	fakeClient.PrependReactor("delete-collection", "alertrules", func(k8stesting.Action) (bool, runtime.Object, error) {
+		alertRuleDeleteCollectionCalled = true
+		return true, nil, nil
+	})
+	spaceTouched := false
+	fakeClient.PrependReactor("delete-collection", "spaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		spaceTouched = true
+		return true, nil, nil
+	})
+	configDeleteCalled := false
+	fakeClient.PrependReactor("delete", "configs", func(k8stesting.Action) (bool, runtime.Object, error) {
+		configDeleteCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testConfigGVR, testConfigType, model.CrdTypeToNodeInfo[testConfigType], "config-hash", false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "still has children")
+	require.False(t, alertRuleDeleteCollectionCalled, "alertrule must not be touched: the whole delete is refused upfront")
+	require.False(t, spaceTouched, "space must not be touched either: the pre-check is read-only")
+	require.False(t, configDeleteCalled, "config must not be deleted while a descendant branch is blocked")
 }
 
 func setupDeleteTest(t *testing.T, objectLabels map[string]string, rootInfo model.NodeInfo) *dynamicfake.FakeDynamicClient {

@@ -713,7 +713,8 @@ func (s *EchoServer) deleteHandler(c echo.Context) error {
 	}
 
 	hashedName, gvr := getHashedNameAndGVR(crdName, crdInfo, name, nc)
-	err = client.DeleteObject(gvr, crdName, crdInfo, hashedName)
+	force, _ := strconv.ParseBool(nc.QueryParam("force"))
+	err = client.DeleteObject(gvr, crdName, crdInfo, hashedName, force)
 	if err != nil {
 		log.Error().Msgf("Failed to DeleteObject, err: %s", err.Error())
 		return handleClientError(nc, err)
