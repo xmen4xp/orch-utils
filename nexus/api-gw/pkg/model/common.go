@@ -20,16 +20,15 @@ const (
 
 //nolint:tagliatelle // This struct has dependency on nexus's field name.
 type NexusAnnotation struct {
-	Name                  string                     `json:"name,omitempty"`
-	Hierarchy             []string                   `json:"hierarchy,omitempty"`
-	Children              map[string]NodeHelperChild `json:"children,omitempty"`
-	Links                 map[string]NodeHelperChild `json:"links,omitempty"`
-	NexusRestAPIGen       nexus.RestAPISpec          `json:"nexus-rest-api-gen,omitempty"`
-	NexusRestAPIMappings  map[string]string          `json:"nexus-rest-api-mappings,omitempty"`
-	IsSingleton           bool                       `json:"is_singleton,omitempty"`
-	Description           string                     `json:"description,omitempty"`
-	DeferredDelete        bool                       `json:"deferred-delete,omitempty"`
-	BlockDeleteOnChildren bool                       `json:"block-delete-on-children,omitempty"`
+	Name                 string                     `json:"name,omitempty"`
+	Hierarchy            []string                   `json:"hierarchy,omitempty"`
+	Children             map[string]NodeHelperChild `json:"children,omitempty"`
+	Links                map[string]NodeHelperChild `json:"links,omitempty"`
+	NexusRestAPIGen      nexus.RestAPISpec          `json:"nexus-rest-api-gen,omitempty"`
+	NexusRestAPIMappings map[string]string          `json:"nexus-rest-api-mappings,omitempty"`
+	IsSingleton          bool                       `json:"is_singleton,omitempty"`
+	Description          string                     `json:"description,omitempty"`
+	DeferredDelete       bool                       `json:"deferred-delete,omitempty"`
 }
 
 type NodeHelperChild struct {
@@ -39,14 +38,13 @@ type NodeHelperChild struct {
 }
 
 type NodeInfo struct {
-	Name                  string
-	ParentHierarchy       []string
-	Children              map[string]NodeHelperChild
-	Links                 map[string]NodeHelperChild
-	IsSingleton           bool
-	Description           string
-	DeferredDelete        bool
-	BlockDeleteOnChildren bool
+	Name            string
+	ParentHierarchy []string
+	Children        map[string]NodeHelperChild
+	Links           map[string]NodeHelperChild
+	IsSingleton     bool
+	Description     string
+	DeferredDelete  bool
 }
 
 type RestURIInfo struct {

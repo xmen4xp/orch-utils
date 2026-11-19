@@ -19,7 +19,6 @@ const (
 	NexusSecretSpecAnnotation       = "nexus-secret-spec"
 	NexusGraphqlSpecAnnotation      = "nexus-graphql-spec"
 	NexusDeferredDeleteAnnotation   = "nexus-deferred-delete"
-	NexusBlockDeleteOnChildren      = "nexus-block-delete-on-children"
 )
 
 func GetNexusSecretSpecAnnotation(pkg Package, name string) (string, bool) {
@@ -44,10 +43,6 @@ func GetNexusGraphqlAnnotation(pkg Package, name string) (string, bool) {
 
 func GetNexusDeferredDeleteAnnotation(pkg Package, name string) (string, bool) {
 	return getNexusAnnotation(pkg, name, NexusDeferredDeleteAnnotation)
-}
-
-func GetNexusBlockDeleteOnChildrenAnnotation(pkg Package, name string) (string, bool) {
-	return getNexusAnnotation(pkg, name, NexusBlockDeleteOnChildren)
 }
 
 func GetNexusGraphqlSpecAnnotation(pkg Package, name string) (string, bool) {

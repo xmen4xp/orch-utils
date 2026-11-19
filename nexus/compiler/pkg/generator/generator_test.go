@@ -172,29 +172,38 @@ var _ = Describe("Template renderers tests", func() {
 			return rest
 		}
 
-		It("should refuse to delete while children exist instead of cascading in Delete<Node>ByName", func() {
+		It("should always accept Delete<Node>ByName on a deferred-delete node without cascading", func() {
 			clientsBytes, err := generator.RenderClientTemplate(baseGroupName, crdModulePath, pkgs, parentsMap)
 			Expect(err).NotTo(HaveOccurred())
 			formatted, err := format.Source(clientsBytes.Bytes())
 			Expect(err).NotTo(HaveOccurred())
 			src := string(formatted)
 
-			// Gns is annotated `nexus-deferred-delete: true` and has children; its delete must
-			// check for existing children and refuse synchronously (no admission webhook
-			// involved) rather than cascade into them, since cascading would destroy them
-			// before the parent's own delete completes.
+			// Gns is annotated `nexus-deferred-delete: true` and has children; its own delete
+			// must always be accepted -- no children check, no cascade into SvcGroup/
+			// AccessControlPolicy -- unchanged, existing nexus-deferred-delete behavior.
 			gnsDelete := funcBody(src, "DeleteGnsByName")
-			Expect(gnsDelete).To(ContainSubstring("GetChildren("))
-			Expect(gnsDelete).To(ContainSubstring("cannot delete"))
+			Expect(gnsDelete).NotTo(ContainSubstring("GetChildren("))
+			Expect(gnsDelete).NotTo(ContainSubstring("cannot delete"))
 			Expect(gnsDelete).NotTo(ContainSubstring("DeleteSvcGroupByName"))
 			Expect(gnsDelete).NotTo(ContainSubstring("DeleteAccessControlPolicyByName"))
-			// It must still issue the parent DELETE once the children check passes.
 			Expect(gnsDelete).To(ContainSubstring("Gnses().Delete(ctx"))
 
-			// A non-deferred parent (Config) must still cascade into its Gns children.
+			// A non-deferred parent (Config) must still cascade into its Gns children, but must
+			// first pre-scan the whole subtree for a live deferred-delete instance and refuse
+			// the whole delete upfront if one is found anywhere.
 			cfgDelete := funcBody(src, "DeleteConfigByName")
+			Expect(cfgDelete).To(ContainSubstring("blockingDeferredDescendant("))
+			Expect(cfgDelete).To(ContainSubstring("cannot delete"))
 			Expect(cfgDelete).To(ContainSubstring("GetChildren("))
 			Expect(cfgDelete).To(ContainSubstring("DeleteGnsByName"))
+
+			// A deferred-delete node must also get the destructive, controller-only
+			// DeleteAndRemoveFinalizer<Node>ByName method.
+			Expect(src).To(ContainSubstring("func (group *GnsTsmV1) DeleteAndRemoveFinalizerGnsByName("))
+			gnsFinalize := funcBody(src, "DeleteAndRemoveFinalizerGnsByName")
+			Expect(gnsFinalize).To(ContainSubstring("nexusDeferredDeleteAnnotation"))
+			Expect(gnsFinalize).To(ContainSubstring("DeleteGnsByName(ctx, hashedName)"))
 		})
 	})
 

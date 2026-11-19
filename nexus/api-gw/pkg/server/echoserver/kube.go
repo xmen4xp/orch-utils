@@ -360,8 +360,7 @@ func KubeDeleteHandler(c echo.Context) error {
 	name = nexus.GetHashedName(nc.CrdType, crdInfo.ParentHierarchy, labels, name)
 	log.Debug().Msgf("KubeDeleteHandler: hashedName: %s, labels: %s", name, labels)
 
-	force, _ := strconv.ParseBool(c.QueryParam("force"))
-	err := client.DeleteObject(gvr, nc.CrdType, crdInfo, name, force)
+	err := client.DeleteObject(gvr, nc.CrdType, crdInfo, name)
 	if err != nil {
 		if status := kerrors.APIStatus(nil); errors.As(err, &status) {
 			return c.JSON(int(status.Status().Code), status.Status())

@@ -113,7 +113,6 @@ func ConstructMapURIToCRDType(eventType EventType, crdType string, apiURIs []nex
 
 func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parentHierarchy []string,
 	children, links map[string]NodeHelperChild, isSingleton bool, description string, deferredDelete bool,
-	blockDeleteOnChildren bool,
 ) {
 	crdTypeToNodeInfoMutex.Lock()
 	if eventType == Delete {
@@ -121,14 +120,13 @@ func ConstructMapCRDTypeToNode(eventType EventType, crdType, name string, parent
 	}
 
 	CrdTypeToNodeInfo[crdType] = NodeInfo{
-		Name:                  name,
-		ParentHierarchy:       parentHierarchy,
-		Children:              children,
-		Links:                 links,
-		IsSingleton:           isSingleton,
-		Description:           description,
-		DeferredDelete:        deferredDelete,
-		BlockDeleteOnChildren: blockDeleteOnChildren,
+		Name:            name,
+		ParentHierarchy: parentHierarchy,
+		Children:        children,
+		Links:           links,
+		IsSingleton:     isSingleton,
+		Description:     description,
+		DeferredDelete:  deferredDelete,
 	}
 	crdTypeToNodeInfoMutex.Unlock()
 
