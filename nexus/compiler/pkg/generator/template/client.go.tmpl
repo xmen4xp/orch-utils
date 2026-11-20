@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8slabels "k8s.io/apimachinery/pkg/labels"
 
 {{.HelperImport}}
 {{.CommonImport}}
@@ -141,7 +142,10 @@ func NewForConfig(config *rest.Config) (*Clientset, error) {
 
 	client := &Clientset{}
 	client.baseClient = baseClient
-	client.DynamicClient, _ = dynamic.NewForConfig(config) // TBD: check and react for error
+	client.DynamicClient, err = dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
 	{{ range $key, $group := .ApiGroups }}{{$group.InitApiGroups}}{{ end }}
 
 	return client, nil
@@ -201,6 +205,40 @@ var childCRDs = map[string][]string{
 {{- end }}
 }
 
+// crdHierarchy maps a CRD type to the ordered list of ancestor label keys on its own objects
+// (e.g. org, project, ...), used to build a label selector that scopes a List to one specific
+// parent instance's children -- the same selector api-gw's cascade uses.
+var crdHierarchy = map[string][]string{
+{{- range $key, $node := .Nodes }}
+	"{{$node.CrdName}}": { {{- range $k, $parent := $node.ParentHierarchy }}"{{$parent}}",{{ end -}} },
+{{- end }}
+}
+
+// crdHasDeferredDescendant precomputes, per CRD type, whether any deferred-delete kind exists
+// anywhere in its declared subtree at all (regardless of live instances) -- so
+// blockingDeferredDescendant can skip walking (and Listing) branches that could never contain a
+// blocker, rather than visiting every node at every depth on every delete.
+var crdHasDeferredDescendant = map[string]bool{}
+
+func init() {
+	var has func(crdName string, seen map[string]bool) bool
+	has = func(crdName string, seen map[string]bool) bool {
+		if seen[crdName] {
+			return false
+		}
+		seen[crdName] = true
+		for _, childCRD := range childCRDs[crdName] {
+			if deferredDeleteCRDs[childCRD] || has(childCRD, seen) {
+				return true
+			}
+		}
+		return false
+	}
+	for crdName := range childCRDs {
+		crdHasDeferredDescendant[crdName] = has(crdName, map[string]bool{})
+	}
+}
+
 // gvrForCrdName parses a CrdName (e.g. "spaces.spaces.hd.cisco.com", pluralResource + "." +
 // group) into its GroupVersionResource, for looking up a live instance via the dynamic client.
 func gvrForCrdName(crdName string) schema.GroupVersionResource {
@@ -212,44 +250,94 @@ func gvrForCrdName(crdName string) schema.GroupVersionResource {
 	}
 }
 
-// describeBlocker returns "<Kind> <display name>" for the live instance identified by
-// (crdName, hashedName), e.g. "Space spaceA" -- a short, caller-facing identifier naming what's
+// describeBlocker returns "<Kind> <display name>" for a live instance already fetched via the
+// dynamic client, e.g. "Space spaceA" -- a short, caller-facing identifier naming what's
 // blocking a delete without exposing internal hierarchy/routing details. Falls back to the
-// hashed name if the object can't be fetched or its display name label is missing.
-func describeBlocker(ctx context.Context, dynamicClient dynamic.Interface, crdName, hashedName string) string {
-	obj, err := dynamicClient.Resource(gvrForCrdName(crdName)).Get(ctx, hashedName, metav1.GetOptions{})
-	if err != nil || obj == nil {
-		return hashedName
-	}
+// hashed name if the display name label is missing.
+func describeBlocker(obj unstructured.Unstructured) string {
 	displayName := obj.GetLabels()["nexus/display_name"]
 	if displayName == "" {
-		displayName = hashedName
+		displayName = obj.GetName()
 	}
 	return obj.GetKind() + " " + displayName
 }
 
-// blockingDeferredDescendant recursively walks the descendant kinds of (crdName, name) and
-// returns "<Kind> <display name>" for the first live instance found of any deferred-delete kind
-// anywhere below, or "" if none exists. It's a read-only, all-or-nothing pre-check -- run once,
-// before any cascade begins -- so a blocking descendant anywhere in the subtree is found before
-// any sibling branch is touched. Presence alone blocks, regardless of whether that instance
-// itself currently has children: deleting a deferred-delete node is meant to be a deliberate,
-// explicit action, not an incidental side effect of deleting an ancestor. This makes a
-// non-deferred ancestor's delete atomic: either nothing in the subtree is blocked and the whole
-// cascade proceeds, or nothing is touched at all.
-func blockingDeferredDescendant(ctx context.Context, dynamicClient dynamic.Interface, crdName, name string) string {
-	for _, childCRD := range childCRDs[crdName] {
-		children := GetChildren(crdName, name, childCRD)
-		if deferredDeleteCRDs[childCRD] && len(children) > 0 {
-			return describeBlocker(ctx, dynamicClient, childCRD, children[0])
+// childListOptions builds the label selector that scopes a List of crdName's instances to only
+// those parented under the specific instance identified by parentLabels (that instance's own
+// hierarchy labels plus its own display name) -- the same selector api-gw's cascade uses, so an
+// in-cluster controller's view of "does a live instance exist" matches api-gw's exactly, instead
+// of depending on this client's local, subscription-populated children cache.
+func childListOptions(parentLabels map[string]string, parentCrdName string) (metav1.ListOptions, error) {
+	selector := k8slabels.Set{}
+	for _, ancestor := range crdHierarchy[parentCrdName] {
+		value := parentLabels[ancestor]
+		if value == "" {
+			return metav1.ListOptions{}, fmt.Errorf("cannot safely check children: missing hierarchy label %q", ancestor)
 		}
-		for _, child := range children {
-			if blocker := blockingDeferredDescendant(ctx, dynamicClient, childCRD, child); blocker != "" {
-				return blocker
+		selector[ancestor] = value
+	}
+	displayName := parentLabels["nexus/display_name"]
+	if displayName == "" {
+		return metav1.ListOptions{}, fmt.Errorf("cannot safely check children: missing hierarchy label %q", "nexus/display_name")
+	}
+	selector[parentCrdName] = displayName
+	return metav1.ListOptions{LabelSelector: k8slabels.SelectorFromSet(selector).String(), Limit: 1}, nil
+}
+
+// blockingDeferredDescendant recursively walks the descendant kinds of (crdName, name) -- the
+// object identified by (crdName, name) must already have been fetched as obj -- and returns
+// "<Kind> <display name>" for the first live instance found of any deferred-delete kind anywhere
+// below, or "" if none exists. It reads live data via the dynamic client (List, Limit: 1 per
+// kind), not this client's local children cache, so it sees every live instance regardless of
+// whether this process has subscribed to or created it. It's a read-only, all-or-nothing
+// pre-check -- run once, before any cascade begins -- so a blocking descendant anywhere in the
+// subtree is found before any sibling branch is touched. Presence alone blocks, regardless of
+// whether that instance itself currently has children: deleting a deferred-delete node is meant
+// to be a deliberate, explicit action, not an incidental side effect of deleting an ancestor.
+// This makes a non-deferred ancestor's delete atomic: either nothing in the subtree is blocked
+// and the whole cascade proceeds, or nothing is touched at all.
+func blockingDeferredDescendant(ctx context.Context, dynamicClient dynamic.Interface, crdName string, objLabels map[string]string) (string, error) {
+	if !crdHasDeferredDescendant[crdName] {
+		return "", nil
+	}
+	listOpts, err := childListOptions(objLabels, crdName)
+	if err != nil {
+		return "", err
+	}
+	for _, childCRD := range childCRDs[crdName] {
+		if deferredDeleteCRDs[childCRD] {
+			// A deferred-delete kind's own presence is all that matters -- Limit: 1 is enough.
+			list, err := dynamicClient.Resource(gvrForCrdName(childCRD)).List(ctx, listOpts)
+			if err != nil {
+				return "", err
+			}
+			if len(list.Items) > 0 {
+				return describeBlocker(list.Items[0]), nil
+			}
+			continue
+		}
+		if !crdHasDeferredDescendant[childCRD] {
+			continue
+		}
+		// childCRD isn't itself deferred-delete, but something further below it might be --
+		// recurse into each live instance (unbounded: need every one, not just the first).
+		unboundedOpts := listOpts
+		unboundedOpts.Limit = 0
+		list, err := dynamicClient.Resource(gvrForCrdName(childCRD)).List(ctx, unboundedOpts)
+		if err != nil {
+			return "", err
+		}
+		for _, child := range list.Items {
+			blocker, err := blockingDeferredDescendant(ctx, dynamicClient, childCRD, child.GetLabels())
+			if err != nil {
+				return "", err
+			}
+			if blocker != "" {
+				return blocker, nil
 			}
 		}
 	}
-	return ""
+	return "", nil
 }
 
 {{ range $key, $node := .Nodes }}
@@ -427,7 +515,9 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	regardless of whether this node itself is deferred-delete. A deferred-delete node is
 	therefore only ever accepted once its own subtree is clear too. This makes the delete atomic
 	instead of depending on map/cache iteration order. */}}
-	if blocker := blockingDeferredDescendant(ctx, group.client.DynamicClient, "{{$node.CrdName}}", hashedName); blocker != "" {
+	if blocker, err := blockingDeferredDescendant(ctx, group.client.DynamicClient, "{{$node.CrdName}}", result.GetLabels()); err != nil {
+		return err
+	} else if blocker != "" {
 		return fmt.Errorf("cannot be deleted as %s exists", blocker)
 	}
 	{{/* Deferred-delete nodes are never cascaded into their own children: once the check above
@@ -551,7 +641,19 @@ func (group *{{$node.GroupTypeName}}) FinalizeDelete{{$node.BaseNodeName}}ByName
 		}
 	}
 
-	return group.Delete{{$node.BaseNodeName}}ByName(ctx, hashedName)
+	// Issue the raw delete directly, bypassing Delete{{$node.BaseNodeName}}ByName's own
+	// pre-check: that check would be both too late (the finalizer patch above may have already
+	// let the apiserver garbage-collect this object the instant its finalizer list emptied, so
+	// nothing we decide here can undo that) and wrong here (FinalizeDelete has already made its
+	// deliberate decision to proceed, including through any nested deferred-delete child it
+	// cascaded into above). The object may already be gone by this point, so NotFound is
+	// expected and not an error.
+	if err := group.client.baseClient.
+		{{$node.GroupTypeName}}().
+		{{$node.GroupResourceNameTitle}}().Delete(ctx, hashedName, metav1.DeleteOptions{}); err != nil && errors.IsNotFound(err) == false {
+		return err
+	}
+	return nil
 }
 {{ end }}
 

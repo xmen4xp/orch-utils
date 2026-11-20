@@ -16,6 +16,7 @@ import (
 	"nexus-api-gw/pkg/model"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
@@ -161,7 +162,7 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		if blocker, err := blockingDeferredDescendant(crdType, listOpts); err != nil {
 			return err
 		} else if blocker != "" {
-			return fmt.Errorf("cannot be deleted as %s exists", blocker)
+			return k8serrors.NewConflict(gvr.GroupResource(), hashedName, fmt.Errorf("cannot be deleted as %s exists", blocker))
 		}
 
 		if crdInfo.DeferredDelete {

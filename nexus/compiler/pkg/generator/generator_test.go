@@ -205,18 +205,27 @@ var _ = Describe("Template renderers tests", func() {
 			Expect(src).To(ContainSubstring("func (group *GnsTsmV1) FinalizeDeleteGnsByName("))
 			gnsFinalize := funcBody(src, "FinalizeDeleteGnsByName")
 			Expect(gnsFinalize).To(ContainSubstring("nexusDeferredDeleteAnnotation"))
-			Expect(gnsFinalize).To(ContainSubstring("DeleteGnsByName(ctx, hashedName)"))
 			Expect(gnsFinalize).NotTo(ContainSubstring("FinalizeDeleteSvcGroupByName"))
+			// The trailing delete must be a raw, check-free call -- not a call back into
+			// DeleteGnsByName's own pre-check, which would run too late (after the finalizer
+			// patch may have already let the object be garbage-collected) and incorrectly
+			// (FinalizeDelete has already made its deliberate decision to proceed).
+			Expect(gnsFinalize).NotTo(ContainSubstring("DeleteGnsByName(ctx, hashedName)"))
+			Expect(gnsFinalize).To(ContainSubstring("Gnses().Delete(ctx, hashedName, metav1.DeleteOptions{})"))
 
 			// FinalizeDelete<Node>ByName must only be generated for deferred-delete nodes --
 			// Config is not deferred-delete, so it must not get this method at all.
 			Expect(src).NotTo(ContainSubstring("FinalizeDeleteConfigByName"))
 
-			// The pre-scan must thread the dynamic client through, so the blocker it finds can
-			// be described by Kind and display name, not just its bare hashed name.
+			// The pre-scan must thread the dynamic client through, and read live data (List),
+			// not the local children cache, so it sees every live instance regardless of
+			// whether this process has subscribed to or created it.
 			Expect(gnsDelete).To(ContainSubstring("blockingDeferredDescendant(ctx, group.client.DynamicClient"))
-			Expect(src).To(ContainSubstring("func describeBlocker(ctx context.Context, dynamicClient dynamic.Interface, crdName, hashedName string) string {"))
+			Expect(src).To(ContainSubstring("func describeBlocker(obj unstructured.Unstructured) string {"))
 			Expect(src).To(ContainSubstring("obj.GetKind() + \" \" + displayName"))
+			Expect(src).To(ContainSubstring("dynamicClient.Resource(gvrForCrdName(childCRD)).List(ctx,"))
+			Expect(src).To(ContainSubstring("var crdHasDeferredDescendant"))
+			Expect(src).To(ContainSubstring("var crdHierarchy"))
 		})
 	})
 
