@@ -16,6 +16,7 @@ import (
 	"nexus-api-gw/pkg/model"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/common-library/pkg/nexus"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
@@ -135,6 +136,7 @@ func GetObject(gvr schema.GroupVersionResource, hashedName string, opts metav1.G
 	return obj, nil
 }
 
+// DeleteObject deletes hashedName of kind crdType.
 func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model.NodeInfo, hashedName string) error {
 	// Get object
 	obj, err := Client.Resource(gvr).Get(context.TODO(), hashedName, metav1.GetOptions{})
@@ -147,10 +149,32 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 		if err != nil {
 			return err
 		}
-		// Delete all children
-		for k := range crdInfo.Children {
-			if err = DeleteChildren(k, listOpts); err != nil {
-				return err
+
+		// All-or-nothing pre-check: refuse the whole delete upfront if a live instance of any
+		// deferred-delete kind exists anywhere in the subtree, before touching any sibling
+		// branch -- regardless of whether this node itself is deferred-delete. A deferred-delete
+		// node is therefore only ever accepted once its own subtree is clear too: the caller
+		// must delete that instance explicitly first (always accepted, once it clears its own
+		// subtree check) and retry. Without this upfront check, whichever branch cascade happens
+		// to reach first (Go map iteration order) determines whether an unrelated,
+		// already-safe-to-delete branch completes before the blocker is found -- this makes the
+		// whole delete atomic instead.
+		if blocker, err := blockingDeferredDescendant(crdType, listOpts); err != nil {
+			return err
+		} else if blocker != "" {
+			return k8serrors.NewConflict(gvr.GroupResource(), hashedName, fmt.Errorf("cannot be deleted as %s exists", blocker))
+		}
+
+		if crdInfo.DeferredDelete {
+			// Deferred-delete nodes are never cascaded: once the check above passes, this
+			// delete is accepted, the finalizer holds the object in Terminating, and it's
+			// entirely the owning controller's job to tear down children and remove the
+			// finalizer (see FinalizeDelete<Node>ByName in the generated client).
+		} else {
+			for k := range crdInfo.Children {
+				if err = DeleteChildren(k, listOpts); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -161,6 +185,68 @@ func DeleteObject(gvr schema.GroupVersionResource, crdType string, crdInfo model
 	}
 
 	return nil
+}
+
+// blockingDeferredDescendant recursively walks the descendant kinds of crdType (scoped by
+// listOpts) and returns "<Kind> <display name>" for the first live instance found of any
+// deferred-delete kind anywhere below crdType, or "" if none exists. The kind here is the
+// object's own Kind (e.g. "Space"), not the internal crdType/group-qualified type string or
+// hierarchy path, so a caller-facing error message can name what's blocking the delete simply,
+// without exposing internal routing details the caller has no reason to know. It's a read-only,
+// all-or-nothing pre-check -- run once, before any cascade begins -- so a blocking descendant
+// anywhere in the subtree is found before any sibling branch is touched. Presence alone blocks,
+// regardless of whether that instance itself currently has children: deleting a deferred-delete
+// node is meant to be a deliberate, explicit action, not an incidental side effect of deleting an
+// ancestor.
+func blockingDeferredDescendant(crdType string, listOpts metav1.ListOptions) (string, error) {
+	crdInfo := model.CrdTypeToNodeInfo[crdType]
+	for childType := range crdInfo.Children {
+		childInfo := model.CrdTypeToNodeInfo[childType]
+		list, err := Client.Resource(gvrForCrdType(childType)).List(context.TODO(), listOpts)
+		if err != nil {
+			return "", err
+		}
+		if childInfo.DeferredDelete && len(list.Items) > 0 {
+			return describeBlocker(list.Items[0]), nil
+		}
+		for _, item := range list.Items {
+			itemListOpts, err := cascadeListOptions(item.GetLabels(), childType, childInfo.ParentHierarchy)
+			if err != nil {
+				return "", err
+			}
+			if blocker, err := blockingDeferredDescendant(childType, itemListOpts); err != nil {
+				return "", err
+			} else if blocker != "" {
+				return blocker, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// describeBlocker returns "<Kind> <display name>" for obj, e.g. "Space spaceA" -- a short,
+// caller-facing identifier naming what's blocking a delete without hierarchy/routing details.
+// Falls back to obj's (hashed) object name if the display name label is somehow missing.
+func describeBlocker(obj unstructured.Unstructured) string {
+	return obj.GetKind() + " " + displayName(obj)
+}
+
+// displayName returns obj's human-readable nexus display name, falling back to its (hashed)
+// object name if the label is somehow missing.
+func displayName(obj unstructured.Unstructured) string {
+	if name := obj.GetLabels()["nexus/display_name"]; name != "" {
+		return name
+	}
+	return obj.GetName()
+}
+
+func gvrForCrdType(crdType string) schema.GroupVersionResource {
+	parts := strings.Split(crdType, ".")
+	return schema.GroupVersionResource{
+		Group:    strings.Join(parts[1:], "."),
+		Version:  "v1",
+		Resource: parts[0],
+	}
 }
 
 func cascadeListOptions(objectLabels map[string]string, crdType string, parentHierarchy []string) (metav1.ListOptions, error) {
@@ -184,25 +270,25 @@ func cascadeListOptions(objectLabels map[string]string, crdType string, parentHi
 
 func DeleteChildren(crdType string, listOpts metav1.ListOptions) error {
 	crdInfo := model.CrdTypeToNodeInfo[crdType]
+	gvr := gvrForCrdType(crdType)
+
+	if crdInfo.DeferredDelete {
+		// Deferred-delete kinds are never cascaded into: the DeleteCollection below still sets
+		// deletionTimestamp on each instance, which the finalizer turns into Terminating
+		// rather than actually removing it -- the owning controller handles the rest of the
+		// teardown. In practice, an ancestor's own upfront pre-scan (blockingDeferredDescendant) already
+		// refuses the whole delete before cascade ever reaches a kind with a live instance
+		// here, so this branch mainly guards direct children-only cascade calls.
+		return Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
+	}
+
 	for k := range crdInfo.Children {
-		err := DeleteChildren(k, listOpts)
-		if err != nil {
+		if err := DeleteChildren(k, listOpts); err != nil {
 			return err
 		}
 	}
 
-	parts := strings.Split(crdType, ".")
-	gvr := schema.GroupVersionResource{
-		Group:    strings.Join(parts[1:], "."),
-		Version:  "v1",
-		Resource: parts[0],
-	}
-	err := Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return Client.Resource(gvr).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
 }
 
 type PatchOp struct {

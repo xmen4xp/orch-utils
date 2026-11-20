@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"go/format"
 	"os"
+	"strings"
 
 	"github.com/vmware-tanzu/graph-framework-for-microservices/compiler/pkg/util"
 	"gopkg.in/yaml.v2"
@@ -156,6 +157,76 @@ var _ = Describe("Template renderers tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(string(formatted)).To(Equal(string(expectedTypes)))
+	})
+
+	When("a node is annotated nexus-deferred-delete", func() {
+		// funcBody returns the source of the generated method `<name>` (up to the next top-level func).
+		funcBody := func(src, name string) string {
+			idx := strings.Index(src, ") "+name+"(ctx context.Context")
+			Expect(idx).To(BeNumerically(">=", 0), "expected to find method %s in the generated client", name)
+			fstart := strings.LastIndex(src[:idx], "func ")
+			rest := src[fstart:]
+			if end := strings.Index(rest[len("func "):], "\nfunc "); end >= 0 {
+				return rest[:end+len("func ")]
+			}
+			return rest
+		}
+
+		It("should always pre-scan for a live deferred-delete descendant, even on a deferred-delete node itself", func() {
+			clientsBytes, err := generator.RenderClientTemplate(baseGroupName, crdModulePath, pkgs, parentsMap)
+			Expect(err).NotTo(HaveOccurred())
+			formatted, err := format.Source(clientsBytes.Bytes())
+			Expect(err).NotTo(HaveOccurred())
+			src := string(formatted)
+
+			// Gns is annotated `nexus-deferred-delete: true` and has children. Its own delete
+			// must still pre-scan its own subtree for a live deferred-delete descendant (the
+			// universal check, regardless of Gns's own DeferredDelete status) before being
+			// accepted; once accepted, cascade into SvcGroup/AccessControlPolicy is skipped as
+			// before -- deferred-delete nodes never cascade into their own children.
+			gnsDelete := funcBody(src, "DeleteGnsByName")
+			Expect(gnsDelete).To(ContainSubstring("blockingDeferredDescendant("))
+			Expect(gnsDelete).To(ContainSubstring("cannot be deleted as"))
+			Expect(gnsDelete).NotTo(ContainSubstring("DeleteSvcGroupByName"))
+			Expect(gnsDelete).NotTo(ContainSubstring("DeleteAccessControlPolicyByName"))
+			Expect(gnsDelete).To(ContainSubstring("Gnses().Delete(ctx"))
+
+			// A non-deferred parent (Config) must still cascade into its Gns children, gated by
+			// the same pre-scan.
+			cfgDelete := funcBody(src, "DeleteConfigByName")
+			Expect(cfgDelete).To(ContainSubstring("blockingDeferredDescendant("))
+			Expect(cfgDelete).To(ContainSubstring("cannot be deleted as"))
+			Expect(cfgDelete).To(ContainSubstring("GetChildren("))
+			Expect(cfgDelete).To(ContainSubstring("DeleteGnsByName"))
+
+			// A deferred-delete node must also get FinalizeDelete<Node>ByName, which cascades
+			// into children via the normal Delete<Child>ByName (not a force-everything call)
+			// and only removes its own finalizer.
+			Expect(src).To(ContainSubstring("func (group *GnsTsmV1) FinalizeDeleteGnsByName("))
+			gnsFinalize := funcBody(src, "FinalizeDeleteGnsByName")
+			Expect(gnsFinalize).To(ContainSubstring("nexusDeferredDeleteAnnotation"))
+			Expect(gnsFinalize).NotTo(ContainSubstring("FinalizeDeleteSvcGroupByName"))
+			// The trailing delete must be a raw, check-free call -- not a call back into
+			// DeleteGnsByName's own pre-check, which would run too late (after the finalizer
+			// patch may have already let the object be garbage-collected) and incorrectly
+			// (FinalizeDelete has already made its deliberate decision to proceed).
+			Expect(gnsFinalize).NotTo(ContainSubstring("DeleteGnsByName(ctx, hashedName)"))
+			Expect(gnsFinalize).To(ContainSubstring("Gnses().Delete(ctx, hashedName, metav1.DeleteOptions{})"))
+
+			// FinalizeDelete<Node>ByName must only be generated for deferred-delete nodes --
+			// Config is not deferred-delete, so it must not get this method at all.
+			Expect(src).NotTo(ContainSubstring("FinalizeDeleteConfigByName"))
+
+			// The pre-scan must thread the dynamic client through, and read live data (List),
+			// not the local children cache, so it sees every live instance regardless of
+			// whether this process has subscribed to or created it.
+			Expect(gnsDelete).To(ContainSubstring("blockingDeferredDescendant(ctx, group.client.DynamicClient"))
+			Expect(src).To(ContainSubstring("func describeBlocker(obj unstructured.Unstructured) string {"))
+			Expect(src).To(ContainSubstring("obj.GetKind() + \" \" + displayName"))
+			Expect(src).To(ContainSubstring("dynamicClient.Resource(gvrForCrdName(childCRD)).List(ctx,"))
+			Expect(src).To(ContainSubstring("var crdHasDeferredDescendant"))
+			Expect(src).To(ContainSubstring("var crdHierarchy"))
+		})
 	})
 
 	It("should parse helper template", func() {

@@ -123,6 +123,12 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getGns.GetName()).To(Equal(gns.GetName()))
 
+			// Gns is deferred-delete: its own delete is always accepted, regardless of
+			// children, cascade into its own children is skipped (unchanged, existing
+			// nexus-deferred-delete behavior).
+			err = cfg.DeleteGNS(context.TODO())
+			Expect(err).NotTo(HaveOccurred())
+
 			err = root.DeleteConfig(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -273,45 +279,7 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should remove all children when parent is removed", func() {
-			cfgName := "configObj"
-			cfgDef := &configv1.Config{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: cfgName,
-				},
-				Spec: configv1.ConfigSpec{
-					MyStr0: &str,
-				},
-			}
-			cfg, err := root.AddConfig(context.TODO(), cfgDef)
-			Expect(err).NotTo(HaveOccurred())
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.DisplayName()).To(Equal(cfgName))
-			gnsDef := &gnsv1.Gns{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "gnsName",
-				},
-			}
-			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
-			Expect(err).NotTo(HaveOccurred())
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(gns.DisplayName()).To(Equal("gnsName"))
-
-			err = root.Delete(context.TODO())
-			Expect(err).NotTo(HaveOccurred())
-
-			cfg, err = fakeClient.Config().GetConfigByName(context.TODO(), cfg.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(cfg).To(BeNil())
-
-			gns, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
-			Expect(err).To(HaveOccurred())
-			Expect(gns).To(BeNil())
-		})
-
-		It("should delete all named children when parent is removed", func() {
+		It("should always accept deleting a deferred-delete node regardless of children, without cascading", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -352,13 +320,93 @@ var _ = Describe("Nexus clients tests", func() {
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
 			Expect(err).NotTo(HaveOccurred())
 
-			err = cfg.DeleteGNS(context.TODO())
+			// Gns is annotated `nexus-deferred-delete`: deleting it while it still has SvcGroup
+			// children must always be accepted (unchanged, existing behavior) -- cascade into
+			// SvcGroup is skipped, so the children are left untouched regardless.
+			err = gns.Delete(context.TODO())
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg1.GetName())
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			_, err = fakeClient.Servicegroup().GetSvcGroupByName(context.TODO(), sg2.GetName())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should refuse to delete a non-deferred ancestor while a deferred-delete descendant exists", func() {
+			cfgName := "configObj"
+			cfgDef := &configv1.Config{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: cfgName,
+				},
+				Spec: configv1.ConfigSpec{
+					MyStr0: &str,
+				},
+			}
+			cfg, err := root.AddConfig(context.TODO(), cfgDef)
+			Expect(err).NotTo(HaveOccurred())
+			gnsDef := &gnsv1.Gns{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "gnsName",
+				},
+			}
+			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Config is not deferred-delete; its delete must be refused outright because Gns
+			// (deferred-delete) exists anywhere in its subtree -- regardless of whether Gns
+			// itself currently has any children of its own.
+			err = root.DeleteConfig(context.TODO())
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("exists"))
+
+			_, err = fakeClient.Config().GetConfigByName(context.TODO())
+			Expect(err).NotTo(HaveOccurred())
+			_, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("FinalizeDelete should cascade and clear the finalizer so a retried ancestor delete succeeds", func() {
+			cfgName := "configObj"
+			cfgDef := &configv1.Config{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: cfgName,
+				},
+				Spec: configv1.ConfigSpec{
+					MyStr0: &str,
+				},
+			}
+			cfg, err := root.AddConfig(context.TODO(), cfgDef)
+			Expect(err).NotTo(HaveOccurred())
+			gnsDef := &gnsv1.Gns{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "gnsName",
+				},
+			}
+			gns, err := cfg.AddGNS(context.TODO(), gnsDef)
+			Expect(err).NotTo(HaveOccurred())
+			sg1def := &sgv1.SvcGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "sg1",
+				},
+			}
+			_, err = gns.AddGnsServiceGroups(context.TODO(), sg1def)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = root.DeleteConfig(context.TODO())
+			Expect(err).To(HaveOccurred())
+
+			// The owning controller completes Gns's teardown via FinalizeDelete, which
+			// cascades into SvcGroup using the normal Delete<Child>ByName and clears only
+			// Gns's own finalizer.
+			err = fakeClient.Gns().FinalizeDeleteGnsByName(context.TODO(), gns.GetName())
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
+			Expect(err).To(HaveOccurred())
+
+			// Retrying Config's delete now succeeds since Gns no longer exists.
+			err = root.DeleteConfig(context.TODO())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
