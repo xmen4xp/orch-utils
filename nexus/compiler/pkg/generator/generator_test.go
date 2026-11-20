@@ -207,6 +207,16 @@ var _ = Describe("Template renderers tests", func() {
 			Expect(gnsFinalize).To(ContainSubstring("nexusDeferredDeleteAnnotation"))
 			Expect(gnsFinalize).To(ContainSubstring("DeleteGnsByName(ctx, hashedName)"))
 			Expect(gnsFinalize).NotTo(ContainSubstring("FinalizeDeleteSvcGroupByName"))
+
+			// FinalizeDelete<Node>ByName must only be generated for deferred-delete nodes --
+			// Config is not deferred-delete, so it must not get this method at all.
+			Expect(src).NotTo(ContainSubstring("FinalizeDeleteConfigByName"))
+
+			// The pre-scan must thread the dynamic client through, so the blocker it finds can
+			// be described by Kind and display name, not just its bare hashed name.
+			Expect(gnsDelete).To(ContainSubstring("blockingDeferredDescendant(ctx, group.client.DynamicClient"))
+			Expect(src).To(ContainSubstring("func describeBlocker(ctx context.Context, dynamicClient dynamic.Interface, crdName, hashedName string) string {"))
+			Expect(src).To(ContainSubstring("obj.GetKind() + \" \" + displayName"))
 		})
 	})
 
