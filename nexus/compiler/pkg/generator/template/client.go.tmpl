@@ -202,19 +202,20 @@ var childCRDs = map[string][]string{
 }
 
 // blockingDeferredDescendant recursively walks the descendant kinds of (crdName, name) and
-// returns "<crd>/<name>" for the first live instance found of any deferred-delete kind anywhere
-// below, or "" if none exists. It's a read-only, all-or-nothing pre-check -- run once, before any
-// cascade begins -- so a blocking descendant anywhere in the subtree is found before any sibling
-// branch is touched. Presence alone blocks, regardless of whether that instance itself currently
-// has children: deleting a deferred-delete node is meant to be a deliberate, explicit action, not
-// an incidental side effect of deleting an ancestor. This makes a non-deferred ancestor's delete
-// atomic: either nothing in the subtree is blocked and the whole cascade proceeds, or nothing is
-// touched at all.
+// returns the (hashed) name of the first live instance found of any deferred-delete kind anywhere
+// below, or "" if none exists. The kind itself isn't returned, so a caller-facing error message
+// can name what's blocking the delete without exposing internal type/hierarchy details. It's a
+// read-only, all-or-nothing pre-check -- run once, before any cascade begins -- so a blocking
+// descendant anywhere in the subtree is found before any sibling branch is touched. Presence
+// alone blocks, regardless of whether that instance itself currently has children: deleting a
+// deferred-delete node is meant to be a deliberate, explicit action, not an incidental side
+// effect of deleting an ancestor. This makes a non-deferred ancestor's delete atomic: either
+// nothing in the subtree is blocked and the whole cascade proceeds, or nothing is touched at all.
 func blockingDeferredDescendant(crdName, name string) string {
 	for _, childCRD := range childCRDs[crdName] {
 		children := GetChildren(crdName, name, childCRD)
 		if deferredDeleteCRDs[childCRD] && len(children) > 0 {
-			return childCRD + "/" + children[0]
+			return children[0]
 		}
 		for _, child := range children {
 			if blocker := blockingDeferredDescendant(childCRD, child); blocker != "" {
@@ -395,19 +396,20 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 		return err
 	}
 
-	{{/* Deferred-delete nodes are never cascaded into their own children: this delete is
-	always accepted, cascade is skipped, and the finalizer holds the object in Terminating
-	until the owning controller tears down and removes the finalizer (see
-	DeleteAndRemoveFinalizer<Node>ByName below) -- unchanged, existing behavior, no children
-	check here. */}}
+	{{/* All-or-nothing pre-check: refuse the whole delete upfront if a live instance of any
+	deferred-delete kind exists anywhere in the subtree, before touching any sibling branch --
+	regardless of whether this node itself is deferred-delete. A deferred-delete node is
+	therefore only ever accepted once its own subtree is clear too. This makes the delete atomic
+	instead of depending on map/cache iteration order. */}}
+	if blocker := blockingDeferredDescendant("{{$node.CrdName}}", hashedName); blocker != "" {
+		return fmt.Errorf("cannot be deleted as %s exists", blocker)
+	}
+	{{/* Deferred-delete nodes are never cascaded into their own children: once the check above
+	passes, this delete is accepted, cascade is skipped, and the finalizer holds the object in
+	Terminating until the owning controller tears down and removes the finalizer (see
+	FinalizeDelete<Node>ByName below). */}}
 	{{ if $node.DeferredDelete }}
 	{{ else }}
-	{{/* All-or-nothing pre-check: refuse the whole delete upfront if a live instance of any
-	deferred-delete kind exists anywhere in the subtree, before touching any sibling branch.
-	This makes the delete atomic instead of depending on map/cache iteration order. */}}
-	if blocker := blockingDeferredDescendant("{{$node.CrdName}}", hashedName); blocker != "" {
-		return fmt.Errorf("cannot delete {{$node.CrdName}} %q: descendant %q exists", hashedName, blocker)
-	}
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
 		err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child)
@@ -475,18 +477,18 @@ func (group *{{$node.GroupTypeName}}) Delete{{$node.BaseNodeName}}ByName(ctx con
 	return nil
 }
 
-// DeleteAndRemoveFinalizer{{$node.BaseNodeName}}ByName cascades through the entire subtree of
-// hashedName unconditionally -- including through any nested deferred-delete descendants -- and
-// removes the nexus-deferred-delete finalizer from everything it touches along the way,
-// including hashedName itself (if present), so each one is actually garbage-collected rather
-// than left Terminating. It does not re-run the blockingDeferredDescendant pre-check or stop at
-// another deferred-delete node the way a normal cascade would -- it is a destructive,
-// controller-only operation, meant for the owning controller to call once it has decided it's
-// safe and appropriate to tear everything down, not for arbitrary callers.
-func (group *{{$node.GroupTypeName}}) DeleteAndRemoveFinalizer{{$node.BaseNodeName}}ByName(ctx context.Context, hashedName string) error {
+// FinalizeDelete{{$node.BaseNodeName}}ByName cascades into hashedName's direct children using
+// the same normal Delete<Child>ByName semantics any ordinary cascade uses, then removes the
+// nexus-deferred-delete finalizer from hashedName itself (if present), so it can actually be
+// garbage-collected rather than left Terminating. It does not force past, or touch the finalizer
+// of, any nested deferred-delete descendant it encounters while cascading -- that child's own
+// accept-and-hold behavior applies as normal, delegating entirely to its own owning controller.
+// This is meant for the owning controller to call on itself once it has decided it's ready to
+// complete its own teardown, not for arbitrary callers.
+func (group *{{$node.GroupTypeName}}) FinalizeDelete{{$node.BaseNodeName}}ByName(ctx context.Context, hashedName string) error {
 	{{ range $key, $link := .Children }}
 	for _, child := range GetChildren("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}") {
-		if err := group.client.{{$link.SimpleGroupTypeName}}().DeleteAndRemoveFinalizer{{$link.BaseNodeName}}ByName(ctx, child); err != nil && errors.IsNotFound(err) == false {
+		if err := group.client.{{$link.SimpleGroupTypeName}}().Delete{{$link.BaseNodeName}}ByName(ctx, child); err != nil && errors.IsNotFound(err) == false {
 			return err
 		}
 		RemoveChild("{{$node.CrdName}}", hashedName, "{{$link.CrdName}}", child)

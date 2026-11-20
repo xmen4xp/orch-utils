@@ -189,11 +189,11 @@ func TestDeleteObjectDoesNotDeleteRootWhenChildDeletionFails(t *testing.T) {
 	}
 }
 
-func TestDeleteObjectAlwaysAcceptsDeferredDeleteNodeRegardlessOfChildren(t *testing.T) {
-	// A deferred-delete node's own delete is always accepted, with or without live children --
-	// unchanged, existing nexus-deferred-delete behavior. Cascade into its own children is
-	// skipped; the finalizer (not exercised by this fake client) is what actually holds it in
-	// Terminating. No children check at all.
+func TestDeleteObjectAcceptsDeferredDeleteNodeWithNonDeferredChildren(t *testing.T) {
+	// A deferred-delete node's own delete is accepted once its universal pre-check passes --
+	// here, aislices exist but aren't themselves deferred-delete, so the check finds nothing
+	// blocking. Cascade into its own children is still skipped regardless; the finalizer (not
+	// exercised by this fake client) is what actually holds it in Terminating.
 	info := recursiveNodeInfo()
 	info.DeferredDelete = true
 	fakeClient := setupDeleteTest(t, map[string]string{
@@ -224,7 +224,90 @@ func TestDeleteObjectAlwaysAcceptsDeferredDeleteNodeRegardlessOfChildren(t *test
 	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
 	require.NoError(t, err)
 	require.Zero(t, cascadeCalls, "deferred-delete node must not cascade to children")
-	require.True(t, deleteCalled, "deferred-delete node's own delete must always be accepted")
+	require.True(t, deleteCalled, "deferred-delete node's own delete must be accepted once its pre-check passes")
+}
+
+func TestDeleteObjectRejectsDeferredDeleteNodeWithNestedDeferredDeleteDescendant(t *testing.T) {
+	// space is deferred-delete, but has its own nested deferred-delete descendant (aislice,
+	// several levels down via workload). The universal pre-check now applies regardless of
+	// space's own DeferredDelete status: space's delete must be refused outright too, exactly
+	// like a non-deferred ancestor would be -- a deferred-delete node is only ever accepted once
+	// its own subtree is clear of other deferred-delete instances.
+	originalClient := Client
+	originalNodeInfo := model.CrdTypeToNodeInfo
+	t.Cleanup(func() {
+		Client = originalClient
+		model.CrdTypeToNodeInfo = originalNodeInfo
+	})
+
+	model.CrdTypeToNodeInfo = map[string]model.NodeInfo{
+		testSpaceType: {
+			DeferredDelete:  true,
+			ParentHierarchy: []string{testOrgType, testProjectType},
+			Children:        map[string]model.NodeHelperChild{testWorkloadType: {}},
+		},
+		testWorkloadType: {
+			ParentHierarchy: []string{testOrgType, testProjectType, testSpaceType},
+			Children:        map[string]model.NodeHelperChild{testAISliceType: {}},
+		},
+		testAISliceType: {
+			DeferredDelete:  true,
+			ParentHierarchy: []string{testOrgType, testProjectType, testSpaceType, testWorkloadType},
+		},
+	}
+
+	space := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": testSpaceGVR.GroupVersion().String(),
+		"kind":       "Space",
+		"metadata": map[string]interface{}{
+			"name": "space-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				"nexus/display_name": "demo-space",
+			},
+		},
+	}}
+	workload := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "workload.test.io/v1",
+		"kind":       "Workload",
+		"metadata": map[string]interface{}{
+			"name": "workload-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				testSpaceType:        "demo-space",
+				"nexus/display_name": "demo-workload",
+			},
+		},
+	}}
+	aislice := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "aislice.test.io/v1",
+		"kind":       "AISlice",
+		"metadata": map[string]interface{}{
+			"name": "aislice-hash",
+			"labels": map[string]interface{}{
+				testOrgType:          "org-a",
+				testProjectType:      "project-a",
+				testSpaceType:        "demo-space",
+				testWorkloadType:     "demo-workload",
+				"nexus/display_name": "demo-aislice",
+			},
+		},
+	}}
+	fakeClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), space, workload, aislice)
+	Client = fakeClient
+
+	spaceDeleteCalled := false
+	fakeClient.PrependReactor("delete", "spaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		spaceDeleteCalled = true
+		return true, nil, nil
+	})
+
+	err := DeleteObject(testSpaceGVR, testSpaceType, model.CrdTypeToNodeInfo[testSpaceType], "space-hash")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "exists")
+	require.False(t, spaceDeleteCalled, "a deferred-delete node must not be deleted while its own subtree still has a deferred-delete descendant")
 }
 
 func TestDeleteChildrenSkipsCascadeIntoDeferredDeleteDescendant(t *testing.T) {

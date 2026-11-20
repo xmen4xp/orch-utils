@@ -365,7 +365,7 @@ var _ = Describe("Nexus clients tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("DeleteAndRemoveFinalizer should cascade and clear the finalizer so a retried ancestor delete succeeds", func() {
+		It("FinalizeDelete should cascade and clear the finalizer so a retried ancestor delete succeeds", func() {
 			cfgName := "configObj"
 			cfgDef := &configv1.Config{
 				ObjectMeta: metav1.ObjectMeta{
@@ -395,10 +395,10 @@ var _ = Describe("Nexus clients tests", func() {
 			err = root.DeleteConfig(context.TODO())
 			Expect(err).To(HaveOccurred())
 
-			// The owning controller completes Gns's teardown via the destructive,
-			// controller-only DeleteAndRemoveFinalizer method: cascades into SvcGroup and
-			// clears Gns's own finalizer.
-			err = fakeClient.Gns().DeleteAndRemoveFinalizerGnsByName(context.TODO(), gns.GetName())
+			// The owning controller completes Gns's teardown via FinalizeDelete, which
+			// cascades into SvcGroup using the normal Delete<Child>ByName and clears only
+			// Gns's own finalizer.
+			err = fakeClient.Gns().FinalizeDeleteGnsByName(context.TODO(), gns.GetName())
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = fakeClient.Gns().GetGnsByName(context.TODO(), gns.GetName())
